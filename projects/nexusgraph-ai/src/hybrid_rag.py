@@ -10,10 +10,10 @@ from langgraph.graph import StateGraph, END
 
 # Use relative imports if possible, or assume src is in path
 try:
-    from config import DEFAULT_NEO4J_URI, DEFAULT_NEO4J_USERNAME, DEFAULT_NEO4J_PASSWORD
+    from config import DEFAULT_NEO4J_URI, DEFAULT_NEO4J_USERNAME, DEFAULT_NEO4J_PASSWORD, DEFAULT_LLM_MODEL
     from vector_query import query_vector_store
 except ImportError:
-    from src.config import DEFAULT_NEO4J_URI, DEFAULT_NEO4J_USERNAME, DEFAULT_NEO4J_PASSWORD
+    from src.config import DEFAULT_NEO4J_URI, DEFAULT_NEO4J_USERNAME, DEFAULT_NEO4J_PASSWORD, DEFAULT_LLM_MODEL
     from src.vector_query import query_vector_store
 
 # Load environment variables
@@ -27,7 +27,7 @@ class State(TypedDict):
 
 # LLM for routing and synthesis
 # Ensure GROQ_API_KEY is in your .env
-llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+llm = ChatGroq(model=os.getenv("GROQ_MODEL", DEFAULT_LLM_MODEL), temperature=0)
 
 # Initialize Neo4j Graph
 graph = Neo4jGraph(
@@ -83,11 +83,13 @@ def graph_node(state: State) -> dict:
     return {"context": [f"Graph Analysis: {graph_answer}"]}
 
 def synthesizer_node(state: State) -> dict:
-    """Generate final grounded answer."""
+    """Generate final grounded answer with citations."""
     full_context = "\n\n".join(state["context"])
     prompt = ChatPromptTemplate.from_messages([
         ("system", "You are a helpful assistant. Answer the user query using ONLY the provided context. "
                    "If the context doesn't contain the answer, say you don't know. "
+                   "IMPORTANT: Distinguish between 'Vector Store' context and 'Graph Analysis' context. "
+                   "Cite your sources (e.g., 'According to the knowledge graph...', 'The vector documentation states...') "
                    "Provide a concise and accurate answer based on the retrieved information."),
         ("human", "Context: {context}\n\nQuery: {query}\n\nAnswer:")
     ])
