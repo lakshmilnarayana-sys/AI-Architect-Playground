@@ -2,14 +2,18 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import json
 from pathlib import Path
+
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_chroma import Chroma
+from langchain_core.documents import Document
+import chromadb
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CHROMA_PATH = ROOT / 'vector_store' / 'chroma'
 DEFAULT_COLLECTION = 'nexusgraph_ai_knowledge'
-VECTOR_DIMENSIONS = 512
+VECTOR_DIMENSIONS = 384
 
 SOURCE_GLOBS = [
     'data/*.yaml',
@@ -26,60 +30,6 @@ def slug(value: str) -> str:
         else:
             cleaned.append('-')
     return '-'.join(part for part in ''.join(cleaned).split('-') if part)
-
-
-STOPWORDS = {
-    'a', 'an', 'and', 'are', 'as', 'by', 'for', 'from', 'graph', 'id', 'in',
-    'is', 'named', 'node', 'of', 'on', 'relationship', 'service', 'services',
-    'the', 'to', 'what', 'which', 'who', 'with'
-}
-TOKEN_ALIASES = {
-    'depends': 'depend',
-    'dependency': 'depend',
-    'dependencies': 'depend',
-    'dependent': 'depend',
-    'oncall': 'on-call',
-    'call': 'on-call',
-    'primary': 'current',
-    'secondary': 'current',
-    'schedules': 'schedule',
-    'runbooks': 'runbook',
-    'dashboards': 'dashboard',
-    'metrics': 'metric',
-}
-
-
-def tokenize(text: str) -> list[str]:
-    normalized = []
-    for char in text.lower():
-        normalized.append(char if char.isalnum() else ' ')
-    raw_tokens = ''.join(normalized).split()
-    tokens = []
-    for token in raw_tokens:
-        if token in STOPWORDS or len(token) < 2:
-            continue
-        token = TOKEN_ALIASES.get(token, token)
-        tokens.append(token)
-        if token.endswith('s') and len(token) > 3:
-            tokens.append(token[:-1])
-    return tokens
-
-
-def stable_embedding(text: str, dimensions: int = VECTOR_DIMENSIONS) -> list[float]:
-    values = [0.0] * dimensions
-    tokens = tokenize(text)
-    for token in tokens:
-        digest = hashlib.sha256(token.encode('utf-8')).digest()
-        index = int.from_bytes(digest[:4], 'big') % dimensions
-        values[index] += 1.0
-    # Add adjacent token pairs so relationship phrases like current oncall and playback depend have signal.
-    for left, right in zip(tokens, tokens[1:]):
-        pair = f'{left}_{right}'
-        digest = hashlib.sha256(pair.encode('utf-8')).digest()
-        index = int.from_bytes(digest[:4], 'big') % dimensions
-        values[index] += 1.5
-    norm = sum(v * v for v in values) ** 0.5 or 1.0
-    return [v / norm for v in values]
 
 
 def read_csv_rows(path: Path) -> list[dict[str, str]]:
@@ -153,27 +103,32 @@ def ingest_documents(
     persist_path: Path = DEFAULT_CHROMA_PATH,
     collection_name: str = DEFAULT_COLLECTION,
 ) -> dict[str, int | str]:
-    import chromadb
-
-    documents = build_ingestion_documents()
+    documents_data = build_ingestion_documents()
     persist_path.mkdir(parents=True, exist_ok=True)
+
+    embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2')
+
+    # Clear existing collection
     client = chromadb.PersistentClient(path=str(persist_path))
     try:
         client.delete_collection(collection_name)
     except Exception:
         pass
-    collection = client.get_or_create_collection(
-        name=collection_name,
-        metadata={'description': 'nexusgraph-ai vector RAG baseline collection'},
+
+    documents = [
+        Document(page_content=doc['text'], metadata=doc['metadata'])
+        for doc in documents_data
+    ]
+    ids = [doc['id'] for doc in documents_data]
+
+    Chroma.from_documents(
+        documents=documents,
+        embedding=embeddings,
+        ids=ids,
+        collection_name=collection_name,
+        persist_directory=str(persist_path),
     )
 
-    ids = [doc['id'] for doc in documents]
-    collection.add(
-        ids=ids,
-        documents=[doc['text'] for doc in documents],
-        metadatas=[doc['metadata'] for doc in documents],
-        embeddings=[stable_embedding(doc['text']) for doc in documents],
-    )
     return {
         'collection': collection_name,
         'persist_path': str(persist_path),
