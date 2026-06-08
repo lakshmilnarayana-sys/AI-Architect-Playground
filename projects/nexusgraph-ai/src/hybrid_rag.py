@@ -69,16 +69,20 @@ graph = Neo4jGraph(
     password=os.getenv("NEO4J_PASSWORD", DEFAULT_NEO4J_PASSWORD)
 )
 
-# Cypher QA Chain with improved prompting for smaller models
+# Cypher QA Chain with explicit schema for smaller models
 CYPHER_GENERATION_TEMPLATE = """Task:Generate Cypher statement to query a graph database.
 Instructions:
-Use only the provided relationship types and properties in the schema.
-Do not use any other relationship types or properties that are not provided.
+Use ONLY the provided relationship types and properties in the schema.
+Valid Labels: Person, Team, Project, Service, Skill, Tool, Document, Decision, Incident, Audit, System
+Valid Relationships: WORKED_ON, MEMBER_OF, HAS_SKILL, USES_TOOL, OWNS_SERVICE, PRODUCED_DOCUMENT, MADE_DECISION, AFFECTED, INFLUENCED, CURRENT_PRIMARY_ONCALL
+
+Property Match Rules:
+- Nodes have a 'name' property and a 'description' property.
+- When searching for names, use case-insensitive comparison or CONTAINS if you are unsure of the exact format.
+- Example: MATCH (n:Person) WHERE n.name =~ '(?i)Emma Chen' ...
+
 Schema:
 {schema}
-Note: Do not include any explanations or apologies in your responses.
-Do not respond to any questions that might ask you to confirm anything other than the Cypher statement.
-Do not include any text other than the generated Cypher statement.
 
 The question is:
 {question}"""
