@@ -5,8 +5,7 @@ import os
 from pathlib import Path
 
 from neo4j import GraphDatabase
-
-ROOT = Path(__file__).resolve().parents[1]
+from config import DEFAULT_NEO4J_URI, DEFAULT_NEO4J_USERNAME, DEFAULT_NEO4J_PASSWORD, ROOT
 NODE_LABELS = {
     'Person', 'Team', 'Project', 'Service', 'Skill', 'Tool', 'Document',
     'Decision', 'Incident', 'Audit', 'Vendor', 'System', 'OnCallSchedule',
@@ -56,9 +55,9 @@ def create_relationship(session, row: dict[str, str]) -> None:
 
 
 def main() -> None:
-    uri = env('NEO4J_URI', 'bolt://localhost:7687')
-    username = env('NEO4J_USERNAME', 'neo4j')
-    password = env('NEO4J_PASSWORD', 'nexusgraph-local')
+    uri = env('NEO4J_URI', DEFAULT_NEO4J_URI)
+    username = env('NEO4J_USERNAME', DEFAULT_NEO4J_USERNAME)
+    password = env('NEO4J_PASSWORD', DEFAULT_NEO4J_PASSWORD)
     driver = GraphDatabase.driver(uri, auth=(username, password))
     nodes = load_rows(ROOT / 'graph' / 'nodes.csv')
     edges = load_rows(ROOT / 'graph' / 'edges.csv')
