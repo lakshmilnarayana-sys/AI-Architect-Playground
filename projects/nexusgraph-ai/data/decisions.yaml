@@ -1,0 +1,40 @@
+-
+  id: "decision:multi-cdn-routing"
+  type: "Decision"
+  name: "Adopt multi-CDN routing"
+  description: "Approved architecture change"
+-
+  id: "decision:pricing-tiers"
+  type: "Decision"
+  name: "Move to usage-aware pricing tiers"
+  description: "Approved pricing model"
+-
+  id: "decision:graph-recommendations"
+  type: "Decision"
+  name: "Use graph features for recommendations"
+  description: "Approved ML architecture"
+-
+  id: "decision:billing-ledger"
+  type: "Decision"
+  name: "Adopt event-driven billing ledger"
+  description: "Approved billing architecture"
+-
+  id: "decision:admin-mfa"
+  type: "Decision"
+  name: "Require phishing-resistant MFA for admins"
+  description: "Approved identity control"
+-
+  id: "decision:opentelemetry"
+  type: "Decision"
+  name: "Standardize on OpenTelemetry"
+  description: "Approved observability standard"
+-
+  id: "decision:fastly-renewal"
+  type: "Decision"
+  name: "Renew Fastly enterprise contract"
+  description: "Approved vendor decision"
+-
+  id: "decision:soc2-evidence"
+  type: "Decision"
+  name: "Centralize SOC2 evidence collection"
+  description: "Approved compliance workflow"

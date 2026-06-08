@@ -1,0 +1,40 @@
+-
+  id: "project:soc2-readiness-audit"
+  type: "Project"
+  name: "SOC2 Readiness Audit"
+  description: "Compliance audit evidence collection"
+-
+  id: "project:playback-resiliency-2026"
+  type: "Project"
+  name: "Playback Resiliency 2026"
+  description: "Improve playback reliability with multi-CDN routing"
+-
+  id: "project:pricing-model-redesign"
+  type: "Project"
+  name: "Pricing Model Redesign"
+  description: "Usage-aware pricing redesign"
+-
+  id: "project:recommendation-graph-platform"
+  type: "Project"
+  name: "Recommendation Graph Platform"
+  description: "Graph features for recommendations"
+-
+  id: "project:billing-platform-modernization"
+  type: "Project"
+  name: "Billing Platform Modernization"
+  description: "Event-driven billing ledger"
+-
+  id: "project:customer-identity-hardening"
+  type: "Project"
+  name: "Customer Identity Hardening"
+  description: "Admin MFA and identity controls"
+-
+  id: "project:observability-unification"
+  type: "Project"
+  name: "Observability Unification"
+  description: "Standardize telemetry and dashboards"
+-
+  id: "project:vendor-risk-review"
+  type: "Project"
+  name: "Vendor Risk Review"
+  description: "Risk review for critical vendors"

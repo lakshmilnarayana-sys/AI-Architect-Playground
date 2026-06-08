@@ -1,0 +1,20 @@
+-
+  id: "incident:playback-latency-sev1"
+  type: "Incident"
+  name: "Playback Latency SEV1"
+  description: "Customer playback latency incident"
+-
+  id: "incident:billing-double-charge"
+  type: "Incident"
+  name: "Billing Double Charge SEV2"
+  description: "Duplicate payment capture incident"
+-
+  id: "incident:stale-recommendations"
+  type: "Incident"
+  name: "Stale Recommendation Incident"
+  description: "Outdated recommendation results"
+-
+  id: "incident:identity-lockout"
+  type: "Incident"
+  name: "Identity Lockout Incident"
+  description: "Admin lockout event"

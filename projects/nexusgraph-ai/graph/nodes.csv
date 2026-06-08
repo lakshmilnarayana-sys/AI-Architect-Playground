@@ -1,0 +1,97 @@
+id,label,name,description
+person:aisha-khan,Person,Aisha Khan,Staff Platform Engineer
+person:priya-menon,Person,Priya Menon,Director of Security Governance
+person:marcus-lee,Person,Marcus Lee,Principal Data Scientist
+person:sofia-garcia,Person,Sofia Garcia,Product Manager
+person:daniel-okafor,Person,Daniel Okafor,Engineering Manager
+person:emma-chen,Person,Emma Chen,SRE Lead
+person:rahul-patel,Person,Rahul Patel,Backend Engineer
+person:hannah-miller,Person,Hannah Miller,Compliance Analyst
+person:luca-romano,Person,Luca Romano,Data Engineer
+person:nora-wilson,Person,Nora Wilson,VP Engineering
+person:yuki-tanaka,Person,Yuki Tanaka,Security Engineer
+person:omar-hassan,Person,Omar Hassan,ML Platform Engineer
+team:platform-engineering,Team,Platform Engineering,Platform services and runtime
+team:security-governance,Team,Security Governance,"Controls, audits, and security policy"
+team:recommendation-systems,Team,Recommendation Systems,Personalization and ranking
+team:product-strategy,Team,Product Strategy,"Pricing, packaging, and roadmap"
+team:billing-platform,Team,Billing Platform,Billing and payments systems
+team:reliability-engineering,Team,Reliability Engineering,"SRE, incidents, and observability"
+project:soc2-readiness-audit,Project,SOC2 Readiness Audit,Compliance audit evidence collection
+project:playback-resiliency-2026,Project,Playback Resiliency 2026,Improve playback reliability with multi-CDN routing
+project:pricing-model-redesign,Project,Pricing Model Redesign,Usage-aware pricing redesign
+project:recommendation-graph-platform,Project,Recommendation Graph Platform,Graph features for recommendations
+project:billing-platform-modernization,Project,Billing Platform Modernization,Event-driven billing ledger
+project:customer-identity-hardening,Project,Customer Identity Hardening,Admin MFA and identity controls
+project:observability-unification,Project,Observability Unification,Standardize telemetry and dashboards
+project:vendor-risk-review,Project,Vendor Risk Review,Risk review for critical vendors
+service:playback,Service,playback-service,customer-facing
+service:manifest,Service,manifest-service,customer-facing
+service:cdn-routing,Service,cdn-routing-service,customer-facing
+service:recommendation,Service,recommendation-service,customer-facing
+service:feature-store,Service,feature-store-service,internal
+service:billing,Service,billing-service,customer-facing
+service:payment-gateway,Service,payment-gateway-service,customer-facing
+service:identity,Service,identity-service,customer-facing
+service:audit-evidence,Service,audit-evidence-service,internal
+service:observability,Service,observability-service,internal
+skill:kubernetes,Skill,Kubernetes,Capability
+skill:neo4j,Skill,Neo4j,Capability
+skill:incident-response,Skill,Incident Response,Capability
+skill:compliance,Skill,Compliance,Capability
+skill:risk-management,Skill,Risk Management,Capability
+skill:soc2,Skill,SOC2,Capability
+skill:graph-data-modeling,Skill,Graph Data Modeling,Capability
+skill:python,Skill,Python,Capability
+skill:experimentation,Skill,Experimentation,Capability
+skill:pricing-strategy,Skill,Pricing Strategy,Capability
+skill:payments,Skill,Payments,Capability
+skill:sre,Skill,SRE,Capability
+skill:observability,Skill,Observability,Capability
+skill:go,Skill,Go,Capability
+skill:cdn-routing,Skill,CDN Routing,Capability
+skill:audit-evidence,Skill,Audit Evidence,Capability
+skill:drata,Skill,Drata,Capability
+skill:airflow,Skill,Airflow,Capability
+skill:snowflake,Skill,Snowflake,Capability
+skill:executive-approval,Skill,Executive Approval,Capability
+skill:threat-modeling,Skill,Threat Modeling,Capability
+skill:mlflow,Skill,MLflow,Capability
+skill:feature-stores,Skill,Feature Stores,Capability
+tool:neo4j,Tool,Neo4j,Tool
+tool:drata,Tool,Drata,Tool
+tool:snowflake,Tool,Snowflake,Tool
+tool:airflow,Tool,Airflow,Tool
+tool:grafana,Tool,Grafana,Tool
+tool:mlflow,Tool,MLflow,Tool
+tool:github,Tool,GitHub,Tool
+tool:jira,Tool,Jira,Tool
+document:soc2-evidence-pack,Document,SOC2 Evidence Pack,Audit evidence for SOC2 readiness
+document:playback-resiliency-rfc,Document,Playback Resiliency RFC,Proposal for multi-CDN routing
+document:pricing-model-brief,Document,Pricing Model Decision Brief,Pricing redesign rationale
+document:recommendation-graph-design,Document,Recommendation Graph Design,Graph architecture for recommendations
+document:billing-platform-runbook,Document,Billing Platform Runbook,Operational billing guidance
+document:identity-threat-model,Document,Customer Identity Threat Model,Identity control analysis
+document:observability-plan,Document,Observability Unification Plan,Telemetry migration plan
+document:vendor-risk-matrix,Document,Vendor Risk Matrix,Vendor control review
+decision:multi-cdn-routing,Decision,Adopt multi-CDN routing,Approved architecture change
+decision:pricing-tiers,Decision,Move to usage-aware pricing tiers,Approved pricing model
+decision:graph-recommendations,Decision,Use graph features for recommendations,Approved ML architecture
+decision:billing-ledger,Decision,Adopt event-driven billing ledger,Approved billing architecture
+decision:admin-mfa,Decision,Require phishing-resistant MFA for admins,Approved identity control
+decision:opentelemetry,Decision,Standardize on OpenTelemetry,Approved observability standard
+decision:fastly-renewal,Decision,Renew Fastly enterprise contract,Approved vendor decision
+decision:soc2-evidence,Decision,Centralize SOC2 evidence collection,Approved compliance workflow
+incident:playback-latency-sev1,Incident,Playback Latency SEV1,Customer playback latency incident
+incident:billing-double-charge,Incident,Billing Double Charge SEV2,Duplicate payment capture incident
+incident:stale-recommendations,Incident,Stale Recommendation Incident,Outdated recommendation results
+incident:identity-lockout,Incident,Identity Lockout Incident,Admin lockout event
+audit:soc2-readiness,Audit,SOC2 Readiness Audit,Readiness review for SOC2 controls
+audit:vendor-risk,Audit,Vendor Risk Review,Critical vendor risk review
+audit:access-controls,Audit,Access Controls Audit,Review of privileged access controls
+vendor:fastly,Vendor,Fastly,CDN vendor
+vendor:stripe,Vendor,Stripe,Payments vendor
+vendor:okta,Vendor,Okta,Identity vendor
+system:billing-platform,System,Billing Platform,Billing domain
+system:playback-platform,System,Playback Platform,Playback domain
+system:recommendation-platform,System,Recommendation Platform,Recommendation domain

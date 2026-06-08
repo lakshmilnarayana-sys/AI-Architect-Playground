@@ -1,0 +1,15 @@
+-
+  id: "audit:soc2-readiness"
+  type: "Audit"
+  name: "SOC2 Readiness Audit"
+  description: "Readiness review for SOC2 controls"
+-
+  id: "audit:vendor-risk"
+  type: "Audit"
+  name: "Vendor Risk Review"
+  description: "Critical vendor risk review"
+-
+  id: "audit:access-controls"
+  type: "Audit"
+  name: "Access Controls Audit"
+  description: "Review of privileged access controls"

@@ -1,0 +1,52 @@
+[
+  {
+    "id": "q1",
+    "query": "Who worked on the last compliance audit and what tools did they use?",
+    "why_graphrag_is_useful": "Requires Audit -> People -> Tools traversal"
+  },
+  {
+    "id": "q2",
+    "query": "What decisions were made about the pricing model and who approved them?",
+    "why_graphrag_is_useful": "Requires Decision + approval relationships"
+  },
+  {
+    "id": "q3",
+    "query": "Which people worked on playback resiliency and also know Kubernetes?",
+    "why_graphrag_is_useful": "Requires Project + Skill intersection"
+  },
+  {
+    "id": "q4",
+    "query": "Which services are owned by teams involved in the SOC2 audit?",
+    "why_graphrag_is_useful": "Requires Team -> Audit -> Service"
+  },
+  {
+    "id": "q5",
+    "query": "What documents support the decision to adopt multi-CDN routing?",
+    "why_graphrag_is_useful": "Requires Decision -> Document relationship"
+  },
+  {
+    "id": "q6",
+    "query": "Who should be consulted for billing platform changes?",
+    "why_graphrag_is_useful": "Requires service ownership + project history"
+  },
+  {
+    "id": "q7",
+    "query": "Which incidents influenced architecture decisions?",
+    "why_graphrag_is_useful": "Requires Incident -> Decision links"
+  },
+  {
+    "id": "q8",
+    "query": "Which tools were used across compliance and platform projects?",
+    "why_graphrag_is_useful": "Requires shared Tool relationships"
+  },
+  {
+    "id": "q9",
+    "query": "What projects involved both Security and Platform Engineering?",
+    "why_graphrag_is_useful": "Requires multi-team project graph"
+  },
+  {
+    "id": "q10",
+    "query": "Which decisions were approved by executives and affected customer-facing services?",
+    "why_graphrag_is_useful": "Requires Decision -> Approver -> Service traversal"
+  }
+]
