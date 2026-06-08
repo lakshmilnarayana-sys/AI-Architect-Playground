@@ -7,10 +7,7 @@ from pathlib import Path
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 
-try:
-    from .vector_ingest import DEFAULT_CHROMA_PATH, DEFAULT_COLLECTION
-except ImportError:
-    from vector_ingest import DEFAULT_CHROMA_PATH, DEFAULT_COLLECTION
+from config import DEFAULT_CHROMA_PATH, DEFAULT_COLLECTION, EMBEDDING_MODEL
 
 
 def query_vector_store(
@@ -19,7 +16,10 @@ def query_vector_store(
     collection_name: str = DEFAULT_COLLECTION,
     n_results: int = 5,
 ) -> dict:
-    embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2')
+    if not persist_path.exists():
+        raise FileNotFoundError(f"Vector store not found at {persist_path}. Did you run src/vector_ingest.py?")
+
+    embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
     vector_store = Chroma(
         collection_name=collection_name,
         embedding_function=embeddings,
