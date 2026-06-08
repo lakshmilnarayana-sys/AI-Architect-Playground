@@ -1,0 +1,60 @@
+-
+  id: "person:aisha-khan"
+  type: "Person"
+  name: "Aisha Khan"
+  description: "Staff Platform Engineer"
+-
+  id: "person:priya-menon"
+  type: "Person"
+  name: "Priya Menon"
+  description: "Director of Security Governance"
+-
+  id: "person:marcus-lee"
+  type: "Person"
+  name: "Marcus Lee"
+  description: "Principal Data Scientist"
+-
+  id: "person:sofia-garcia"
+  type: "Person"
+  name: "Sofia Garcia"
+  description: "Product Manager"
+-
+  id: "person:daniel-okafor"
+  type: "Person"
+  name: "Daniel Okafor"
+  description: "Engineering Manager"
+-
+  id: "person:emma-chen"
+  type: "Person"
+  name: "Emma Chen"
+  description: "SRE Lead"
+-
+  id: "person:rahul-patel"
+  type: "Person"
+  name: "Rahul Patel"
+  description: "Backend Engineer"
+-
+  id: "person:hannah-miller"
+  type: "Person"
+  name: "Hannah Miller"
+  description: "Compliance Analyst"
+-
+  id: "person:luca-romano"
+  type: "Person"
+  name: "Luca Romano"
+  description: "Data Engineer"
+-
+  id: "person:nora-wilson"
+  type: "Person"
+  name: "Nora Wilson"
+  description: "VP Engineering"
+-
+  id: "person:yuki-tanaka"
+  type: "Person"
+  name: "Yuki Tanaka"
+  description: "Security Engineer"
+-
+  id: "person:omar-hassan"
+  type: "Person"
+  name: "Omar Hassan"
+  description: "ML Platform Engineer"

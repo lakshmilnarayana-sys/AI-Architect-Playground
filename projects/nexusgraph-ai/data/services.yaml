@@ -1,0 +1,50 @@
+-
+  id: "service:playback"
+  type: "Service"
+  name: "playback-service"
+  description: "customer-facing"
+-
+  id: "service:manifest"
+  type: "Service"
+  name: "manifest-service"
+  description: "customer-facing"
+-
+  id: "service:cdn-routing"
+  type: "Service"
+  name: "cdn-routing-service"
+  description: "customer-facing"
+-
+  id: "service:recommendation"
+  type: "Service"
+  name: "recommendation-service"
+  description: "customer-facing"
+-
+  id: "service:feature-store"
+  type: "Service"
+  name: "feature-store-service"
+  description: "internal"
+-
+  id: "service:billing"
+  type: "Service"
+  name: "billing-service"
+  description: "customer-facing"
+-
+  id: "service:payment-gateway"
+  type: "Service"
+  name: "payment-gateway-service"
+  description: "customer-facing"
+-
+  id: "service:identity"
+  type: "Service"
+  name: "identity-service"
+  description: "customer-facing"
+-
+  id: "service:audit-evidence"
+  type: "Service"
+  name: "audit-evidence-service"
+  description: "internal"
+-
+  id: "service:observability"
+  type: "Service"
+  name: "observability-service"
+  description: "internal"

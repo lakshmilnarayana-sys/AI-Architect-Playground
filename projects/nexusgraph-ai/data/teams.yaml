@@ -1,0 +1,30 @@
+-
+  id: "team:platform-engineering"
+  type: "Team"
+  name: "Platform Engineering"
+  description: "Platform services and runtime"
+-
+  id: "team:security-governance"
+  type: "Team"
+  name: "Security Governance"
+  description: "Controls, audits, and security policy"
+-
+  id: "team:recommendation-systems"
+  type: "Team"
+  name: "Recommendation Systems"
+  description: "Personalization and ranking"
+-
+  id: "team:product-strategy"
+  type: "Team"
+  name: "Product Strategy"
+  description: "Pricing, packaging, and roadmap"
+-
+  id: "team:billing-platform"
+  type: "Team"
+  name: "Billing Platform"
+  description: "Billing and payments systems"
+-
+  id: "team:reliability-engineering"
+  type: "Team"
+  name: "Reliability Engineering"
+  description: "SRE, incidents, and observability"

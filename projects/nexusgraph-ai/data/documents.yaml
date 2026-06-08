@@ -1,0 +1,40 @@
+-
+  id: "document:soc2-evidence-pack"
+  type: "Document"
+  name: "SOC2 Evidence Pack"
+  description: "Audit evidence for SOC2 readiness"
+-
+  id: "document:playback-resiliency-rfc"
+  type: "Document"
+  name: "Playback Resiliency RFC"
+  description: "Proposal for multi-CDN routing"
+-
+  id: "document:pricing-model-brief"
+  type: "Document"
+  name: "Pricing Model Decision Brief"
+  description: "Pricing redesign rationale"
+-
+  id: "document:recommendation-graph-design"
+  type: "Document"
+  name: "Recommendation Graph Design"
+  description: "Graph architecture for recommendations"
+-
+  id: "document:billing-platform-runbook"
+  type: "Document"
+  name: "Billing Platform Runbook"
+  description: "Operational billing guidance"
+-
+  id: "document:identity-threat-model"
+  type: "Document"
+  name: "Customer Identity Threat Model"
+  description: "Identity control analysis"
+-
+  id: "document:observability-plan"
+  type: "Document"
+  name: "Observability Unification Plan"
+  description: "Telemetry migration plan"
+-
+  id: "document:vendor-risk-matrix"
+  type: "Document"
+  name: "Vendor Risk Matrix"
+  description: "Vendor control review"
