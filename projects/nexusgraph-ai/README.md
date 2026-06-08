@@ -29,6 +29,13 @@ Import the graph after the containers are healthy:
 docker compose exec app python src/import_to_neo4j.py
 ```
 
+
+## Architecture Diagram
+
+![nexusgraph-ai traffic flow architecture](architecture-diagram.png)
+
+Diagram source: [`architecture-diagram.svg`](architecture-diagram.svg) and [`docs/architecture-diagram.mmd`](docs/architecture-diagram.mmd).
+
 ## Dataset
 
 The project uses a fictional streaming company dataset:

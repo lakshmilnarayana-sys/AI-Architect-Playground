@@ -1,0 +1,45 @@
+flowchart LR
+  internet((Internet users)) --> fastly[Fastly CDN]
+  fastly --> edge[edge-router]
+  edge --> gateway[api-gateway]
+
+  gateway --> auth[auth-service]
+  auth --> account[account-service]
+  auth --> device[device-auth-service]
+
+  gateway --> playback[playback-service]
+  playback --> license[license-service]
+  playback --> manifest[manifest-service]
+  playback --> cdn[cdn-routing-service]
+  playback --> subtitle[subtitle-service]
+
+  gateway --> catalog[catalog-service]
+  catalog --> metadata[metadata-service]
+  catalog --> search[search-service]
+  gateway --> rec[recommendation-service]
+  rec --> personalization[personalization-service]
+  rec --> ranking[ml-ranking-service]
+  rec --> feature[feature-store-service]
+
+  gateway --> billing[billing-service]
+  billing --> payment[payment-service]
+  billing --> invoice[invoice-service]
+  billing --> subscription[subscription-service]
+
+  playback --> events[(playback-events)]
+  billing --> billingEvents[(billing-events)]
+  rec --> recEvents[(recommendation-events)]
+  events --> ingestion[event-ingestion-service]
+  billingEvents --> ingestion
+  recEvents --> ingestion
+  ingestion --> analytics[analytics-service]
+
+  playback --> observability[observability-service]
+  billing --> observability
+  auth --> observability
+  rec --> observability
+  observability --> dashboards[Grafana dashboards]
+  observability --> oncall[on-call schedules]
+  oncall --> runbooks[runbooks]
+  oncall --> escalation[escalation policies]
+  observability --> slos[SLO metrics]
