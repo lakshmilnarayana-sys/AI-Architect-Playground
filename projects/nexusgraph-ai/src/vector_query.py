@@ -4,7 +4,10 @@ import argparse
 import json
 from pathlib import Path
 
-from vector_ingest import DEFAULT_CHROMA_PATH, DEFAULT_COLLECTION, stable_embedding
+try:
+    from .vector_ingest import DEFAULT_CHROMA_PATH, DEFAULT_COLLECTION, stable_embedding
+except ImportError:
+    from vector_ingest import DEFAULT_CHROMA_PATH, DEFAULT_COLLECTION, stable_embedding
 
 
 def query_vector_store(
