@@ -47,7 +47,11 @@ st.write(f"**Insight:** {selected['why_graphrag_is_useful']}")
 st.divider()
 
 st.subheader('Ask NexusGraph')
-user_query = st.text_input("Enter your question about organizational knowledge:", placeholder="e.g., How is Emma Chen related to the playback service?")
+user_query = st.text_input(
+    "Enter your question about organizational knowledge:", 
+    value="How is Emma Chen related to the playback service?",
+    placeholder="e.g., How is Emma Chen related to the playback service?"
+)
 
 if st.button("Run Hybrid RAG"):
     if user_query:
