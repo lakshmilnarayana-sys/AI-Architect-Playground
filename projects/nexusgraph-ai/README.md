@@ -87,6 +87,12 @@ Query the vector store:
 docker compose exec app python src/vector_query.py "Who is on call for playback-service?" --n-results 5
 ```
 
+Generate a readable Vector RAG answer from retrieved chunks:
+
+```bash
+docker compose exec app python src/vector_rag.py "Who is on call for playback-service?" --n-results 5
+```
+
 The initial ingestion includes graph nodes, graph relationships, YAML source data, docs, and evaluation artifacts.
 
 ## Next Implementation Steps
