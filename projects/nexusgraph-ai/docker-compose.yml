@@ -37,6 +37,7 @@ services:
       - "8501:8501"
     volumes:
       - .:/app
+      - hf_cache:/root/.cache/huggingface
 
   ollama:
     image: ollama/ollama:latest
@@ -58,3 +59,4 @@ services:
 volumes:
   neo4j_data:
   ollama_data:
+  hf_cache:
