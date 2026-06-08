@@ -69,7 +69,9 @@ graph = Neo4jGraph(
     password=os.getenv("NEO4J_PASSWORD", DEFAULT_NEO4J_PASSWORD)
 )
 
-# Cypher QA Chain with extremely rigid schema for small models
+import re
+
+# Cypher generation prompt with extremely rigid schema for small models
 CYPHER_GENERATION_TEMPLATE = """Task: Generate a Cypher statement to query a Neo4j graph database.
 
 Rules:
@@ -88,18 +90,26 @@ Cypher: MATCH (p:Person)-[*1..3]-(s:Service) WHERE p.name =~ '(?i)Emma Chen' AND
 The question is:
 {question}"""
 
-CYPHER_PROMPT = ChatPromptTemplate.from_messages([
-    ("system", "You are a Neo4j expert. Generate a clean, simple Cypher query based on the schema."),
-    ("human", CYPHER_GENERATION_TEMPLATE)
-])
-
-cypher_chain = GraphCypherQAChain.from_llm(
-    llm, 
-    graph=graph, 
-    verbose=True, 
-    allow_dangerous_requests=True,
-    cypher_prompt=CYPHER_PROMPT
-)
+def clean_cypher(text: str) -> str:
+    """Strip preamble, postamble, and markdown from Cypher string."""
+    # Remove markdown backticks
+    text = text.replace('```cypher', '').replace('```', '')
+    
+    # Find the actual MATCH or RETURN part
+    match = re.search(r'(MATCH|RETURN|WITH)\s+.*', text, re.IGNORECASE | re.DOTALL)
+    if match:
+        text = match.group(0)
+    
+    # Remove everything after the last semicolon or RETURN statement
+    lines = text.split('\n')
+    cleaned_lines = []
+    for line in lines:
+        if any(keyword in line.upper() for keyword in ['MATCH', 'WHERE', 'RETURN', 'WITH', 'UNWIND', 'LIMIT', 'SKIP', 'ORDER BY']):
+            cleaned_lines.append(line)
+        elif not cleaned_lines: continue
+        else: break
+            
+    return '\n'.join(cleaned_lines).strip()
 
 def router(state: State) -> dict:
     """Decide whether to use vector, graph, or compare."""
@@ -133,12 +143,31 @@ def vector_node(state: State) -> dict:
     return {"context": context}
 
 def graph_node(state: State) -> dict:
-    """Query the knowledge graph."""
+    """Query the knowledge graph manually with cleaning."""
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "You are a Neo4j expert. Generate a simple, valid Cypher query. NO text other than the query."),
+        ("human", CYPHER_GENERATION_TEMPLATE)
+    ])
+    chain = prompt | llm
+    
     try:
-        res = cypher_chain.invoke({"query": state["query"]})
-        graph_answer = res.get("result", "")
+        # 1. Generate
+        schema = graph.get_schema
+        raw_cypher = chain.invoke({"question": state["query"], "schema": schema}).content
+        
+        # 2. Clean
+        cypher = clean_cypher(raw_cypher)
+        print(f"--- EXECUTING CYPHER ---\n{cypher}\n-----------------------")
+        
+        # 3. Execute
+        results = graph.query(cypher)
+        
+        if not results:
+            graph_answer = "No matching relationships found in the graph."
+        else:
+            graph_answer = f"Graph results found: {str(results)}"
+            
     except Exception as e:
-        # If the error looks like it contains a Cypher statement mixed with text, it's conversational filler
         graph_answer = f"Error querying graph. Check logs for details."
         print(f"DEBUG Graph Error: {str(e)}")
     
