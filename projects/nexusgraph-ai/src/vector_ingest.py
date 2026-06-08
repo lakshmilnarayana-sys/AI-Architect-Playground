@@ -10,16 +10,7 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document
 import chromadb
 
-ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CHROMA_PATH = ROOT / 'vector_store' / 'chroma'
-DEFAULT_COLLECTION = 'nexusgraph_ai_knowledge'
-VECTOR_DIMENSIONS = 384
-
-SOURCE_GLOBS = [
-    'data/*.yaml',
-    'docs/*.md',
-    'evaluation/*.json',
-]
+from config import DEFAULT_CHROMA_PATH, DEFAULT_COLLECTION, EMBEDDING_MODEL, SOURCE_GLOBS, ROOT
 
 
 def slug(value: str) -> str:
@@ -106,7 +97,7 @@ def ingest_documents(
     documents_data = build_ingestion_documents()
     persist_path.mkdir(parents=True, exist_ok=True)
 
-    embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2')
+    embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
 
     # Clear existing collection
     client = chromadb.PersistentClient(path=str(persist_path))
