@@ -69,20 +69,27 @@ graph = Neo4jGraph(
     password=os.getenv("NEO4J_PASSWORD", DEFAULT_NEO4J_PASSWORD)
 )
 
-# Cypher QA Chain with explicit schema for smaller models
-CYPHER_GENERATION_TEMPLATE = """Task:Generate Cypher statement to query a graph database.
-Instructions:
-Use ONLY the provided relationship types and properties in the schema.
-Valid Labels: Person, Team, Project, Service, Skill, Tool, Document, Decision, Incident, Audit, System
-Valid Relationships: WORKED_ON, MEMBER_OF, HAS_SKILL, USES_TOOL, OWNS_SERVICE, PRODUCED_DOCUMENT, MADE_DECISION, AFFECTED, INFLUENCED, CURRENT_PRIMARY_ONCALL
-
-Property Match Rules:
-- Nodes have a 'name' property and a 'description' property.
-- When searching for names, use case-insensitive comparison or CONTAINS if you are unsure of the exact format.
-- Example: MATCH (n:Person) WHERE n.name =~ '(?i)Emma Chen' ...
+# Cypher QA Chain with explicit schema and few-shot examples
+CYPHER_GENERATION_TEMPLATE = """Task: Generate a Cypher statement to query a Neo4j graph database.
 
 Schema:
 {schema}
+
+Labels: Person, Team, Project, Service, Skill, Tool, Document, Decision, Incident, Audit, System, OnCallSchedule, EscalationPolicy
+Relationships: WORKED_ON, MEMBER_OF, HAS_SKILL, USES_TOOL, OWNS_SERVICE, PRODUCED_DOCUMENT, MADE_DECISION, AFFECTED, INFLUENCED, CURRENT_PRIMARY_ONCALL, HAS_ONCALL_SCHEDULE, USES_ESCALATION_POLICY
+
+Instructions:
+1. Use ONLY the provided labels and relationships.
+2. For multi-hop relationships, use the shortestPath function or direct traversals.
+3. Use case-insensitive matching for name properties using =~ '(?i)...'.
+4. Return a concise Cypher statement. No explanations.
+
+Examples:
+Question: Who works on the playback resiliency project?
+Cypher: MATCH (p:Person)-[:WORKED_ON]->(prj:Project) WHERE prj.name =~ '(?i)Playback Resiliency.*' RETURN p.name
+
+Question: How is Emma Chen related to the playback service?
+Cypher: MATCH path = shortestPath((p:Person)-[*1..3]-(s:Service)) WHERE p.name =~ '(?i)Emma Chen' AND s.name =~ '(?i)playback.*' RETURN path
 
 The question is:
 {question}"""
