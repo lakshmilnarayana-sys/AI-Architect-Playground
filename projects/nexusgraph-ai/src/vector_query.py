@@ -4,10 +4,13 @@ import argparse
 import json
 from pathlib import Path
 
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_chroma import Chroma
+
 try:
-    from .vector_ingest import DEFAULT_CHROMA_PATH, DEFAULT_COLLECTION, stable_embedding
+    from .vector_ingest import DEFAULT_CHROMA_PATH, DEFAULT_COLLECTION
 except ImportError:
-    from vector_ingest import DEFAULT_CHROMA_PATH, DEFAULT_COLLECTION, stable_embedding
+    from vector_ingest import DEFAULT_CHROMA_PATH, DEFAULT_COLLECTION
 
 
 def query_vector_store(
@@ -16,22 +19,22 @@ def query_vector_store(
     collection_name: str = DEFAULT_COLLECTION,
     n_results: int = 5,
 ) -> dict:
-    import chromadb
-
-    client = chromadb.PersistentClient(path=str(persist_path))
-    collection = client.get_collection(collection_name)
-    result = collection.query(
-        query_embeddings=[stable_embedding(query)],
-        n_results=n_results,
-        include=['documents', 'metadatas', 'distances'],
+    embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2')
+    vector_store = Chroma(
+        collection_name=collection_name,
+        embedding_function=embeddings,
+        persist_directory=str(persist_path),
     )
+
+    results = vector_store.similarity_search_with_score(query, k=n_results)
+
     matches = []
-    for idx, doc_id in enumerate(result['ids'][0]):
+    for doc, score in results:
         matches.append({
-            'id': doc_id,
-            'distance': result['distances'][0][idx],
-            'metadata': result['metadatas'][0][idx],
-            'document': result['documents'][0][idx],
+            'id': getattr(doc, 'id', 'unknown'),
+            'distance': float(score),
+            'metadata': doc.metadata,
+            'document': doc.page_content,
         })
     return {'query': query, 'matches': matches}
 
