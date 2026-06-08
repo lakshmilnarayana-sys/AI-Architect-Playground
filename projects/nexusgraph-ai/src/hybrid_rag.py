@@ -72,24 +72,25 @@ graph = Neo4jGraph(
 # Cypher QA Chain with explicit schema and few-shot examples
 CYPHER_GENERATION_TEMPLATE = """Task: Generate a Cypher statement to query a Neo4j graph database.
 
+Instructions:
+1. Respond with ONLY the Cypher statement. No preamble, no explanation, no markdown backticks.
+2. Use ONLY the provided labels and relationships.
+3. For multi-hop relationships, use direct traversals: (a)-[*1..3]-(b)
+4. Use case-insensitive matching for name properties using WHERE p.name =~ '(?i)...'.
+5. Do NOT put regex inside curly braces.
+
 Schema:
 {schema}
 
 Labels: Person, Team, Project, Service, Skill, Tool, Document, Decision, Incident, Audit, System, OnCallSchedule, EscalationPolicy
 Relationships: WORKED_ON, MEMBER_OF, HAS_SKILL, USES_TOOL, OWNS_SERVICE, PRODUCED_DOCUMENT, MADE_DECISION, AFFECTED, INFLUENCED, CURRENT_PRIMARY_ONCALL, HAS_ONCALL_SCHEDULE, USES_ESCALATION_POLICY
 
-Instructions:
-1. Use ONLY the provided labels and relationships.
-2. For multi-hop relationships, use the shortestPath function or direct traversals.
-3. Use case-insensitive matching for name properties using =~ '(?i)...'.
-4. Return a concise Cypher statement. No explanations.
-
 Examples:
 Question: Who works on the playback resiliency project?
 Cypher: MATCH (p:Person)-[:WORKED_ON]->(prj:Project) WHERE prj.name =~ '(?i)Playback Resiliency.*' RETURN p.name
 
 Question: How is Emma Chen related to the playback service?
-Cypher: MATCH path = shortestPath((p:Person)-[*1..3]-(s:Service)) WHERE p.name =~ '(?i)Emma Chen' AND s.name =~ '(?i)playback.*' RETURN path
+Cypher: MATCH (p:Person)-[*1..3]-(s:Service) WHERE p.name =~ '(?i)Emma Chen' AND s.name =~ '(?i)playback.*' RETURN p.name, labels(s), s.name
 
 The question is:
 {question}"""
@@ -144,7 +145,9 @@ def graph_node(state: State) -> dict:
         res = cypher_chain.invoke({"query": state["query"]})
         graph_answer = res.get("result", "")
     except Exception as e:
-        graph_answer = f"Error querying graph: {str(e)}"
+        # If the error looks like it contains a Cypher statement mixed with text, it's conversational filler
+        graph_answer = f"Error querying graph. Check logs for details."
+        print(f"DEBUG Graph Error: {str(e)}")
     
     return {"context": [f"Graph Analysis: {graph_answer}"]}
 
