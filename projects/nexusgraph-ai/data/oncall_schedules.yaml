@@ -1,0 +1,25 @@
+-
+  id: "oncall:playback-primary"
+  type: "OnCallSchedule"
+  name: "Playback Primary On-call"
+  description: "Current primary rotation for playback-service and cdn-routing-service"
+-
+  id: "oncall:billing-primary"
+  type: "OnCallSchedule"
+  name: "Billing Primary On-call"
+  description: "Current primary rotation for billing-service and payment-gateway-service"
+-
+  id: "oncall:identity-security"
+  type: "OnCallSchedule"
+  name: "Identity Security On-call"
+  description: "Current security rotation for identity-service and audit-evidence-service"
+-
+  id: "oncall:recommendation-platform"
+  type: "OnCallSchedule"
+  name: "Recommendation Platform On-call"
+  description: "Current rotation for recommendation-service and feature-store-service"
+-
+  id: "oncall:observability-platform"
+  type: "OnCallSchedule"
+  name: "Observability Platform On-call"
+  description: "Current rotation for observability-service and telemetry tooling"

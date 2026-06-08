@@ -1,0 +1,30 @@
+-
+  id: "slo:playback-availability"
+  type: "SLOMetric"
+  name: "Playback Availability SLO"
+  description: "99.95% monthly availability for playback-service"
+-
+  id: "slo:playback-start-latency"
+  type: "SLOMetric"
+  name: "Playback Start Latency SLO"
+  description: "95% of playback starts below 2 seconds"
+-
+  id: "slo:billing-correctness"
+  type: "SLOMetric"
+  name: "Billing Correctness SLO"
+  description: "99.99% successful billing events without duplicate charge"
+-
+  id: "slo:identity-login-success"
+  type: "SLOMetric"
+  name: "Identity Login Success SLO"
+  description: "99.9% successful customer login attempts"
+-
+  id: "slo:recommendation-freshness"
+  type: "SLOMetric"
+  name: "Recommendation Freshness SLO"
+  description: "95% of recommendations generated from features less than 15 minutes old"
+-
+  id: "slo:observability-ingestion"
+  type: "SLOMetric"
+  name: "Observability Ingestion SLO"
+  description: "99.5% telemetry ingestion within 60 seconds"

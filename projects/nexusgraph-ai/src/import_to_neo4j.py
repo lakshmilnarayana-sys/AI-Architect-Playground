@@ -9,7 +9,10 @@ from neo4j import GraphDatabase
 ROOT = Path(__file__).resolve().parents[1]
 NODE_LABELS = {
     'Person', 'Team', 'Project', 'Service', 'Skill', 'Tool', 'Document',
-    'Decision', 'Incident', 'Audit', 'Vendor', 'System'
+    'Decision', 'Incident', 'Audit', 'Vendor', 'System', 'OnCallSchedule',
+    'Runbook', 'Dashboard', 'EscalationPolicy', 'SLOMetric', 'Datastore',
+    'Environment', 'Topic', 'ArchitectureDoc', 'OpenAPISpec',
+    'KubernetesManifest', 'TerraformModule', 'Entity'
 }
 
 
@@ -40,7 +43,7 @@ def create_node(session, row: dict[str, str]) -> None:
 
 def create_relationship(session, row: dict[str, str]) -> None:
     relationship = row['relationship']
-    if not relationship.replace('_', '').isalpha() or relationship.upper() != relationship:
+    if not relationship.replace('_', '').isalnum() or relationship.upper() != relationship:
         raise ValueError(f'Unsupported relationship: {relationship}')
     session.run(
         f"""

@@ -1,0 +1,25 @@
+-
+  id: "dashboard:playback-health"
+  type: "Dashboard"
+  name: "Playback Health Dashboard"
+  description: "Grafana dashboard for playback latency, error rate, and CDN routing health"
+-
+  id: "dashboard:billing-health"
+  type: "Dashboard"
+  name: "Billing Health Dashboard"
+  description: "Grafana dashboard for billing success rate, payment errors, and ledger lag"
+-
+  id: "dashboard:identity-risk"
+  type: "Dashboard"
+  name: "Identity Risk Dashboard"
+  description: "Grafana dashboard for login failures, MFA errors, and admin lockouts"
+-
+  id: "dashboard:recommendation-freshness"
+  type: "Dashboard"
+  name: "Recommendation Freshness Dashboard"
+  description: "Grafana dashboard for recommendation freshness, feature lag, and ranking latency"
+-
+  id: "dashboard:platform-slos"
+  type: "Dashboard"
+  name: "Platform SLO Dashboard"
+  description: "Grafana dashboard for service SLOs across playback, billing, identity, and recommendations"
