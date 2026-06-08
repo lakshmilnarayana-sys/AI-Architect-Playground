@@ -21,7 +21,8 @@ DEFAULT_NEO4J_USERNAME = 'neo4j'
 DEFAULT_NEO4J_PASSWORD = 'nexusgraph-local'
 
 # LLM Config
-LLM_PROVIDER = 'openai'  # 'openai', 'gemini', or 'groq'
+LLM_PROVIDER = 'openai'  # 'openai', 'gemini', 'groq', or 'ollama'
 DEFAULT_OPENAI_MODEL = 'gpt-4o'
 DEFAULT_GEMINI_MODEL = 'gemini-2.0-flash'
 DEFAULT_GROQ_MODEL = 'llama-3.3-70b-versatile'
+DEFAULT_OLLAMA_MODEL = 'llama3'
