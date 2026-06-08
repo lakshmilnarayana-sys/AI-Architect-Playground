@@ -58,9 +58,10 @@ if st.button("Run Hybrid RAG"):
         with st.spinner("Analyzing graph and vector data..."):
             try:
                 # We use the raw stream to show progress if needed, but for now just the answer
-                answer = run_hybrid_rag(user_query)
+                result = run_hybrid_rag(user_query)
+                st.write(f"**Route:** {result['route'].capitalize()}")
                 st.write("**Answer:**")
-                st.write(answer)
+                st.write(result['answer'])
             except Exception as e:
                 st.error(f"Error running RAG: {str(e)}")
     else:

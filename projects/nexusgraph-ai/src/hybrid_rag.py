@@ -69,9 +69,31 @@ graph = Neo4jGraph(
     password=os.getenv("NEO4J_PASSWORD", DEFAULT_NEO4J_PASSWORD)
 )
 
-# Cypher QA Chain
+# Cypher QA Chain with improved prompting for smaller models
+CYPHER_GENERATION_TEMPLATE = """Task:Generate Cypher statement to query a graph database.
+Instructions:
+Use only the provided relationship types and properties in the schema.
+Do not use any other relationship types or properties that are not provided.
+Schema:
+{schema}
+Note: Do not include any explanations or apologies in your responses.
+Do not respond to any questions that might ask you to confirm anything other than the Cypher statement.
+Do not include any text other than the generated Cypher statement.
+
+The question is:
+{question}"""
+
+CYPHER_PROMPT = ChatPromptTemplate.from_messages([
+    ("system", "You are a Neo4j expert. Generate a clean, simple Cypher query based on the schema. Avoid complex traversals if possible."),
+    ("human", CYPHER_GENERATION_TEMPLATE)
+])
+
 cypher_chain = GraphCypherQAChain.from_llm(
-    llm, graph=graph, verbose=True, allow_dangerous_requests=True
+    llm, 
+    graph=graph, 
+    verbose=True, 
+    allow_dangerous_requests=True,
+    cypher_prompt=CYPHER_PROMPT
 )
 
 def router(state: State) -> dict:
