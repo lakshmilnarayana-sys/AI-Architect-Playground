@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
+from langchain_ollama import ChatOllama
 from langchain_neo4j import Neo4jGraph, GraphCypherQAChain
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, END
@@ -14,13 +15,15 @@ from langgraph.graph import StateGraph, END
 try:
     from config import (
         DEFAULT_NEO4J_URI, DEFAULT_NEO4J_USERNAME, DEFAULT_NEO4J_PASSWORD,
-        LLM_PROVIDER, DEFAULT_OPENAI_MODEL, DEFAULT_GEMINI_MODEL, DEFAULT_GROQ_MODEL
+        LLM_PROVIDER, DEFAULT_OPENAI_MODEL, DEFAULT_GEMINI_MODEL, DEFAULT_GROQ_MODEL,
+        DEFAULT_OLLAMA_MODEL
     )
     from vector_query import query_vector_store
 except ImportError:
     from src.config import (
         DEFAULT_NEO4J_URI, DEFAULT_NEO4J_USERNAME, DEFAULT_NEO4J_PASSWORD,
-        LLM_PROVIDER, DEFAULT_OPENAI_MODEL, DEFAULT_GEMINI_MODEL, DEFAULT_GROQ_MODEL
+        LLM_PROVIDER, DEFAULT_OPENAI_MODEL, DEFAULT_GEMINI_MODEL, DEFAULT_GROQ_MODEL,
+        DEFAULT_OLLAMA_MODEL
     )
     from src.vector_query import query_vector_store
 
@@ -45,6 +48,12 @@ if provider == "gemini":
 elif provider == "groq":
     llm = ChatGroq(
         model=os.getenv("GROQ_MODEL", DEFAULT_GROQ_MODEL),
+        temperature=0
+    )
+elif provider == "ollama":
+    llm = ChatOllama(
+        model=os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL),
+        base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
         temperature=0
     )
 else: # default to openai
