@@ -32,9 +32,9 @@ docker compose exec app python src/import_to_neo4j.py
 
 ## Architecture Diagram
 
-![nexusgraph-ai animated traffic flow](architecture-traffic-flow.gif)
+![nexusgraph-ai service traffic flow](architecture-flow-simple.png)
 
-Animated diagram preview: [`architecture-traffic-flow.png`](architecture-traffic-flow.png). Detailed diagram source remains available as [`architecture-diagram.svg`](architecture-diagram.svg) and [`docs/architecture-diagram.mmd`](docs/architecture-diagram.mmd).
+A simpler static traffic-flow diagram. Detailed diagram source remains available as [`architecture-diagram.svg`](architecture-diagram.svg) and [`docs/architecture-diagram.mmd`](docs/architecture-diagram.mmd).
 
 ## Dataset
 
@@ -61,6 +61,7 @@ app/
 evaluation/
 docs/
 ```
+
 
 ## Next Implementation Steps
 
