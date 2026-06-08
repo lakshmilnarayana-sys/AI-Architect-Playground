@@ -69,26 +69,19 @@ graph = Neo4jGraph(
     password=os.getenv("NEO4J_PASSWORD", DEFAULT_NEO4J_PASSWORD)
 )
 
-# Cypher QA Chain with explicit schema and few-shot examples
+# Cypher QA Chain with extremely rigid schema for small models
 CYPHER_GENERATION_TEMPLATE = """Task: Generate a Cypher statement to query a Neo4j graph database.
 
-Instructions:
-1. Respond with ONLY the Cypher statement. No preamble, no explanation.
-2. Use ONLY the provided labels and relationships.
-3. CRITICAL: Use the WHERE clause for all property filtering. DO NOT use curly braces {{}} for properties.
-4. Use case-insensitive matching for name properties using WHERE n.name =~ '(?i)...'.
-5. For multi-hop connections, use: MATCH (a)-[*1..3]-(b)
+Rules:
+1. ONLY return the Cypher query. NO preamble.
+2. DO NOT use curly braces {{}} for property filtering.
+3. ALWAYS use the WHERE clause with the =~ operator for name searches.
+4. Correct Pattern: MATCH (p:Person) WHERE p.name =~ '(?i)Emma Chen' ...
 
 Schema:
 {schema}
 
-Labels: Person, Team, Project, Service, Skill, Tool, Document, Decision, Incident, Audit, System, OnCallSchedule, EscalationPolicy
-Relationships: WORKED_ON, MEMBER_OF, HAS_SKILL, USES_TOOL, OWNS_SERVICE, PRODUCED_DOCUMENT, MADE_DECISION, AFFECTED, INFLUENCED, CURRENT_PRIMARY_ONCALL, HAS_ONCALL_SCHEDULE, USES_ESCALATION_POLICY
-
-Examples:
-Question: Who works on the playback resiliency project?
-Cypher: MATCH (p:Person)-[:WORKED_ON]->(prj:Project) WHERE prj.name =~ '(?i)Playback Resiliency.*' RETURN p.name
-
+Example:
 Question: How is Emma Chen related to the playback service?
 Cypher: MATCH (p:Person)-[*1..3]-(s:Service) WHERE p.name =~ '(?i)Emma Chen' AND s.name =~ '(?i)playback.*' RETURN p.name, s.name, labels(s)
 

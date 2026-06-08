@@ -35,9 +35,9 @@ metric_cols[2].metric('Comparison Queries', len(queries))
 st.subheader('Graph Shape')
 left, right = st.columns(2)
 with left:
-    st.dataframe(nodes['label'].value_counts().rename_axis('node_type').reset_index(name='count'), use_container_width=True)
+    st.dataframe(nodes['label'].value_counts().rename_axis('node_type').reset_index(name='count'), width='stretch')
 with right:
-    st.dataframe(edges['relationship'].value_counts().rename_axis('relationship').reset_index(name='count'), use_container_width=True)
+    st.dataframe(edges['relationship'].value_counts().rename_axis('relationship').reset_index(name='count'), width='stretch')
 
 st.subheader('Required GraphRAG vs Vector RAG Queries')
 query = st.selectbox('Sample Queries', [item['query'] for item in queries])
@@ -72,6 +72,6 @@ st.divider()
 st.subheader('Seed Data Preview')
 tab_nodes, tab_edges = st.tabs(['Nodes', 'Edges'])
 with tab_nodes:
-    st.dataframe(nodes, use_container_width=True)
+    st.dataframe(nodes, width='stretch')
 with tab_edges:
-    st.dataframe(edges, use_container_width=True)
+    st.dataframe(edges, width='stretch')
