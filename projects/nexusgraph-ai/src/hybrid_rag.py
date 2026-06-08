@@ -147,12 +147,20 @@ app = workflow.compile()
 def run_hybrid_rag(query: str):
     inputs = {"query": query, "context": []}
     
-    result = None
+    final_answer = None
+    route_taken = None
+    
     for output in app.stream(inputs):
         for key, value in output.items():
+            if "route" in value:
+                route_taken = value["route"]
             if "answer" in value:
-                result = value["answer"]
-    return result
+                final_answer = value["answer"]
+    
+    return {
+        "answer": final_answer,
+        "route": route_taken
+    }
 
 if __name__ == "__main__":
     import sys
