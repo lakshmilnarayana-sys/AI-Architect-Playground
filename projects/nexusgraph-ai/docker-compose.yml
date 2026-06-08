@@ -34,5 +34,23 @@ services:
       - .:/app
     command: ["streamlit", "run", "app/streamlit_app.py", "--server.address=0.0.0.0", "--server.port=8501"]
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: nexusgraph-ai-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # Uncomment the following lines if you have a GPU and want to use it
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
 volumes:
   neo4j_data:
+  ollama_data:
