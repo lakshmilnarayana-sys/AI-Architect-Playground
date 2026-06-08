@@ -75,7 +75,7 @@ CYPHER_GENERATION_TEMPLATE = """Task: Generate a Cypher statement to query a Neo
 Instructions:
 1. Respond with ONLY the Cypher statement. No preamble, no explanation.
 2. Use ONLY the provided labels and relationships.
-3. CRITICAL: Use the WHERE clause for all property filtering. DO NOT use curly braces {} for properties.
+3. CRITICAL: Use the WHERE clause for all property filtering. DO NOT use curly braces {{}} for properties.
 4. Use case-insensitive matching for name properties using WHERE n.name =~ '(?i)...'.
 5. For multi-hop connections, use: MATCH (a)-[*1..3]-(b)
 
@@ -96,7 +96,7 @@ The question is:
 {question}"""
 
 CYPHER_PROMPT = ChatPromptTemplate.from_messages([
-    ("system", "You are a Neo4j expert. Generate a clean, simple Cypher query based on the schema. Avoid complex traversals if possible."),
+    ("system", "You are a Neo4j expert. Generate a clean, simple Cypher query based on the schema."),
     ("human", CYPHER_GENERATION_TEMPLATE)
 ])
 
