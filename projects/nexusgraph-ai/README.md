@@ -37,7 +37,7 @@ The project uses a fictional streaming company dataset:
 StreamFlix Organizational Knowledge Dataset
 ```
 
-The current seed graph contains people, teams, projects, services, skills, tools, documents, decisions, incidents, audits, vendors, and systems. Source artifacts live in `data/`, while graph import artifacts live in `graph/`.
+The current seed graph contains people, teams, projects, services, skills, tools, documents, decisions, incidents, audits, vendors, systems, on-call schedules, current on-call assignments, dashboards, runbooks, escalation policies, SLO metrics, datastores, event topics, architecture docs, OpenAPI specs, Kubernetes manifests, and Terraform references. It also incorporates missing service-dependency and operational documentation concepts from the Netflix synthetic service dataset. Source artifacts live in `data/`, while graph import artifacts live in `graph/`.
 
 ## Deliverables
 

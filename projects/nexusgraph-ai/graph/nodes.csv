@@ -95,3 +95,219 @@ vendor:okta,Vendor,Okta,Identity vendor
 system:billing-platform,System,Billing Platform,Billing domain
 system:playback-platform,System,Playback Platform,Playback domain
 system:recommendation-platform,System,Recommendation Platform,Recommendation domain
+oncall:playback-primary,OnCallSchedule,Playback Primary On-call,Current primary rotation for playback-service and cdn-routing-service
+oncall:billing-primary,OnCallSchedule,Billing Primary On-call,Current primary rotation for billing-service and payment-gateway-service
+oncall:identity-security,OnCallSchedule,Identity Security On-call,Current security rotation for identity-service and audit-evidence-service
+oncall:recommendation-platform,OnCallSchedule,Recommendation Platform On-call,Current rotation for recommendation-service and feature-store-service
+oncall:observability-platform,OnCallSchedule,Observability Platform On-call,Current rotation for observability-service and telemetry tooling
+runbook:playback-latency,Runbook,Playback Latency Runbook,"Steps for playback latency, CDN failover, and manifest degradation"
+runbook:billing-incident,Runbook,Billing Incident Runbook,"Steps for payment anomalies, double charges, and ledger reconciliation"
+runbook:identity-lockout,Runbook,Identity Lockout Runbook,"Steps for admin lockouts, MFA recovery, and privileged access review"
+runbook:recommendation-staleness,Runbook,Recommendation Staleness Runbook,Steps for stale recommendations and feature-store freshness
+runbook:observability-degradation,Runbook,Observability Degradation Runbook,"Steps for telemetry gaps, dashboard outages, and alert routing failures"
+dashboard:playback-health,Dashboard,Playback Health Dashboard,"Grafana dashboard for playback latency, error rate, and CDN routing health"
+dashboard:billing-health,Dashboard,Billing Health Dashboard,"Grafana dashboard for billing success rate, payment errors, and ledger lag"
+dashboard:identity-risk,Dashboard,Identity Risk Dashboard,"Grafana dashboard for login failures, MFA errors, and admin lockouts"
+dashboard:recommendation-freshness,Dashboard,Recommendation Freshness Dashboard,"Grafana dashboard for recommendation freshness, feature lag, and ranking latency"
+dashboard:platform-slos,Dashboard,Platform SLO Dashboard,"Grafana dashboard for service SLOs across playback, billing, identity, and recommendations"
+escalation:playback-sev1,EscalationPolicy,Playback SEV1 Escalation Policy,Escalates playback customer-impacting incidents from SRE to Platform Engineering leadership
+escalation:billing-sev2,EscalationPolicy,Billing SEV2 Escalation Policy,Escalates billing correctness incidents to Billing Platform and Product Strategy
+escalation:security-sev1,EscalationPolicy,Security SEV1 Escalation Policy,Escalates identity and access incidents to Security Governance leadership
+escalation:recommendation-sev2,EscalationPolicy,Recommendation SEV2 Escalation Policy,Escalates recommendation quality or freshness incidents to ML platform owners
+slo:playback-availability,SLOMetric,Playback Availability SLO,99.95% monthly availability for playback-service
+slo:playback-start-latency,SLOMetric,Playback Start Latency SLO,95% of playback starts below 2 seconds
+slo:billing-correctness,SLOMetric,Billing Correctness SLO,99.99% successful billing events without duplicate charge
+slo:identity-login-success,SLOMetric,Identity Login Success SLO,99.9% successful customer login attempts
+slo:recommendation-freshness,SLOMetric,Recommendation Freshness SLO,95% of recommendations generated from features less than 15 minutes old
+slo:observability-ingestion,SLOMetric,Observability Ingestion SLO,99.5% telemetry ingestion within 60 seconds
+datastore:aurora,Datastore,aurora,Imported from Netflix synthetic dataset: Datastore aurora
+datastore:cassandra,Datastore,cassandra,Imported from Netflix synthetic dataset: Datastore cassandra
+datastore:dynamodb,Datastore,dynamodb,Imported from Netflix synthetic dataset: Datastore dynamodb
+datastore:elasticsearch,Datastore,elasticsearch,Imported from Netflix synthetic dataset: Datastore elasticsearch
+datastore:feature-store,Datastore,feature-store,Imported from Netflix synthetic dataset: Datastore feature-store
+datastore:kafka,Datastore,kafka,Imported from Netflix synthetic dataset: Datastore kafka
+datastore:postgres,Datastore,postgres,Imported from Netflix synthetic dataset: Datastore postgres
+datastore:redis,Datastore,redis,Imported from Netflix synthetic dataset: Datastore redis
+datastore:s3,Datastore,s3,Imported from Netflix synthetic dataset: Datastore s3
+environment:production,Environment,production,Imported from Netflix synthetic dataset: Environment production
+runbook:docs-runbooks-account-service-runbook-md,Runbook,docs/runbooks/account-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/account-service-runbook.md
+runbook:docs-runbooks-analytics-service-runbook-md,Runbook,docs/runbooks/analytics-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/analytics-service-runbook.md
+runbook:docs-runbooks-api-gateway-runbook-md,Runbook,docs/runbooks/api-gateway-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/api-gateway-runbook.md
+runbook:docs-runbooks-auth-service-runbook-md,Runbook,docs/runbooks/auth-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/auth-service-runbook.md
+runbook:docs-runbooks-billing-service-runbook-md,Runbook,docs/runbooks/billing-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/billing-service-runbook.md
+runbook:docs-runbooks-catalog-service-runbook-md,Runbook,docs/runbooks/catalog-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/catalog-service-runbook.md
+runbook:docs-runbooks-cdn-routing-service-runbook-md,Runbook,docs/runbooks/cdn-routing-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/cdn-routing-service-runbook.md
+runbook:docs-runbooks-config-service-runbook-md,Runbook,docs/runbooks/config-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/config-service-runbook.md
+runbook:docs-runbooks-device-auth-service-runbook-md,Runbook,docs/runbooks/device-auth-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/device-auth-service-runbook.md
+runbook:docs-runbooks-edge-router-runbook-md,Runbook,docs/runbooks/edge-router-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/edge-router-runbook.md
+runbook:docs-runbooks-email-service-runbook-md,Runbook,docs/runbooks/email-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/email-service-runbook.md
+runbook:docs-runbooks-event-ingestion-service-runbook-md,Runbook,docs/runbooks/event-ingestion-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/event-ingestion-service-runbook.md
+runbook:docs-runbooks-experiment-service-runbook-md,Runbook,docs/runbooks/experiment-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/experiment-service-runbook.md
+runbook:docs-runbooks-feature-store-service-runbook-md,Runbook,docs/runbooks/feature-store-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/feature-store-service-runbook.md
+runbook:docs-runbooks-invoice-service-runbook-md,Runbook,docs/runbooks/invoice-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/invoice-service-runbook.md
+runbook:docs-runbooks-license-service-runbook-md,Runbook,docs/runbooks/license-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/license-service-runbook.md
+runbook:docs-runbooks-manifest-service-runbook-md,Runbook,docs/runbooks/manifest-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/manifest-service-runbook.md
+runbook:docs-runbooks-metadata-service-runbook-md,Runbook,docs/runbooks/metadata-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/metadata-service-runbook.md
+runbook:docs-runbooks-ml-ranking-service-runbook-md,Runbook,docs/runbooks/ml-ranking-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/ml-ranking-service-runbook.md
+runbook:docs-runbooks-notification-service-runbook-md,Runbook,docs/runbooks/notification-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/notification-service-runbook.md
+runbook:docs-runbooks-observability-service-runbook-md,Runbook,docs/runbooks/observability-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/observability-service-runbook.md
+runbook:docs-runbooks-payment-service-runbook-md,Runbook,docs/runbooks/payment-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/payment-service-runbook.md
+runbook:docs-runbooks-personalization-service-runbook-md,Runbook,docs/runbooks/personalization-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/personalization-service-runbook.md
+runbook:docs-runbooks-playback-service-runbook-md,Runbook,docs/runbooks/playback-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/playback-service-runbook.md
+runbook:docs-runbooks-profile-service-runbook-md,Runbook,docs/runbooks/profile-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/profile-service-runbook.md
+runbook:docs-runbooks-push-service-runbook-md,Runbook,docs/runbooks/push-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/push-service-runbook.md
+runbook:docs-runbooks-ratings-service-runbook-md,Runbook,docs/runbooks/ratings-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/ratings-service-runbook.md
+runbook:docs-runbooks-recommendation-service-runbook-md,Runbook,docs/runbooks/recommendation-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/recommendation-service-runbook.md
+runbook:docs-runbooks-search-service-runbook-md,Runbook,docs/runbooks/search-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/search-service-runbook.md
+runbook:docs-runbooks-subscription-service-runbook-md,Runbook,docs/runbooks/subscription-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/subscription-service-runbook.md
+runbook:docs-runbooks-subtitle-service-runbook-md,Runbook,docs/runbooks/subtitle-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/subtitle-service-runbook.md
+runbook:docs-runbooks-watchlist-service-runbook-md,Runbook,docs/runbooks/watchlist-service-runbook.md,Runbook document imported from Netflix synthetic dataset: docs/runbooks/watchlist-service-runbook.md
+service:account-service,Service,account-service,Imported from Netflix synthetic dataset: Service account-service
+service:analytics-service,Service,analytics-service,Imported from Netflix synthetic dataset: Service analytics-service
+service:api-gateway,Service,api-gateway,Imported from Netflix synthetic dataset: Service api-gateway
+service:auth-service,Service,auth-service,Imported from Netflix synthetic dataset: Service auth-service
+service:catalog-service,Service,catalog-service,Imported from Netflix synthetic dataset: Service catalog-service
+service:config-service,Service,config-service,Imported from Netflix synthetic dataset: Service config-service
+service:device-auth-service,Service,device-auth-service,Imported from Netflix synthetic dataset: Service device-auth-service
+service:edge-router,Service,edge-router,Imported from Netflix synthetic dataset: Service edge-router
+service:email-service,Service,email-service,Imported from Netflix synthetic dataset: Service email-service
+service:event-ingestion-service,Service,event-ingestion-service,Imported from Netflix synthetic dataset: Service event-ingestion-service
+service:experiment-service,Service,experiment-service,Imported from Netflix synthetic dataset: Service experiment-service
+service:invoice-service,Service,invoice-service,Imported from Netflix synthetic dataset: Service invoice-service
+service:license-service,Service,license-service,Imported from Netflix synthetic dataset: Service license-service
+service:metadata-service,Service,metadata-service,Imported from Netflix synthetic dataset: Service metadata-service
+service:ml-ranking-service,Service,ml-ranking-service,Imported from Netflix synthetic dataset: Service ml-ranking-service
+service:notification-service,Service,notification-service,Imported from Netflix synthetic dataset: Service notification-service
+service:payment-service,Service,payment-service,Imported from Netflix synthetic dataset: Service payment-service
+service:personalization-service,Service,personalization-service,Imported from Netflix synthetic dataset: Service personalization-service
+service:profile-service,Service,profile-service,Imported from Netflix synthetic dataset: Service profile-service
+service:push-service,Service,push-service,Imported from Netflix synthetic dataset: Service push-service
+service:ratings-service,Service,ratings-service,Imported from Netflix synthetic dataset: Service ratings-service
+service:search-service,Service,search-service,Imported from Netflix synthetic dataset: Service search-service
+service:subscription-service,Service,subscription-service,Imported from Netflix synthetic dataset: Service subscription-service
+service:subtitle-service,Service,subtitle-service,Imported from Netflix synthetic dataset: Service subtitle-service
+service:watchlist-service,Service,watchlist-service,Imported from Netflix synthetic dataset: Service watchlist-service
+team:content-discovery-team,Team,content-discovery-team,Imported from Netflix synthetic dataset: Team content-discovery-team
+team:core-platform-team,Team,core-platform-team,Imported from Netflix synthetic dataset: Team core-platform-team
+team:data-platform-team,Team,data-platform-team,Imported from Netflix synthetic dataset: Team data-platform-team
+team:identity-platform-team,Team,identity-platform-team,Imported from Netflix synthetic dataset: Team identity-platform-team
+team:monetization-platform-team,Team,monetization-platform-team,Imported from Netflix synthetic dataset: Team monetization-platform-team
+team:streaming-platform-team,Team,streaming-platform-team,Imported from Netflix synthetic dataset: Team streaming-platform-team
+team:user-engagement-team,Team,user-engagement-team,Imported from Netflix synthetic dataset: Team user-engagement-team
+topic:billing-events,Topic,billing-events,Imported from Netflix synthetic dataset: Topic billing-events
+topic:catalog-events,Topic,catalog-events,Imported from Netflix synthetic dataset: Topic catalog-events
+topic:device-events,Topic,device-events,Imported from Netflix synthetic dataset: Topic device-events
+topic:experiment-events,Topic,experiment-events,Imported from Netflix synthetic dataset: Topic experiment-events
+topic:notification-events,Topic,notification-events,Imported from Netflix synthetic dataset: Topic notification-events
+topic:playback-events,Topic,playback-events,Imported from Netflix synthetic dataset: Topic playback-events
+topic:recommendation-events,Topic,recommendation-events,Imported from Netflix synthetic dataset: Topic recommendation-events
+topic:user-events,Topic,user-events,Imported from Netflix synthetic dataset: Topic user-events
+architecture-doc:docs-architecture-account-service-md,ArchitectureDoc,docs/architecture/account-service.md,Architecture document for account-service
+openapi:openapi-account-service-openapi-yaml,OpenAPISpec,openapi/account-service-openapi.yaml,OpenAPI specification for account-service
+k8s:k8s-account-service-deployment-yaml,KubernetesManifest,k8s/account-service-deployment.yaml,Kubernetes deployment manifest for account-service
+architecture-doc:docs-architecture-analytics-service-md,ArchitectureDoc,docs/architecture/analytics-service.md,Architecture document for analytics-service
+openapi:openapi-analytics-service-openapi-yaml,OpenAPISpec,openapi/analytics-service-openapi.yaml,OpenAPI specification for analytics-service
+k8s:k8s-analytics-service-deployment-yaml,KubernetesManifest,k8s/analytics-service-deployment.yaml,Kubernetes deployment manifest for analytics-service
+architecture-doc:docs-architecture-api-gateway-md,ArchitectureDoc,docs/architecture/api-gateway.md,Architecture document for api-gateway
+openapi:openapi-api-gateway-openapi-yaml,OpenAPISpec,openapi/api-gateway-openapi.yaml,OpenAPI specification for api-gateway
+k8s:k8s-api-gateway-deployment-yaml,KubernetesManifest,k8s/api-gateway-deployment.yaml,Kubernetes deployment manifest for api-gateway
+architecture-doc:docs-architecture-auth-service-md,ArchitectureDoc,docs/architecture/auth-service.md,Architecture document for auth-service
+openapi:openapi-auth-service-openapi-yaml,OpenAPISpec,openapi/auth-service-openapi.yaml,OpenAPI specification for auth-service
+k8s:k8s-auth-service-deployment-yaml,KubernetesManifest,k8s/auth-service-deployment.yaml,Kubernetes deployment manifest for auth-service
+architecture-doc:docs-architecture-billing-service-md,ArchitectureDoc,docs/architecture/billing-service.md,Architecture document for billing-service
+openapi:openapi-billing-service-openapi-yaml,OpenAPISpec,openapi/billing-service-openapi.yaml,OpenAPI specification for billing-service
+k8s:k8s-billing-service-deployment-yaml,KubernetesManifest,k8s/billing-service-deployment.yaml,Kubernetes deployment manifest for billing-service
+architecture-doc:docs-architecture-catalog-service-md,ArchitectureDoc,docs/architecture/catalog-service.md,Architecture document for catalog-service
+openapi:openapi-catalog-service-openapi-yaml,OpenAPISpec,openapi/catalog-service-openapi.yaml,OpenAPI specification for catalog-service
+k8s:k8s-catalog-service-deployment-yaml,KubernetesManifest,k8s/catalog-service-deployment.yaml,Kubernetes deployment manifest for catalog-service
+architecture-doc:docs-architecture-cdn-routing-service-md,ArchitectureDoc,docs/architecture/cdn-routing-service.md,Architecture document for cdn-routing-service
+openapi:openapi-cdn-routing-service-openapi-yaml,OpenAPISpec,openapi/cdn-routing-service-openapi.yaml,OpenAPI specification for cdn-routing-service
+k8s:k8s-cdn-routing-service-deployment-yaml,KubernetesManifest,k8s/cdn-routing-service-deployment.yaml,Kubernetes deployment manifest for cdn-routing-service
+architecture-doc:docs-architecture-config-service-md,ArchitectureDoc,docs/architecture/config-service.md,Architecture document for config-service
+openapi:openapi-config-service-openapi-yaml,OpenAPISpec,openapi/config-service-openapi.yaml,OpenAPI specification for config-service
+k8s:k8s-config-service-deployment-yaml,KubernetesManifest,k8s/config-service-deployment.yaml,Kubernetes deployment manifest for config-service
+architecture-doc:docs-architecture-device-auth-service-md,ArchitectureDoc,docs/architecture/device-auth-service.md,Architecture document for device-auth-service
+openapi:openapi-device-auth-service-openapi-yaml,OpenAPISpec,openapi/device-auth-service-openapi.yaml,OpenAPI specification for device-auth-service
+k8s:k8s-device-auth-service-deployment-yaml,KubernetesManifest,k8s/device-auth-service-deployment.yaml,Kubernetes deployment manifest for device-auth-service
+architecture-doc:docs-architecture-edge-router-md,ArchitectureDoc,docs/architecture/edge-router.md,Architecture document for edge-router
+openapi:openapi-edge-router-openapi-yaml,OpenAPISpec,openapi/edge-router-openapi.yaml,OpenAPI specification for edge-router
+k8s:k8s-edge-router-deployment-yaml,KubernetesManifest,k8s/edge-router-deployment.yaml,Kubernetes deployment manifest for edge-router
+architecture-doc:docs-architecture-email-service-md,ArchitectureDoc,docs/architecture/email-service.md,Architecture document for email-service
+openapi:openapi-email-service-openapi-yaml,OpenAPISpec,openapi/email-service-openapi.yaml,OpenAPI specification for email-service
+k8s:k8s-email-service-deployment-yaml,KubernetesManifest,k8s/email-service-deployment.yaml,Kubernetes deployment manifest for email-service
+architecture-doc:docs-architecture-event-ingestion-service-md,ArchitectureDoc,docs/architecture/event-ingestion-service.md,Architecture document for event-ingestion-service
+openapi:openapi-event-ingestion-service-openapi-yaml,OpenAPISpec,openapi/event-ingestion-service-openapi.yaml,OpenAPI specification for event-ingestion-service
+k8s:k8s-event-ingestion-service-deployment-yaml,KubernetesManifest,k8s/event-ingestion-service-deployment.yaml,Kubernetes deployment manifest for event-ingestion-service
+architecture-doc:docs-architecture-experiment-service-md,ArchitectureDoc,docs/architecture/experiment-service.md,Architecture document for experiment-service
+openapi:openapi-experiment-service-openapi-yaml,OpenAPISpec,openapi/experiment-service-openapi.yaml,OpenAPI specification for experiment-service
+k8s:k8s-experiment-service-deployment-yaml,KubernetesManifest,k8s/experiment-service-deployment.yaml,Kubernetes deployment manifest for experiment-service
+architecture-doc:docs-architecture-feature-store-service-md,ArchitectureDoc,docs/architecture/feature-store-service.md,Architecture document for feature-store-service
+openapi:openapi-feature-store-service-openapi-yaml,OpenAPISpec,openapi/feature-store-service-openapi.yaml,OpenAPI specification for feature-store-service
+k8s:k8s-feature-store-service-deployment-yaml,KubernetesManifest,k8s/feature-store-service-deployment.yaml,Kubernetes deployment manifest for feature-store-service
+architecture-doc:docs-architecture-invoice-service-md,ArchitectureDoc,docs/architecture/invoice-service.md,Architecture document for invoice-service
+openapi:openapi-invoice-service-openapi-yaml,OpenAPISpec,openapi/invoice-service-openapi.yaml,OpenAPI specification for invoice-service
+k8s:k8s-invoice-service-deployment-yaml,KubernetesManifest,k8s/invoice-service-deployment.yaml,Kubernetes deployment manifest for invoice-service
+architecture-doc:docs-architecture-license-service-md,ArchitectureDoc,docs/architecture/license-service.md,Architecture document for license-service
+openapi:openapi-license-service-openapi-yaml,OpenAPISpec,openapi/license-service-openapi.yaml,OpenAPI specification for license-service
+k8s:k8s-license-service-deployment-yaml,KubernetesManifest,k8s/license-service-deployment.yaml,Kubernetes deployment manifest for license-service
+architecture-doc:docs-architecture-manifest-service-md,ArchitectureDoc,docs/architecture/manifest-service.md,Architecture document for manifest-service
+openapi:openapi-manifest-service-openapi-yaml,OpenAPISpec,openapi/manifest-service-openapi.yaml,OpenAPI specification for manifest-service
+k8s:k8s-manifest-service-deployment-yaml,KubernetesManifest,k8s/manifest-service-deployment.yaml,Kubernetes deployment manifest for manifest-service
+architecture-doc:docs-architecture-metadata-service-md,ArchitectureDoc,docs/architecture/metadata-service.md,Architecture document for metadata-service
+openapi:openapi-metadata-service-openapi-yaml,OpenAPISpec,openapi/metadata-service-openapi.yaml,OpenAPI specification for metadata-service
+k8s:k8s-metadata-service-deployment-yaml,KubernetesManifest,k8s/metadata-service-deployment.yaml,Kubernetes deployment manifest for metadata-service
+architecture-doc:docs-architecture-ml-ranking-service-md,ArchitectureDoc,docs/architecture/ml-ranking-service.md,Architecture document for ml-ranking-service
+openapi:openapi-ml-ranking-service-openapi-yaml,OpenAPISpec,openapi/ml-ranking-service-openapi.yaml,OpenAPI specification for ml-ranking-service
+k8s:k8s-ml-ranking-service-deployment-yaml,KubernetesManifest,k8s/ml-ranking-service-deployment.yaml,Kubernetes deployment manifest for ml-ranking-service
+architecture-doc:docs-architecture-notification-service-md,ArchitectureDoc,docs/architecture/notification-service.md,Architecture document for notification-service
+openapi:openapi-notification-service-openapi-yaml,OpenAPISpec,openapi/notification-service-openapi.yaml,OpenAPI specification for notification-service
+k8s:k8s-notification-service-deployment-yaml,KubernetesManifest,k8s/notification-service-deployment.yaml,Kubernetes deployment manifest for notification-service
+architecture-doc:docs-architecture-observability-service-md,ArchitectureDoc,docs/architecture/observability-service.md,Architecture document for observability-service
+openapi:openapi-observability-service-openapi-yaml,OpenAPISpec,openapi/observability-service-openapi.yaml,OpenAPI specification for observability-service
+k8s:k8s-observability-service-deployment-yaml,KubernetesManifest,k8s/observability-service-deployment.yaml,Kubernetes deployment manifest for observability-service
+architecture-doc:docs-architecture-payment-service-md,ArchitectureDoc,docs/architecture/payment-service.md,Architecture document for payment-service
+openapi:openapi-payment-service-openapi-yaml,OpenAPISpec,openapi/payment-service-openapi.yaml,OpenAPI specification for payment-service
+k8s:k8s-payment-service-deployment-yaml,KubernetesManifest,k8s/payment-service-deployment.yaml,Kubernetes deployment manifest for payment-service
+architecture-doc:docs-architecture-personalization-service-md,ArchitectureDoc,docs/architecture/personalization-service.md,Architecture document for personalization-service
+openapi:openapi-personalization-service-openapi-yaml,OpenAPISpec,openapi/personalization-service-openapi.yaml,OpenAPI specification for personalization-service
+k8s:k8s-personalization-service-deployment-yaml,KubernetesManifest,k8s/personalization-service-deployment.yaml,Kubernetes deployment manifest for personalization-service
+architecture-doc:docs-architecture-playback-service-md,ArchitectureDoc,docs/architecture/playback-service.md,Architecture document for playback-service
+openapi:openapi-playback-service-openapi-yaml,OpenAPISpec,openapi/playback-service-openapi.yaml,OpenAPI specification for playback-service
+k8s:k8s-playback-service-deployment-yaml,KubernetesManifest,k8s/playback-service-deployment.yaml,Kubernetes deployment manifest for playback-service
+architecture-doc:docs-architecture-profile-service-md,ArchitectureDoc,docs/architecture/profile-service.md,Architecture document for profile-service
+openapi:openapi-profile-service-openapi-yaml,OpenAPISpec,openapi/profile-service-openapi.yaml,OpenAPI specification for profile-service
+k8s:k8s-profile-service-deployment-yaml,KubernetesManifest,k8s/profile-service-deployment.yaml,Kubernetes deployment manifest for profile-service
+architecture-doc:docs-architecture-push-service-md,ArchitectureDoc,docs/architecture/push-service.md,Architecture document for push-service
+openapi:openapi-push-service-openapi-yaml,OpenAPISpec,openapi/push-service-openapi.yaml,OpenAPI specification for push-service
+k8s:k8s-push-service-deployment-yaml,KubernetesManifest,k8s/push-service-deployment.yaml,Kubernetes deployment manifest for push-service
+architecture-doc:docs-architecture-ratings-service-md,ArchitectureDoc,docs/architecture/ratings-service.md,Architecture document for ratings-service
+openapi:openapi-ratings-service-openapi-yaml,OpenAPISpec,openapi/ratings-service-openapi.yaml,OpenAPI specification for ratings-service
+k8s:k8s-ratings-service-deployment-yaml,KubernetesManifest,k8s/ratings-service-deployment.yaml,Kubernetes deployment manifest for ratings-service
+architecture-doc:docs-architecture-recommendation-service-md,ArchitectureDoc,docs/architecture/recommendation-service.md,Architecture document for recommendation-service
+openapi:openapi-recommendation-service-openapi-yaml,OpenAPISpec,openapi/recommendation-service-openapi.yaml,OpenAPI specification for recommendation-service
+k8s:k8s-recommendation-service-deployment-yaml,KubernetesManifest,k8s/recommendation-service-deployment.yaml,Kubernetes deployment manifest for recommendation-service
+architecture-doc:docs-architecture-search-service-md,ArchitectureDoc,docs/architecture/search-service.md,Architecture document for search-service
+openapi:openapi-search-service-openapi-yaml,OpenAPISpec,openapi/search-service-openapi.yaml,OpenAPI specification for search-service
+k8s:k8s-search-service-deployment-yaml,KubernetesManifest,k8s/search-service-deployment.yaml,Kubernetes deployment manifest for search-service
+architecture-doc:docs-architecture-subscription-service-md,ArchitectureDoc,docs/architecture/subscription-service.md,Architecture document for subscription-service
+openapi:openapi-subscription-service-openapi-yaml,OpenAPISpec,openapi/subscription-service-openapi.yaml,OpenAPI specification for subscription-service
+k8s:k8s-subscription-service-deployment-yaml,KubernetesManifest,k8s/subscription-service-deployment.yaml,Kubernetes deployment manifest for subscription-service
+architecture-doc:docs-architecture-subtitle-service-md,ArchitectureDoc,docs/architecture/subtitle-service.md,Architecture document for subtitle-service
+openapi:openapi-subtitle-service-openapi-yaml,OpenAPISpec,openapi/subtitle-service-openapi.yaml,OpenAPI specification for subtitle-service
+k8s:k8s-subtitle-service-deployment-yaml,KubernetesManifest,k8s/subtitle-service-deployment.yaml,Kubernetes deployment manifest for subtitle-service
+architecture-doc:docs-architecture-watchlist-service-md,ArchitectureDoc,docs/architecture/watchlist-service.md,Architecture document for watchlist-service
+openapi:openapi-watchlist-service-openapi-yaml,OpenAPISpec,openapi/watchlist-service-openapi.yaml,OpenAPI specification for watchlist-service
+k8s:k8s-watchlist-service-deployment-yaml,KubernetesManifest,k8s/watchlist-service-deployment.yaml,Kubernetes deployment manifest for watchlist-service
+terraform:terraform-main-tf,TerraformModule,terraform/main.tf,Terraform infrastructure module from Netflix synthetic dataset
+incident:auth-error-spike-incident,Incident,auth-error-spike-incident,Incident document imported from Netflix synthetic dataset: docs/incidents/auth-error-spike-incident.md
+document:docs-incidents-auth-error-spike-incident-md,Document,docs/incidents/auth-error-spike-incident.md,Incident analysis document for auth-error-spike-incident
+incident:billing-timeout-incident,Incident,billing-timeout-incident,Incident document imported from Netflix synthetic dataset: docs/incidents/billing-timeout-incident.md
+document:docs-incidents-billing-timeout-incident-md,Document,docs/incidents/billing-timeout-incident.md,Incident analysis document for billing-timeout-incident
+incident:catalog-search-incident,Incident,catalog-search-incident,Incident document imported from Netflix synthetic dataset: docs/incidents/catalog-search-incident.md
+document:docs-incidents-catalog-search-incident-md,Document,docs/incidents/catalog-search-incident.md,Incident analysis document for catalog-search-incident
+incident:notification-delay-incident,Incident,notification-delay-incident,Incident document imported from Netflix synthetic dataset: docs/incidents/notification-delay-incident.md
+document:docs-incidents-notification-delay-incident-md,Document,docs/incidents/notification-delay-incident.md,Incident analysis document for notification-delay-incident
+incident:playback-latency-incident,Incident,playback-latency-incident,Incident document imported from Netflix synthetic dataset: docs/incidents/playback-latency-incident.md
+document:docs-incidents-playback-latency-incident-md,Document,docs/incidents/playback-latency-incident.md,Incident analysis document for playback-latency-incident
+incident:recommendation-quality-incident,Incident,recommendation-quality-incident,Incident document imported from Netflix synthetic dataset: docs/incidents/recommendation-quality-incident.md
+document:docs-incidents-recommendation-quality-incident-md,Document,docs/incidents/recommendation-quality-incident.md,Incident analysis document for recommendation-quality-incident

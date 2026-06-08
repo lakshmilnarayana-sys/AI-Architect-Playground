@@ -1,0 +1,150 @@
+[
+  {
+    "question": "What services does playback-service depend on?",
+    "expected": [
+      "license-service",
+      "manifest-service",
+      "cdn-routing-service",
+      "subtitle-service",
+      "auth-service"
+    ],
+    "type": "dependency"
+  },
+  {
+    "question": "If payment-service fails, which services are directly impacted?",
+    "expected": [
+      "billing-service",
+      "subscription-service"
+    ],
+    "type": "reverse_dependency"
+  },
+  {
+    "question": "Who owns recommendation-service?",
+    "expected": "content-discovery-team",
+    "type": "ownership"
+  },
+  {
+    "question": "Which services use redis?",
+    "expected": [
+      "auth-service",
+      "profile-service",
+      "device-auth-service",
+      "search-service",
+      "recommendation-service",
+      "personalization-service",
+      "playback-service",
+      "license-service",
+      "manifest-service",
+      "cdn-routing-service",
+      "billing-service",
+      "subscription-service",
+      "notification-service",
+      "api-gateway",
+      "edge-router",
+      "experiment-service",
+      "feature-store-service",
+      "ml-ranking-service"
+    ],
+    "type": "datastore"
+  },
+  {
+    "question": "Which services consume billing-events?",
+    "expected": [
+      "notification-service",
+      "analytics-service",
+      "invoice-service"
+    ],
+    "type": "event_consumers"
+  },
+  {
+    "question": "Which runbook should be used for auth-service issues?",
+    "expected": [
+      "docs/runbooks/auth-service-runbook.md"
+    ],
+    "type": "runbook"
+  },
+  {
+    "question": "Which tier-0 services exist?",
+    "expected": [
+      "playback-service",
+      "api-gateway",
+      "edge-router"
+    ],
+    "type": "tier"
+  },
+  {
+    "question": "Which incident affected billing-service?",
+    "expected": [
+      "billing-timeout-incident"
+    ],
+    "type": "incident"
+  },
+  {
+    "question": "What datastores does billing-service use?",
+    "expected": [
+      "aurora",
+      "redis"
+    ],
+    "type": "datastore"
+  },
+  {
+    "question": "Which services publish playback-events?",
+    "expected": [
+      "playback-service",
+      "event-ingestion-service"
+    ],
+    "type": "publisher"
+  },
+  {
+    "question": "What is the impact path from playback-service to cdn-routing-service?",
+    "expected": [
+      "playback-service",
+      "cdn-routing-service"
+    ],
+    "type": "path"
+  },
+  {
+    "question": "Which services are owned by core-platform-team?",
+    "expected": [
+      "api-gateway",
+      "edge-router",
+      "config-service",
+      "experiment-service",
+      "observability-service"
+    ],
+    "type": "ownership"
+  },
+  {
+    "question": "What services depend on account-service?",
+    "expected": [
+      "auth-service",
+      "profile-service",
+      "device-auth-service",
+      "license-service",
+      "billing-service",
+      "payment-service",
+      "subscription-service"
+    ],
+    "type": "reverse_dependency"
+  },
+  {
+    "question": "Which service uses elasticsearch and is related to search?",
+    "expected": [
+      "catalog-service",
+      "search-service",
+      "observability-service"
+    ],
+    "type": "datastore"
+  },
+  {
+    "question": "What should an engineer check first for recommendation-service incident?",
+    "expected": [
+      "Kubernetes health",
+      "p95 latency",
+      "dependencies",
+      "datastores",
+      "recent deployments"
+    ],
+    "type": "runbook_rag"
+  }
+]

@@ -1,0 +1,20 @@
+-
+  id: "escalation:playback-sev1"
+  type: "EscalationPolicy"
+  name: "Playback SEV1 Escalation Policy"
+  description: "Escalates playback customer-impacting incidents from SRE to Platform Engineering leadership"
+-
+  id: "escalation:billing-sev2"
+  type: "EscalationPolicy"
+  name: "Billing SEV2 Escalation Policy"
+  description: "Escalates billing correctness incidents to Billing Platform and Product Strategy"
+-
+  id: "escalation:security-sev1"
+  type: "EscalationPolicy"
+  name: "Security SEV1 Escalation Policy"
+  description: "Escalates identity and access incidents to Security Governance leadership"
+-
+  id: "escalation:recommendation-sev2"
+  type: "EscalationPolicy"
+  name: "Recommendation SEV2 Escalation Policy"
+  description: "Escalates recommendation quality or freshness incidents to ML platform owners"

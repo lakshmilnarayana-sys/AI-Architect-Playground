@@ -1,0 +1,25 @@
+-
+  id: "runbook:playback-latency"
+  type: "Runbook"
+  name: "Playback Latency Runbook"
+  description: "Steps for playback latency, CDN failover, and manifest degradation"
+-
+  id: "runbook:billing-incident"
+  type: "Runbook"
+  name: "Billing Incident Runbook"
+  description: "Steps for payment anomalies, double charges, and ledger reconciliation"
+-
+  id: "runbook:identity-lockout"
+  type: "Runbook"
+  name: "Identity Lockout Runbook"
+  description: "Steps for admin lockouts, MFA recovery, and privileged access review"
+-
+  id: "runbook:recommendation-staleness"
+  type: "Runbook"
+  name: "Recommendation Staleness Runbook"
+  description: "Steps for stale recommendations and feature-store freshness"
+-
+  id: "runbook:observability-degradation"
+  type: "Runbook"
+  name: "Observability Degradation Runbook"
+  description: "Steps for telemetry gaps, dashboard outages, and alert routing failures"
