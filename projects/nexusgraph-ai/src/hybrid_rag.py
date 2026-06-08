@@ -4,16 +4,24 @@ from typing import Annotated, List, Optional, TypedDict
 from dotenv import load_dotenv
 
 from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 from langchain_neo4j import Neo4jGraph, GraphCypherQAChain
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, END
 
 # Use relative imports if possible, or assume src is in path
 try:
-    from config import DEFAULT_NEO4J_URI, DEFAULT_NEO4J_USERNAME, DEFAULT_NEO4J_PASSWORD, DEFAULT_LLM_MODEL
+    from config import (
+        DEFAULT_NEO4J_URI, DEFAULT_NEO4J_USERNAME, DEFAULT_NEO4J_PASSWORD,
+        LLM_PROVIDER, DEFAULT_OPENAI_MODEL, DEFAULT_GEMINI_MODEL, DEFAULT_GROQ_MODEL
+    )
     from vector_query import query_vector_store
 except ImportError:
-    from src.config import DEFAULT_NEO4J_URI, DEFAULT_NEO4J_USERNAME, DEFAULT_NEO4J_PASSWORD, DEFAULT_LLM_MODEL
+    from src.config import (
+        DEFAULT_NEO4J_URI, DEFAULT_NEO4J_USERNAME, DEFAULT_NEO4J_PASSWORD,
+        LLM_PROVIDER, DEFAULT_OPENAI_MODEL, DEFAULT_GEMINI_MODEL, DEFAULT_GROQ_MODEL
+    )
     from src.vector_query import query_vector_store
 
 # Load environment variables
@@ -26,8 +34,24 @@ class State(TypedDict):
     answer: Optional[str]
 
 # LLM for routing and synthesis
-# Ensure OPENAI_API_KEY is in your .env
-llm = ChatOpenAI(model=os.getenv("OPENAI_MODEL", DEFAULT_LLM_MODEL), temperature=0)
+provider = os.getenv("LLM_PROVIDER", LLM_PROVIDER).lower()
+
+if provider == "gemini":
+    llm = ChatGoogleGenerativeAI(
+        model=os.getenv("GOOGLE_MODEL", DEFAULT_GEMINI_MODEL),
+        temperature=0,
+        google_api_key=os.getenv("GOOGLE_API_KEY")
+    )
+elif provider == "groq":
+    llm = ChatGroq(
+        model=os.getenv("GROQ_MODEL", DEFAULT_GROQ_MODEL),
+        temperature=0
+    )
+else: # default to openai
+    llm = ChatOpenAI(
+        model=os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL),
+        temperature=0
+    )
 
 # Initialize Neo4j Graph
 graph = Neo4jGraph(
