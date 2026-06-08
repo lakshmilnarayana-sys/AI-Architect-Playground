@@ -19,3 +19,6 @@ SOURCE_GLOBS = [
 DEFAULT_NEO4J_URI = 'bolt://localhost:7687'
 DEFAULT_NEO4J_USERNAME = 'neo4j'
 DEFAULT_NEO4J_PASSWORD = 'nexusgraph-local'
+
+# LLM Config
+DEFAULT_LLM_MODEL = 'llama-3.3-70b-versatile'
