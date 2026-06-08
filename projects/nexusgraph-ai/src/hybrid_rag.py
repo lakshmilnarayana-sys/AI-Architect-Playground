@@ -3,7 +3,7 @@ import operator
 from typing import Annotated, List, Optional, TypedDict
 from dotenv import load_dotenv
 
-from langchain_groq import ChatGroq
+from langchain_openai import ChatOpenAI
 from langchain_neo4j import Neo4jGraph, GraphCypherQAChain
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, END
@@ -26,8 +26,8 @@ class State(TypedDict):
     answer: Optional[str]
 
 # LLM for routing and synthesis
-# Ensure GROQ_API_KEY is in your .env
-llm = ChatGroq(model=os.getenv("GROQ_MODEL", DEFAULT_LLM_MODEL), temperature=0)
+# Ensure OPENAI_API_KEY is in your .env
+llm = ChatOpenAI(model=os.getenv("OPENAI_MODEL", DEFAULT_LLM_MODEL), temperature=0)
 
 # Initialize Neo4j Graph
 graph = Neo4jGraph(
