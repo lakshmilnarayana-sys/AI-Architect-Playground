@@ -63,9 +63,35 @@ docs/
 ```
 
 
+
+## Vector Database
+
+The Vector RAG baseline uses ChromaDB as a local persistent vector database. Chroma keeps the local setup simple: no external API keys, no managed service dependency, and a persistent store under `vector_store/chroma`.
+
+Dry-run document preparation:
+
+```bash
+cd projects/nexusgraph-ai
+docker compose exec app python src/vector_ingest.py --dry-run
+```
+
+Ingest into ChromaDB:
+
+```bash
+docker compose exec app python src/vector_ingest.py
+```
+
+Query the vector store:
+
+```bash
+docker compose exec app python src/vector_query.py "Who is on call for playback-service?" --n-results 5
+```
+
+The initial ingestion includes graph nodes, graph relationships, YAML source data, docs, and evaluation artifacts.
+
 ## Next Implementation Steps
 
-1. Add Cypher-backed GraphRAG query functions for the 10 evaluation queries.
-2. Add a vector RAG baseline over the same dataset.
-3. Capture comparison results in `evaluation/results.md`.
+1. Add a Vector RAG answer wrapper over the ChromaDB retrieval results.
+2. Add Cypher-backed GraphRAG query functions for the 10 evaluation queries.
+3. Compare Vector RAG and GraphRAG results in `evaluation/results.md`.
 4. Record the demo using the local Docker environment.
