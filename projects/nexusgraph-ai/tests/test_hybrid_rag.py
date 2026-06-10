@@ -87,6 +87,16 @@ class HybridRagTests(unittest.TestCase):
             {"input_tokens": 11, "output_tokens": 7, "total_tokens": 18},
         )
 
+    def test_get_graph_initializes_neo4j_lazily(self):
+        fake_graph = object()
+
+        with patch.object(hybrid_rag, "graph", None), \
+             patch.object(hybrid_rag, "Neo4jGraph", return_value=fake_graph) as graph_factory:
+            self.assertIs(hybrid_rag.get_graph(), fake_graph)
+            self.assertIs(hybrid_rag.get_graph(), fake_graph)
+
+        graph_factory.assert_called_once()
+
     def test_run_vector_rag_returns_token_usage(self):
         with patch.object(hybrid_rag, "vector_node", return_value={"context": ["context"]}), \
              patch.object(

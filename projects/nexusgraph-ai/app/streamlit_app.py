@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import html
 import re
-import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -180,7 +179,14 @@ def render_graph_view(nodes_df: pd.DataFrame, edges_df: pd.DataFrame) -> None:
         st.info('No nodes match the selected filters.')
         return
 
-    net = Network(height='600px', width='100%', bgcolor='#0e1117', font_color='#fafafa', directed=True)
+    net = Network(
+        height='600px',
+        width='100%',
+        bgcolor='#0e1117',
+        font_color='#fafafa',
+        directed=True,
+        cdn_resources='remote',
+    )
     net.barnes_hut()
     for _, row in filtered_nodes.iterrows():
         if row['label'] == "Person":
@@ -211,9 +217,7 @@ def render_graph_view(nodes_df: pd.DataFrame, edges_df: pd.DataFrame) -> None:
             font={'size': 9, 'color': '#aaaaaa', 'align': 'middle'},
         )
 
-    graph_path = Path(tempfile.gettempdir()) / 'nexusgraph_preview.html'
-    net.save_graph(str(graph_path))
-    components.html(graph_path.read_text(), height=620, scrolling=True)
+    components.html(net.generate_html(notebook=False), height=620, scrolling=True)
     st.caption(f"Showing {len(filtered_nodes)} nodes and {len(filtered_edges)} relationships.")
 
 
