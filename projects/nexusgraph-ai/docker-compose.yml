@@ -4,18 +4,18 @@ services:
     container_name: nexusgraph-ai-neo4j
     restart: unless-stopped
     environment:
-      NEO4J_AUTH: neo4j/nexusgraph-local
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-nexusgraph-local}
       NEO4J_PLUGINS: '["apoc"]'
       NEO4J_dbms_security_procedures_unrestricted: apoc.*
       NEO4J_dbms_security_procedures_allowlist: apoc.*
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
     volumes:
       - neo4j_data:/data
       - ./graph:/import
     healthcheck:
-      test: ["CMD-SHELL", "cypher-shell -u neo4j -p nexusgraph-local 'RETURN 1' || exit 1"]
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p \"${NEO4J_PASSWORD:-nexusgraph-local}\" 'RETURN 1' || exit 1"]
       interval: 10s
       timeout: 10s
       retries: 12
@@ -34,7 +34,7 @@ services:
     env_file:
       - .env
     ports:
-      - "8501:8501"
+      - "127.0.0.1:8501:8501"
     volumes:
       - .:/app
       - hf_cache:/root/.cache/huggingface
@@ -44,7 +44,7 @@ services:
     container_name: nexusgraph-ai-ollama
     restart: unless-stopped
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
     volumes:
       - ollama_data:/root/.ollama
     # Uncomment the following lines if you have a GPU and want to use it

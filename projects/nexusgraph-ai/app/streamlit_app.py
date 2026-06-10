@@ -38,6 +38,8 @@ DEMO_QUERIES = [
      "insight": "Both should be honest about the gap: the graph has SLO definitions, but no live burn-rate telemetry feed."},
 ]
 
+MAX_QUERY_LENGTH = 500
+
 NODE_COLORS = {
     'Person': '#4C9AFF', 'Team': '#79E2F2', 'Project': '#F2A65A',
     'Service': '#F26B6B', 'Skill': '#9C88FF', 'Tool': '#52C97E',
@@ -775,11 +777,12 @@ with st.expander("Ask NexusGraph", expanded=True):
     user_query = st.text_input(
         "Enter your question about organizational knowledge:",
         key='active_query',
+        max_chars=MAX_QUERY_LENGTH,
         placeholder="e.g., How is Emma Chen related to the playback service?",
     )
 
     if st.button("Run GraphRAG + Vector Baseline"):
-        if user_query:
+        if user_query and len(user_query) <= MAX_QUERY_LENGTH:
             def timed(fn, q):
                 t0 = time.perf_counter()
                 result = fn(q)
@@ -841,7 +844,7 @@ with st.expander("Ask NexusGraph", expanded=True):
                     """
                 )
         else:
-            st.warning("Please enter a query first.")
+            st.warning(f"Please enter a query between 1 and {MAX_QUERY_LENGTH} characters.")
 
 with st.expander("GraphRAG Demo Queries", expanded=True):
     st.caption('Pick one curated graph relationship query.')

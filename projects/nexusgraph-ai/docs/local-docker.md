@@ -47,6 +47,14 @@ username: neo4j
 password: nexusgraph-local
 ```
 
+Security defaults:
+
+- Streamlit, Neo4j, and Ollama ports are bound to `127.0.0.1` only.
+- `.env` is ignored by Git and should hold any real hosted LLM API keys.
+- For non-demo use, set a non-default `NEO4J_PASSWORD` in `.env`.
+- If you change `NEO4J_PASSWORD` after Neo4j has initialized, recreate the
+  local volume with `docker compose down -v`.
+
 ## Ingestion
 
 The app container automatically imports the Neo4j graph and ingests ChromaDB
