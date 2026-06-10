@@ -109,6 +109,24 @@ def env_flag(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def summarize_backend_error(error: Exception) -> str:
+    message = str(error)
+    lower = message.lower()
+    if "resource_exhausted" in lower or "quota exceeded" in lower or "429" in lower:
+        provider = os.getenv("LLM_PROVIDER", "configured LLM")
+        return (
+            f"{provider} quota is exhausted. Add billing/quota for that provider, "
+            "or switch Streamlit secrets to another hosted LLM provider such as Groq or OpenAI."
+        )
+    if "api_key" in lower or "unauthorized" in lower or "permission_denied" in lower or "401" in lower or "403" in lower:
+        return "LLM provider authentication failed. Check the API key and selected LLM_PROVIDER in Streamlit secrets."
+    if "could not connect to neo4j" in lower or "serviceunavailable" in lower:
+        return "Neo4j is unreachable. Check NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, and Aura network availability."
+    if "nodename nor servname" in lower or "cannot assign requested address" in lower or "connection" in lower:
+        return "A backend service could not be reached from the app runtime. Check hosted service URLs and secrets."
+    return "Backend request failed. Check the app logs for the full provider error."
+
+
 @st.cache_resource(show_spinner=False)
 def load_rag_runners() -> dict:
     from hybrid_rag import (
@@ -878,9 +896,10 @@ with st.expander("Ask NexusGraph", expanded=True):
                 try:
                     runners = load_rag_runners()
                 except Exception as e:
+                    error = summarize_backend_error(e)
                     results = {
-                        "graph": {"answer": None, "error": str(e), "route": "graph", "elapsed": 0.0},
-                        "vector": {"answer": None, "error": str(e), "route": "vector", "elapsed": 0.0},
+                        "graph": {"answer": None, "error": error, "route": "graph", "elapsed": 0.0},
+                        "vector": {"answer": None, "error": error, "route": "vector", "elapsed": 0.0},
                     }
                 else:
                     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -890,7 +909,7 @@ with st.expander("Ask NexusGraph", expanded=True):
                             try:
                                 results[key] = future.result()
                             except Exception as e:
-                                results[key] = {"answer": None, "error": str(e), "route": key, "elapsed": 0.0}
+                                results[key] = {"answer": None, "error": summarize_backend_error(e), "route": key, "elapsed": 0.0}
 
             graph_res = results.get("graph", {})
             vector_res = results.get("vector", {})
