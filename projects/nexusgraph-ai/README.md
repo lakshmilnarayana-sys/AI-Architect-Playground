@@ -7,8 +7,24 @@ GraphRAG for Organizational Knowledge and Decision Intelligence.
 ## Requirements
 
 - Docker Desktop or Docker Engine with Docker Compose.
+- Python 3.12 if you install dependencies locally outside Docker. Python 3.14
+  can force source builds for dependencies such as `pyarrow`, which is pulled
+  in by Streamlit.
 - Enough disk space for the Python image, Neo4j volume, ChromaDB store, and the local Ollama model.
 - Optional hosted LLM API key only if you choose `openai`, `gemini`, or `groq` instead of local Ollama.
+
+## Local Python Environment
+
+The app is pinned to Python 3.12 for Docker and Streamlit Community Cloud. If
+Homebrew's default `python3` points at a newer runtime, create the virtualenv
+with an explicit 3.12 interpreter:
+
+```bash
+/opt/homebrew/bin/python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
 
 ## Quick Start With Docker
 
