@@ -19,6 +19,14 @@ class StreamlitUiStaticTests(unittest.TestCase):
         self.assertIn("net.generate_html", source)
         self.assertNotIn("net.save_graph", source)
 
+    def test_backend_errors_are_summarized_before_display(self):
+        source = APP_SOURCE.read_text()
+
+        self.assertIn("def summarize_backend_error", source)
+        self.assertIn("resource_exhausted", source)
+        self.assertIn("summarize_backend_error(e)", source)
+        self.assertNotIn('{"answer": None, "error": str(e)', source)
+
 
 if __name__ == "__main__":
     unittest.main()
