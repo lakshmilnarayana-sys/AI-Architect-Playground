@@ -30,7 +30,7 @@ flowchart TD
 | RBAC | `must access_roles == role` payload filter on **both prefetch legs and the fused query** — restricted chunks never leave Qdrant |
 | Reranking | fastembed cross-encoder `Xenova/ms-marco-MiniLM-L-6-v2`; top-10 candidates → top-3 to the LLM (scores shown in the UI) |
 | SQL RAG | `sql_rag_chain(question) -> str` in `src/medibot/sql_rag.py`: ① LLM NL→SQL ② regex-clean to bare `SELECT` ③ execute read-only + LLM phrases the answer. Restricted to `billing_executive` / `admin` |
-| LLM | OpenAI Responses API (`gpt-5.4-mini` by default; override with `OPENAI_MODEL`) |
+| LLM | OpenAI API (`gpt-4o-mini` by default; override with `OPENAI_MODEL`) |
 | UI | Streamlit: login, role badge + accessible-collections sidebar, role-specific sample question buttons, source citations, `Hybrid RAG` / `SQL RAG` label per answer, informative RBAC refusal messages |
 
 ## Setup & Run

@@ -24,7 +24,15 @@ def _api_key() -> str:
 
 
 def _model() -> str:
-    return os.environ.get("OPENAI_MODEL", LLM_MODEL)
+    model = os.environ.get("OPENAI_MODEL", "")
+    if not model:
+        try:
+            import streamlit as st
+
+            model = st.secrets.get("OPENAI_MODEL", "")
+        except Exception:
+            pass
+    return model or LLM_MODEL
 
 
 _client: OpenAI | None = None
@@ -32,14 +40,29 @@ _client: OpenAI | None = None
 
 def complete(system: str, user: str, temperature: float = 0.1) -> str:
     global _client
-    _ = temperature  # Kept for the existing call sites; GPT-5.x uses defaults here.
     if _client is None:
         _client = OpenAI(api_key=_api_key())
-    response = _client.responses.create(
-        model=_model(),
-        instructions=system,
-        input=user,
-        reasoning={"effort": "low"},
-        text={"verbosity": "low"},
-    )
-    return response.output_text.strip()
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+    ]
+    model = _model()
+    try:
+        response = _client.chat.completions.create(
+            model=model,
+            temperature=temperature,
+            messages=messages,
+        )
+    except Exception as exc:
+        error_text = str(exc)
+        if model != LLM_MODEL and (
+            "model_not_found" in error_text or "does not have access to model" in error_text
+        ):
+            response = _client.chat.completions.create(
+                model=LLM_MODEL,
+                temperature=temperature,
+                messages=messages,
+            )
+        else:
+            raise
+    return response.choices[0].message.content.strip()
