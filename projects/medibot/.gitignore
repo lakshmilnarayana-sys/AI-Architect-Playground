@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+qdrant_storage/
+.streamlit/secrets.toml
+resources/
+.DS_Store
