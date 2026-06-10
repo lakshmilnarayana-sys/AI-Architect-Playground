@@ -1,0 +1,7 @@
+streamlit>=1.40
+qdrant-client>=1.12
+fastembed>=0.7
+docling>=2.15
+docling-core[chunking]>=2.15
+groq>=0.13
+pandas>=2.2
