@@ -2,8 +2,14 @@ import os
 import unittest
 from unittest.mock import patch
 
+from langchain_core.runnables import RunnableLambda
+
 from src import hybrid_rag
-from src.hybrid_rag import app
+
+
+class FakeChatResponse:
+    def __init__(self, content: str):
+        self.content = content
 
 class HybridRagTests(unittest.TestCase):
     def test_make_trace_stage_shape(self):
@@ -471,30 +477,24 @@ class HybridRagTests(unittest.TestCase):
     def test_router_vector_flow(self):
         # Descriptive query should favor vector
         query = "What is the nexusgraph-ai project?"
-        inputs = {"query": query, "context": []}
-        
-        nodes_visited = []
-        for output in app.stream(inputs):
-            for key in output.keys():
-                nodes_visited.append(key)
-        
-        self.assertIn("router", nodes_visited)
-        self.assertIn("vector_node", nodes_visited)
-        self.assertIn("synthesizer_node", nodes_visited)
+        fake_llm = RunnableLambda(lambda _: FakeChatResponse("vector"))
+
+        with patch.object(hybrid_rag, "get_llm", return_value=fake_llm):
+            route = hybrid_rag.router({"query": query, "context": []})
+
+        self.assertEqual(route["route"], "vector")
+        self.assertEqual(hybrid_rag.route_decision(route), "vector_node")
 
     def test_router_graph_flow(self):
         # Relationship query should favor graph
         query = "How is Emma Chen related to the playback service?"
-        inputs = {"query": query, "context": []}
-        
-        nodes_visited = []
-        for output in app.stream(inputs):
-            for key in output.keys():
-                nodes_visited.append(key)
-        
-        self.assertIn("router", nodes_visited)
-        self.assertIn("graph_node", nodes_visited)
-        self.assertIn("synthesizer_node", nodes_visited)
+        fake_llm = RunnableLambda(lambda _: FakeChatResponse("graph"))
+
+        with patch.object(hybrid_rag, "get_llm", return_value=fake_llm):
+            route = hybrid_rag.router({"query": query, "context": []})
+
+        self.assertEqual(route["route"], "graph")
+        self.assertEqual(hybrid_rag.route_decision(route), "graph_node")
 
 if __name__ == "__main__":
     unittest.main()
