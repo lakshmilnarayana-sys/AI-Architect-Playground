@@ -208,9 +208,9 @@ def chat_screen(user: dict):
             else:
                 st.markdown(msg["content"])
 
-    if selected_sample:
-        answer_question(selected_sample, role, retriever)
-    elif question := st.chat_input("Ask MediBot..."):
+    typed_question = st.chat_input("Ask MediBot...")
+    question = selected_sample or typed_question
+    if question:
         answer_question(question, role, retriever)
 
 
