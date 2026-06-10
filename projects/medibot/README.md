@@ -43,7 +43,8 @@ uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -r requi
 cp .streamlit/secrets.toml.example .streamlit/secrets.toml   # paste your key
 # or: export GROQ_API_KEY=gsk_...
 
-# 3. Ingestion (one-time; chunks.json is committed so you can skip this)
+# 3. Ingestion (optional; chunks.json is committed so you can skip this)
+uv pip install --python .venv/bin/python -r requirements-ingest.txt
 PYTHONPATH=src .venv/bin/python -m medibot.ingest
 
 # 4. Run the app (first launch builds the Qdrant index, ~1 min)
@@ -53,8 +54,9 @@ PYTHONPATH=src .venv/bin/python -m medibot.ingest
 ### Deploy on Streamlit Community Cloud
 
 1. Push this folder to GitHub (already includes `data/processed/chunks.json`, so Docling never runs in the cloud).
-2. New app → point at `app.py` → add `GROQ_API_KEY` in **Settings → Secrets**.
-3. First boot downloads the fastembed models and builds the embedded Qdrant index, then it's cached.
+2. New app → repo `lakshmilnarayana-sys/AI-Architect-Playground`, branch `main`, main file path `projects/medibot/app.py`.
+3. Add `GROQ_API_KEY` in **Settings → Secrets**.
+4. First boot downloads the fastembed models and builds the embedded Qdrant index, then it's cached.
 
 ### Demo credentials
 
