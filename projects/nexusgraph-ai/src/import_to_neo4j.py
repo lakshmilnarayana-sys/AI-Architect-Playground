@@ -4,8 +4,12 @@ import csv
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
 from neo4j import GraphDatabase
 from config import DEFAULT_NEO4J_URI, DEFAULT_NEO4J_USERNAME, DEFAULT_NEO4J_PASSWORD, ROOT
+
+load_dotenv()
+
 NODE_LABELS = {
     'Person', 'Team', 'Project', 'Service', 'Skill', 'Tool', 'Document',
     'Decision', 'Incident', 'Audit', 'Vendor', 'System', 'OnCallSchedule',

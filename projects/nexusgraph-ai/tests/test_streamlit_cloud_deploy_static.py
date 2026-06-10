@@ -46,6 +46,12 @@ class StreamlitCloudDeployStaticTests(unittest.TestCase):
         self.assertIn("ingest_documents()", source)
         self.assertIn("NEXUSGRAPH_AUTO_IMPORT_NEO4J", source)
 
+    def test_neo4j_import_script_loads_dotenv_for_local_aura_checks(self):
+        source = (ROOT / "src" / "import_to_neo4j.py").read_text()
+
+        self.assertIn("from dotenv import load_dotenv", source)
+        self.assertIn("load_dotenv()", source)
+
     def test_railway_uses_dockerfile_and_streamlit_healthcheck(self):
         config = tomllib.loads((ROOT / "railway.toml").read_text())
 
