@@ -175,12 +175,18 @@ else: # default to openai
         temperature=0
     )
 
-# Initialize Neo4j Graph
-graph = Neo4jGraph(
-    url=os.getenv("NEO4J_URI", DEFAULT_NEO4J_URI),
-    username=os.getenv("NEO4J_USERNAME", DEFAULT_NEO4J_USERNAME),
-    password=os.getenv("NEO4J_PASSWORD", DEFAULT_NEO4J_PASSWORD)
-)
+graph: Neo4jGraph | None = None
+
+
+def get_graph() -> Neo4jGraph:
+    global graph
+    if graph is None:
+        graph = Neo4jGraph(
+            url=os.getenv("NEO4J_URI", DEFAULT_NEO4J_URI),
+            username=os.getenv("NEO4J_USERNAME", DEFAULT_NEO4J_USERNAME),
+            password=os.getenv("NEO4J_PASSWORD", DEFAULT_NEO4J_PASSWORD),
+        )
+    return graph
 
 import re
 
@@ -876,13 +882,14 @@ def graph_node(state: State) -> dict:
     used_deterministic_cypher = False
     
     try:
+        neo4j_graph = get_graph()
         deterministic_cypher = deterministic_cypher_for_query(state["query"])
         used_deterministic_cypher = bool(deterministic_cypher)
         if deterministic_cypher:
             cypher = " ".join(deterministic_cypher.split())
         else:
             # 1. Generate
-            schema = graph.get_schema
+            schema = neo4j_graph.get_schema
             cypher_response = chain.invoke({"question": state["query"], "schema": schema})
             token_usage = extract_token_usage(cypher_response)
             raw_cypher = cypher_response.content
@@ -923,7 +930,7 @@ def graph_node(state: State) -> dict:
         print(f"--- EXECUTING CYPHER ---\n{cypher}\n-----------------------")
 
         # 5. Execute
-        results = graph.query(cypher)
+        results = neo4j_graph.query(cypher)
         graph_evidence = {
             "cypher": cypher,
             "row_count": len(results),
