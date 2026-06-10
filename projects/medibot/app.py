@@ -133,9 +133,27 @@ def render_response(msg: dict):
     badge = RETRIEVAL_BADGES.get(msg.get("retrieval_type", ""), "")
     if badge:
         st.caption(badge)
-    if msg.get("sql"):
-        with st.expander("Generated SQL"):
-            st.code(msg["sql"], language="sql")
+    token_usage = msg.get("token_usage") or {}
+    if msg.get("sql") or token_usage:
+        with st.expander("Behind the scenes"):
+            if msg.get("sql"):
+                st.markdown("**SQL query used**")
+                st.code(msg["sql"], language="sql")
+            if token_usage:
+                st.markdown("**Token usage**")
+                st.table(
+                    [
+                        {
+                            "Prompt": token_usage.get("prompt_tokens", 0),
+                            "Completion": token_usage.get("completion_tokens", 0),
+                            "Total": token_usage.get("total_tokens", 0),
+                        }
+                    ]
+                )
+                calls = token_usage.get("calls") or []
+                if calls:
+                    st.markdown("**LLM calls**")
+                    st.dataframe(calls, use_container_width=True, hide_index=True)
     if msg.get("sources"):
         with st.expander(f"📚 Sources ({len(msg['sources'])})"):
             for i, src in enumerate(msg["sources"], 1):
@@ -180,6 +198,7 @@ def answer_question(question: str, role: str, retriever):
                     "retrieval_type": response.retrieval_type,
                     "sql": response.sql,
                     "rerank_scores": response.rerank_scores,
+                    "token_usage": response.token_usage,
                 }
             except Exception as exc:
                 msg = {
