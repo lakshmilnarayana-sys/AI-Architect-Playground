@@ -51,7 +51,6 @@ def hydrate_streamlit_secrets() -> None:
 hydrate_streamlit_secrets()
 
 import chromadb
-from hybrid_rag import run_graph_rag, run_vector_rag
 from software_catalog import build_software_catalog
 from ui_trace import evidence_counts, format_stage_elapsed
 
@@ -109,6 +108,16 @@ def env_flag(name: str, default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+@st.cache_resource(show_spinner=False)
+def load_rag_runners() -> dict:
+    from hybrid_rag import (
+        run_graph_rag,
+        run_vector_rag,
+    )
+
+    return {"graph": run_graph_rag, "vector": run_vector_rag}
 
 
 @st.cache_resource(show_spinner=False)
@@ -861,16 +870,23 @@ with st.expander("Ask NexusGraph", expanded=True):
                 return result
 
             with st.spinner("Running GraphRAG and Vector baseline..."):
-                runners = {"graph": run_graph_rag, "vector": run_vector_rag}
                 results = {}
-                with ThreadPoolExecutor(max_workers=2) as pool:
-                    futures = {pool.submit(timed, fn, user_query): key for key, fn in runners.items()}
-                    for future in as_completed(futures):
-                        key = futures[future]
-                        try:
-                            results[key] = future.result()
-                        except Exception as e:
-                            results[key] = {"answer": None, "error": str(e), "route": key, "elapsed": 0.0}
+                try:
+                    runners = load_rag_runners()
+                except Exception as e:
+                    results = {
+                        "graph": {"answer": None, "error": str(e), "route": "graph", "elapsed": 0.0},
+                        "vector": {"answer": None, "error": str(e), "route": "vector", "elapsed": 0.0},
+                    }
+                else:
+                    with ThreadPoolExecutor(max_workers=2) as pool:
+                        futures = {pool.submit(timed, fn, user_query): key for key, fn in runners.items()}
+                        for future in as_completed(futures):
+                            key = futures[future]
+                            try:
+                                results[key] = future.result()
+                            except Exception as e:
+                                results[key] = {"answer": None, "error": str(e), "route": key, "elapsed": 0.0}
 
             graph_res = results.get("graph", {})
             vector_res = results.get("vector", {})
