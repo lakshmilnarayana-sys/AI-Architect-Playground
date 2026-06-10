@@ -113,10 +113,21 @@ def summarize_backend_error(error: Exception) -> str:
     message = str(error)
     lower = message.lower()
     if "resource_exhausted" in lower or "quota exceeded" in lower or "429" in lower:
-        provider = os.getenv("LLM_PROVIDER", "configured LLM")
+        provider = os.getenv("LLM_PROVIDER", "configured LLM").lower()
+        if provider == "openai":
+            return (
+                "OpenAI returned HTTP 429. Check the OpenAI project billing, usage limits, "
+                "rate limits, organization/project attached to this API key, and model access. "
+                "For a lower-cost test, set OPENAI_MODEL to gpt-4o-mini."
+            )
+        if provider == "gemini":
+            return (
+                "Gemini returned RESOURCE_EXHAUSTED / 429. Check Google AI Studio quota, "
+                "billing, and model limits, or switch Streamlit secrets to OpenAI or Groq."
+            )
         return (
-            f"{provider} quota is exhausted. Add billing/quota for that provider, "
-            "or switch Streamlit secrets to another hosted LLM provider such as Groq or OpenAI."
+            f"{provider} returned a quota or rate-limit error. Check provider billing, "
+            "rate limits, model access, or switch Streamlit secrets to another hosted LLM provider."
         )
     if "api_key" in lower or "unauthorized" in lower or "permission_denied" in lower or "401" in lower or "403" in lower:
         return "LLM provider authentication failed. Check the API key and selected LLM_PROVIDER in Streamlit secrets."
