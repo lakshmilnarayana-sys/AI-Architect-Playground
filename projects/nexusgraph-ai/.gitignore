@@ -5,3 +5,5 @@ __pycache__/
 .env
 vector_store/
 .DS_Store
+.ruflo/
+lib/
