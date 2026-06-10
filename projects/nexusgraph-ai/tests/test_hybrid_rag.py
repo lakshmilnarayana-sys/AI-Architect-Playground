@@ -369,6 +369,18 @@ class HybridRagTests(unittest.TestCase):
         self.assertIn("| ml-ranking-service | No direct service on-call schedule modeled", answer)
         self.assertIn("| observability-service | Observability Platform On-call | Aisha Khan | Luca Romano | Reliability Engineering |", answer)
 
+    def test_oncall_query_uses_static_graph_fallback_when_neo4j_unavailable(self):
+        with patch.object(hybrid_rag, "get_graph", side_effect=RuntimeError("Neo4j unavailable")):
+            result = hybrid_rag.run_graph_rag(
+                "Who is oncall for ml-ranking-service and observability-service?"
+            )
+
+        self.assertIn("| ml-ranking-service | No direct service on-call schedule modeled", result["answer"])
+        self.assertIn("| observability-service | Observability Platform On-call | Emma Chen | Luca Romano | Reliability Engineering |", result["answer"])
+        summaries = [stage["summary"] for stage in result["trace"]["stages"]]
+        self.assertTrue(any("Static CSV graph fallback" in summary for summary in summaries))
+        self.assertIn("Neo4j query failed", result["trace"]["known_gaps"][0])
+
     def test_run_graph_rag_returns_structured_payload(self):
         with patch.object(
             hybrid_rag,
