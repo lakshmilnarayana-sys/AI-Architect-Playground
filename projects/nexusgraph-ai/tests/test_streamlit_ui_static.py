@@ -24,6 +24,8 @@ class StreamlitUiStaticTests(unittest.TestCase):
 
         self.assertIn("def summarize_backend_error", source)
         self.assertIn("resource_exhausted", source)
+        self.assertIn("OpenAI returned HTTP 429", source)
+        self.assertIn("gpt-4o-mini", source)
         self.assertIn("summarize_backend_error(e)", source)
         self.assertNotIn('{"answer": None, "error": str(e)', source)
 
