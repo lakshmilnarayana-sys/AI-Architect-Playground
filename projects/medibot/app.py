@@ -38,42 +38,55 @@ def get_retriever():
     return HybridRetriever(client)
 
 
-def login_screen():
+def user_from_username(username: str) -> dict:
+    _, role, name = DEMO_USERS[username]
+    return {"username": username, "role": role, "name": name}
+
+
+def select_user(username: str):
+    st.session_state.user = user_from_username(username)
+    st.session_state.messages = []
+
+
+def profile_label(username: str) -> str:
+    _, role, name = DEMO_USERS[username]
+    return f"{name} - {ROLE_LABELS[role]}"
+
+
+def home_screen():
     st.title("🏥 MediBot")
     st.caption("MediAssist Health Network — internal knowledge assistant")
-    left, right = st.columns([1, 1])
+    st.subheader("Choose a profile")
 
-    with left:
-        with st.form("login"):
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
-            submitted = st.form_submit_button("Sign in", use_container_width=True)
-        if submitted:
-            record = DEMO_USERS.get(username.strip())
-            if record and record[0] == password:
-                st.session_state.user = {
-                    "username": username.strip(),
-                    "role": record[1],
-                    "name": record[2],
-                }
-                st.session_state.messages = []
-                st.rerun()
-            else:
-                st.error("Invalid username or password.")
-
-    with right:
-        st.subheader("Demo accounts")
-        st.table(
-            [
-                {"Username": u, "Password": p, "Role": role}
-                for u, (p, role, _) in DEMO_USERS.items()
-            ]
-        )
+    for username in DEMO_USERS:
+        _, role, name = DEMO_USERS[username]
+        with st.container(border=True):
+            left, right = st.columns([3, 1])
+            with left:
+                st.markdown(f"**{name}**")
+                st.caption(
+                    f"{ROLE_LABELS[role]} · access: {', '.join(ROLE_COLLECTIONS[role])}"
+                )
+            with right:
+                if st.button("Enter", key=f"enter-{username}", use_container_width=True):
+                    select_user(username)
+                    st.rerun()
 
 
 def sidebar(user: dict):
     role = user["role"]
     with st.sidebar:
+        selected_username = st.selectbox(
+            "Switch profile",
+            list(DEMO_USERS.keys()),
+            index=list(DEMO_USERS.keys()).index(user["username"]),
+            format_func=profile_label,
+        )
+        if selected_username != user["username"]:
+            select_user(selected_username)
+            st.rerun()
+
+        st.divider()
         st.markdown(f"### {ROLE_LABELS[role]}")
         st.markdown(f"**{user['name']}**  \n`{user['username']}`")
         st.divider()
@@ -83,7 +96,7 @@ def sidebar(user: dict):
         if role in SQL_RAG_ROLES:
             st.markdown("- 📊 `analytics database (SQL RAG)`")
         st.divider()
-        if st.button("Log out", use_container_width=True):
+        if st.button("Back to profiles", use_container_width=True):
             st.session_state.clear()
             st.rerun()
 
@@ -293,6 +306,7 @@ def answer_question(question: str, role: str, retriever):
 
 
 def chat_screen(user: dict):
+    sidebar(user)
     role = user["role"]
     st.title("🏥 MediBot")
     st.caption(
@@ -316,6 +330,6 @@ def chat_screen(user: dict):
 
 
 if "user" not in st.session_state:
-    login_screen()
+    home_screen()
 else:
     chat_screen(st.session_state.user)
