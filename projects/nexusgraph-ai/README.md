@@ -67,6 +67,19 @@ username: neo4j
 password: nexusgraph-local
 ```
 
+Security defaults:
+
+- Docker ports bind to `127.0.0.1` only, so Streamlit, Neo4j, and Ollama are
+  reachable from your machine but not from the wider network.
+- The Streamlit query input is capped at 500 characters to reduce accidental or
+  abusive prompt/API usage.
+- `.env` is ignored by Git. Do not commit real hosted LLM API keys.
+- For anything beyond a local demo, set a non-default `NEO4J_PASSWORD` in `.env`.
+  If you change the Neo4j password after the database volume already exists,
+  recreate the volume with `docker compose down -v` before starting again.
+- See [`SECURITY.md`](SECURITY.md) for repo security notes and local-demo
+  boundaries.
+
 Check container status:
 
 ```bash
