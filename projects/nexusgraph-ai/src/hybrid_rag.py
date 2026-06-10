@@ -1,5 +1,6 @@
 import os
 import operator
+import csv
 import time
 from typing import Annotated, Any, Dict, List, Optional, TypedDict
 from dotenv import load_dotenv
@@ -17,14 +18,14 @@ try:
     from config import (
         DEFAULT_NEO4J_URI, DEFAULT_NEO4J_USERNAME, DEFAULT_NEO4J_PASSWORD,
         LLM_PROVIDER, DEFAULT_OPENAI_MODEL, DEFAULT_GEMINI_MODEL, DEFAULT_GROQ_MODEL,
-        DEFAULT_OLLAMA_MODEL
+        DEFAULT_OLLAMA_MODEL, ROOT
     )
     from vector_query import query_vector_store
 except ImportError:
     from src.config import (
         DEFAULT_NEO4J_URI, DEFAULT_NEO4J_USERNAME, DEFAULT_NEO4J_PASSWORD,
         LLM_PROVIDER, DEFAULT_OPENAI_MODEL, DEFAULT_GEMINI_MODEL, DEFAULT_GROQ_MODEL,
-        DEFAULT_OLLAMA_MODEL
+        DEFAULT_OLLAMA_MODEL, ROOT
     )
     from src.vector_query import query_vector_store
 
@@ -713,6 +714,68 @@ def format_single_service_oncall(results: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def static_oncall_rows_for_services(service_names: list[str]) -> list[dict]:
+    """Read the committed graph CSVs for deterministic on-call fallback answers."""
+    if not service_names:
+        return []
+
+    nodes_path = ROOT / "graph" / "nodes.csv"
+    edges_path = ROOT / "graph" / "edges.csv"
+    with nodes_path.open(newline="") as handle:
+        nodes = {row["id"]: row for row in csv.DictReader(handle)}
+    with edges_path.open(newline="") as handle:
+        edges = list(csv.DictReader(handle))
+
+    by_source_relationship: dict[tuple[str, str], list[str]] = {}
+    for edge in edges:
+        by_source_relationship.setdefault((edge["source"], edge["relationship"]), []).append(edge["target"])
+
+    service_ids_by_name = {
+        row["name"].lower(): node_id
+        for node_id, row in nodes.items()
+        if row.get("label") == "Service"
+    }
+
+    rows = []
+    for service_name in service_names:
+        service_id = service_ids_by_name.get(service_name.lower())
+        if not service_id:
+            continue
+
+        schedule_ids = by_source_relationship.get((service_id, "HAS_ONCALL_SCHEDULE"), [])
+        owner = "No owner modeled"
+        for edge in edges:
+            if edge["relationship"] == "OWNS_SERVICE" and edge["target"] == service_id:
+                owner = nodes.get(edge["source"], {}).get("name", owner)
+                break
+        if owner == "No owner modeled":
+            owner_team_ids = by_source_relationship.get((service_id, "OWNED_BY_EXTERNAL_TEAM"), [])
+            if owner_team_ids:
+                owner = nodes.get(owner_team_ids[0], {}).get("name", owner)
+
+        if schedule_ids:
+            schedule_id = schedule_ids[0]
+            primary_ids = by_source_relationship.get((schedule_id, "CURRENT_PRIMARY_ONCALL"), [])
+            secondary_ids = by_source_relationship.get((schedule_id, "CURRENT_SECONDARY_ONCALL"), [])
+            rows.append({
+                "service": nodes[service_id]["name"],
+                "schedule": nodes.get(schedule_id, {}).get("name", "No direct service on-call schedule modeled"),
+                "primary_oncall": nodes.get(primary_ids[0], {}).get("name", "Escalate to owner team") if primary_ids else "Escalate to owner team",
+                "secondary_oncall": nodes.get(secondary_ids[0], {}).get("name", "Escalate to owner team") if secondary_ids else "Escalate to owner team",
+                "owner_team": owner,
+            })
+        else:
+            rows.append({
+                "service": nodes[service_id]["name"],
+                "schedule": "No direct service on-call schedule modeled",
+                "primary_oncall": "Escalate to owner team",
+                "secondary_oncall": "Escalate to owner team",
+                "owner_team": owner,
+            })
+
+    return rows
+
+
 def format_service_dashboards(results: list[dict]) -> str:
     if not results:
         return "No matching services were found in the graph."
@@ -987,6 +1050,30 @@ def graph_node(state: State) -> dict:
         ))
         trace["known_gaps"].append("Graph evidence is unavailable because the Neo4j query failed.")
         print(f"DEBUG Graph Error: {str(e)}")
+        service_names = extract_service_names_from_oncall_query(state["query"])
+        if service_names:
+            fallback_results = static_oncall_rows_for_services(service_names)
+            if fallback_results:
+                graph_answer = format_single_service_oncall(fallback_results)
+                graph_evidence = {
+                    "cypher": cypher,
+                    "row_count": len(fallback_results),
+                    "rows": fallback_results,
+                    "deterministic": True,
+                    "source": "static_csv_fallback",
+                }
+                trace["stages"].append(make_trace_stage(
+                    "Graph retrieval fallback",
+                    "complete",
+                    f"Static CSV graph fallback returned {len(fallback_results)} rows.",
+                    elapsed=time.perf_counter() - t0,
+                    details={"row_count": len(fallback_results), "source": "graph/*.csv"},
+                ))
+                trace["evidence"]["graph"] = [graph_evidence]
+                trace["known_gaps"][0] = (
+                    "Neo4j query failed; answer used the committed static CSV graph fallback."
+                )
+                direct_answer = graph_answer
     
     result = {
         "context": [f"Graph Analysis: {graph_answer}"],
