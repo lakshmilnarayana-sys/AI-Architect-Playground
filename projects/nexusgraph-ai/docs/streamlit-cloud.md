@@ -9,8 +9,9 @@ Use this guide to deploy the hosted demo from the monorepo.
 - Main file path: `projects/nexusgraph-ai/app/streamlit_app.py`
 - Python version: `3.12`
 
-The entrypoint directory includes `app/requirements.txt`, which points Streamlit
-Cloud back to the project-level `requirements.txt`.
+The entrypoint directory includes a full `app/requirements.txt` file so
+Streamlit Cloud can install dependencies without following a parent-directory
+requirements reference.
 
 ## Required Hosted Services
 

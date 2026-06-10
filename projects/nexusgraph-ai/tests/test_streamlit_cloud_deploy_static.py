@@ -7,10 +7,22 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class StreamlitCloudDeployStaticTests(unittest.TestCase):
     def test_entrypoint_directory_has_requirements_shim(self):
-        requirements = ROOT / "app" / "requirements.txt"
+        root_requirements = (ROOT / "requirements.txt").read_text()
+        app_requirements = ROOT / "app" / "requirements.txt"
 
-        self.assertTrue(requirements.exists())
-        self.assertEqual(requirements.read_text().strip(), "-r ../requirements.txt")
+        self.assertTrue(app_requirements.exists())
+        self.assertEqual(app_requirements.read_text(), root_requirements)
+        self.assertIn("streamlit==", app_requirements.read_text())
+        self.assertIn("langchain==", app_requirements.read_text())
+
+    def test_python_runtime_is_pinned_for_streamlit_cloud(self):
+        runtime = ROOT / "runtime.txt"
+        app_runtime = ROOT / "app" / "runtime.txt"
+
+        self.assertTrue(runtime.exists())
+        self.assertTrue(app_runtime.exists())
+        self.assertEqual(runtime.read_text().strip(), "python-3.12")
+        self.assertEqual(app_runtime.read_text().strip(), "python-3.12")
 
     def test_app_hydrates_streamlit_secrets_before_backend_imports(self):
         source = (ROOT / "app" / "streamlit_app.py").read_text()
