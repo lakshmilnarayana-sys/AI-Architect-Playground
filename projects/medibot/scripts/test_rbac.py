@@ -4,7 +4,7 @@
    restricted collections — asserts no restricted chunk is ever returned
    by the retriever (i.e. the Qdrant filter blocks it, not the UI).
 2. Hybrid vs dense-only comparison on exact-terminology queries.
-3. SQL RAG smoke test on 4 analytical questions (needs GROQ_API_KEY).
+3. SQL RAG smoke test on 4 analytical questions (needs OPENAI_API_KEY).
 
 Run: PYTHONPATH=src .venv/bin/python scripts/test_rbac.py [--skip-llm]
 """

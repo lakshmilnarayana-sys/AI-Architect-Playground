@@ -19,8 +19,8 @@ RERANK_MODEL = "Xenova/ms-marco-MiniLM-L-6-v2"
 CANDIDATES_PER_LEG = 10   # broad candidate set fetched per search leg
 RERANK_TOP_K = 3          # narrowed set passed to the LLM
 
-# LLM (cloud-hosted inference via Groq)
-LLM_MODEL = "llama-3.3-70b-versatile"
+# LLM (cloud-hosted inference via OpenAI Responses API)
+LLM_MODEL = "gpt-5.4-mini"
 
 # Which document collections each role may retrieve from.
 # This drives the access_roles metadata written at ingestion time AND the
