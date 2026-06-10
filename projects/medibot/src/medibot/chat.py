@@ -8,7 +8,7 @@ or a document question (-> hybrid retrieval + rerank + cited answer).
 from dataclasses import dataclass, field
 
 from medibot.config import ROLE_COLLECTIONS, SQL_RAG_ROLES
-from medibot.llm import complete
+from medibot.llm import complete, get_token_usage, reset_token_usage
 from medibot.retrieval import HybridRetriever, RetrievedChunk
 from medibot.sql_rag import sql_rag_chain_verbose
 
@@ -41,6 +41,7 @@ class ChatResponse:
     role: str = ""
     sql: str | None = None
     rerank_scores: list[float] = field(default_factory=list)
+    token_usage: dict = field(default_factory=dict)
 
 
 def _is_analytical(question: str) -> bool:
@@ -67,6 +68,7 @@ def _answer_from_chunks(question: str, chunks: list[RetrievedChunk]) -> str:
 
 
 def chat(question: str, role: str, retriever: HybridRetriever) -> ChatResponse:
+    reset_token_usage()
     if _is_analytical(question):
         if role not in SQL_RAG_ROLES:
             return ChatResponse(
@@ -77,6 +79,7 @@ def chat(question: str, role: str, retriever: HybridRetriever) -> ChatResponse:
                 ),
                 retrieval_type="blocked",
                 role=role,
+                token_usage=get_token_usage(),
             )
         result = sql_rag_chain_verbose(question)
         return ChatResponse(
@@ -91,12 +94,18 @@ def chat(question: str, role: str, retriever: HybridRetriever) -> ChatResponse:
             retrieval_type="sql_rag",
             role=role,
             sql=result["sql"],
+            token_usage=get_token_usage(),
         )
 
     # Document question: RBAC filter is applied inside Qdrant by the retriever.
     chunks = retriever.search(question, role)
     if not chunks:
-        return ChatResponse(answer=_blocked_message(role), retrieval_type="blocked", role=role)
+        return ChatResponse(
+            answer=_blocked_message(role),
+            retrieval_type="blocked",
+            role=role,
+            token_usage=get_token_usage(),
+        )
 
     answer = _answer_from_chunks(question, chunks)
     return ChatResponse(
@@ -112,4 +121,5 @@ def chat(question: str, role: str, retriever: HybridRetriever) -> ChatResponse:
         retrieval_type="hybrid_rag",
         role=role,
         rerank_scores=[c.rerank_score for c in chunks],
+        token_usage=get_token_usage(),
     )
