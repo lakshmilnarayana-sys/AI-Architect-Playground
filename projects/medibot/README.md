@@ -2,13 +2,13 @@
 
 An internal intelligent assistant for **MediAssist Health Network**: staff ask natural-language questions and get accurate, cited answers — scoped to the document collections their role is authorised to access, enforced **inside the vector database**, not in the UI.
 
-> **Tool substitution:** the original assignment specifies a FastAPI backend + Next.js frontend. This implementation targets **Streamlit-based deployment** (single app on Streamlit Community Cloud), so the UI is Streamlit and the "backend" is a modular Python package (`src/medibot/`) called directly by the app. All backend behaviours required by the spec (login, RBAC-filtered chat, role→collections lookup, sources + retrieval type in every response) are implemented in `medibot.chat.chat()`, which mirrors the `/chat` contract (`answer`, `sources`, `retrieval_type`, `role`). A FastAPI layer could be added on top of the same package without changing any retrieval code.
+> **Tool substitution:** the original assignment specifies a FastAPI backend + Next.js frontend. This implementation targets **Streamlit-based deployment** (single app on Streamlit Community Cloud), so the UI is Streamlit and the "backend" is a modular Python package (`src/medibot/`) called directly by the app. All backend behaviours required by the spec (profile selection, RBAC-filtered chat, role→collections lookup, sources + retrieval type in every response) are implemented in `medibot.chat.chat()`, which mirrors the `/chat` contract (`answer`, `sources`, `retrieval_type`, `role`). A FastAPI layer could be added on top of the same package without changing any retrieval code.
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    L["Login (5 demo roles)"] --> Q["Question + Role"]
+    L["Profile picker (5 demo roles)"] --> Q["Question + Role"]
     Q --> R{"LLM router: analytical?"}
     R -- "yes + role ∈ {billing_executive, admin}" --> S["SQL RAG over mediassist.db<br/>(NL→SQL → clean → execute → NL answer)"]
     R -- "yes + other roles" --> X["⛔ RBAC refusal message"]
@@ -31,7 +31,7 @@ flowchart TD
 | Reranking | fastembed cross-encoder `Xenova/ms-marco-MiniLM-L-6-v2`; top-10 candidates → top-3 to the LLM (scores shown in the UI) |
 | SQL RAG | `sql_rag_chain(question) -> str` in `src/medibot/sql_rag.py`: ① LLM NL→SQL ② regex-clean to bare `SELECT` ③ execute read-only + LLM phrases the answer. Restricted to `billing_executive` / `admin` |
 | LLM | OpenAI API (`gpt-4o-mini` by default; override with `OPENAI_MODEL`) |
-| UI | Streamlit: login, role badge + accessible-collections sidebar, role-specific allowed / not-allowed sample question buttons, source citations, `Hybrid RAG` / `SQL RAG` label per answer, informative RBAC refusal messages |
+| UI | Streamlit: profile picker, sidebar profile switcher, role badge + accessible-collections sidebar, role-specific allowed / not-allowed sample question buttons, source citations, `Hybrid RAG` / `SQL RAG` label per answer, informative RBAC refusal messages |
 
 ## Setup & Run
 
@@ -58,15 +58,17 @@ PYTHONPATH=src .venv/bin/python -m medibot.ingest
 3. Add `OPENAI_API_KEY` in **Settings → Secrets**.
 4. First boot downloads the fastembed models and builds the embedded Qdrant index, then it's cached.
 
-### Demo credentials
+### Demo profiles
 
-| Username | Password | Role | Collections |
-|---|---|---|---|
-| `dr.mehta` | `doctor123` | doctor | general, clinical, nursing |
-| `nurse.priya` | `nurse123` | nurse | general, nursing |
-| `billing.ravi` | `billing123` | billing_executive | general, billing + SQL RAG |
-| `tech.anand` | `tech123` | technician | general, equipment |
-| `admin.sys` | `admin123` | admin | everything + SQL RAG |
+Select a profile on the home page. Use the sidebar **Switch profile** control to move between roles without returning to the home page.
+
+| Username | Role | Collections |
+|---|---|---|
+| `dr.mehta` | doctor | general, clinical, nursing |
+| `nurse.priya` | nurse | general, nursing |
+| `billing.ravi` | billing_executive | general, billing + SQL RAG |
+| `tech.anand` | technician | general, equipment |
+| `admin.sys` | admin | everything + SQL RAG |
 
 ## RBAC verification (adversarial prompts)
 
@@ -98,7 +100,7 @@ Query: *"What is the ICD code I21.4 used for in claims?"* (as admin)
 ## Project layout
 
 ```
-app.py                  # Streamlit UI (login, chat, RBAC messaging)
+app.py                  # Streamlit UI (profile picker, chat, RBAC messaging)
 src/medibot/
   config.py             # access matrix, demo users, models, paths
   ingest.py             # Docling + HybridChunker → chunks.json
