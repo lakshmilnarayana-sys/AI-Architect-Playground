@@ -2,12 +2,26 @@
 
 GraphRAG for Organizational Knowledge and Decision Intelligence.
 
-`nexusgraph-ai` models organizational knowledge as a graph of people, teams, projects, services, documents, decisions, tools, audits, and incidents. It uses GraphRAG to answer relationship-heavy questions that traditional vector RAG struggles with, such as identifying who worked on a compliance audit, which tools were used, what decisions were made, and who approved them.
+`nexusgraph-ai` models organizational knowledge as a graph of people, teams, services, runbooks, dashboards, SLOs, on-call schedules, documents, decisions, audits, and incidents. It uses GraphRAG to answer relationship-heavy operational questions that traditional Vector RAG struggles with, such as who owns a service, who is on call, which runbook applies, which dashboard/SLO matters, and which dependencies are involved.
+
+## Requirements
+
+- Docker Desktop or Docker Engine with Docker Compose.
+- Enough disk space for the Python image, Neo4j volume, ChromaDB store, and the local Ollama model.
+- Optional hosted LLM API key only if you choose `openai`, `gemini`, or `groq` instead of local Ollama.
 
 ## Quick Start With Docker
 
+From the repository root:
+
 ```bash
-cd /path/to/nexusgraph-ai
+cd projects/nexusgraph-ai
+cp .env.example .env
+```
+
+If you are already inside this project directory:
+
+```bash
 cp .env.example .env
 ```
 
@@ -21,13 +35,19 @@ OLLAMA_MODEL=llama3
 Start the full stack:
 
 ```bash
-docker compose up -d --build
+docker compose up -d neo4j ollama
 ```
 
-On first run, make sure the local Ollama model is available:
+On first run, download the local Ollama model:
 
 ```bash
 docker compose exec ollama ollama pull llama3
+```
+
+Build and start the app:
+
+```bash
+docker compose up -d --build app
 ```
 
 The `app` container automatically imports the Neo4j graph and ingests ChromaDB
@@ -107,7 +127,9 @@ docs/
 
 ## Manual Data Commands
 
-The Vector RAG baseline uses ChromaDB as a local persistent vector database. Chroma keeps the local setup simple: no external API keys, no managed service dependency, and a persistent store under `vector_store/chroma`.
+The Vector RAG baseline uses ChromaDB as a local persistent vector database.
+Chroma keeps the local setup simple: no managed vector database is required, and
+the persistent store lives under `vector_store/chroma`.
 
 The Docker entrypoint already runs these ingestion commands. Use the manual
 commands below only when you want to re-run a specific step inside an already
@@ -144,6 +166,33 @@ docker compose exec app python src/vector_rag.py "Who is on call for playback-se
 ```
 
 The initial ingestion includes graph nodes, graph relationships, YAML source data, docs, and evaluation artifacts.
+
+## Run Checks
+
+Run the current test suite inside the app container:
+
+```bash
+docker compose exec app python -m unittest \
+  tests.test_hybrid_rag \
+  tests.test_software_catalog \
+  tests.test_streamlit_ui_static \
+  tests.test_ui_trace \
+  tests.test_vector_query \
+  tests.test_vector_rag \
+  tests.test_vector_ingestion \
+  tests.test_vector_ingestion_new
+```
+
+Compile-check the main app and helper modules:
+
+```bash
+docker compose exec app python -m py_compile \
+  app/streamlit_app.py \
+  src/hybrid_rag.py \
+  src/vector_query.py \
+  src/software_catalog.py \
+  src/ui_trace.py
+```
 
 ## Optional Hosted LLM Providers
 
