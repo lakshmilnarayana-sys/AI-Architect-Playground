@@ -1,3 +1,4 @@
+import os
 import unittest
 from unittest.mock import patch
 
@@ -96,6 +97,17 @@ class HybridRagTests(unittest.TestCase):
             self.assertIs(hybrid_rag.get_graph(), fake_graph)
 
         graph_factory.assert_called_once()
+
+    def test_get_llm_initializes_provider_lazily(self):
+        fake_llm = object()
+
+        with patch.dict(os.environ, {"LLM_PROVIDER": "groq", "GROQ_MODEL": "llama-test"}, clear=False), \
+             patch.object(hybrid_rag, "llm", None), \
+             patch.object(hybrid_rag, "ChatGroq", return_value=fake_llm) as llm_factory:
+            self.assertIs(hybrid_rag.get_llm(), fake_llm)
+            self.assertIs(hybrid_rag.get_llm(), fake_llm)
+
+        llm_factory.assert_called_once()
 
     def test_run_vector_rag_returns_token_usage(self):
         with patch.object(hybrid_rag, "vector_node", return_value={"context": ["context"]}), \
