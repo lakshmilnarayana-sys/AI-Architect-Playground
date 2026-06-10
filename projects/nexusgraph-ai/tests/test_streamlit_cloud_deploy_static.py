@@ -28,8 +28,15 @@ class StreamlitCloudDeployStaticTests(unittest.TestCase):
         source = (ROOT / "app" / "streamlit_app.py").read_text()
 
         hydrate_index = source.index("hydrate_streamlit_secrets()")
-        backend_import_index = source.index("from hybrid_rag import run_graph_rag, run_vector_rag")
+        backend_import_index = source.index("def load_rag_runners()")
         self.assertLess(hydrate_index, backend_import_index)
+
+    def test_app_does_not_import_neo4j_backend_at_module_load(self):
+        source = (ROOT / "app" / "streamlit_app.py").read_text()
+
+        self.assertNotIn("from hybrid_rag import run_graph_rag, run_vector_rag", source)
+        self.assertIn("def load_rag_runners()", source)
+        self.assertIn("from hybrid_rag import (", source)
 
     def test_app_ensures_vector_store_for_streamlit_cloud(self):
         source = (ROOT / "app" / "streamlit_app.py").read_text()
