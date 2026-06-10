@@ -104,6 +104,11 @@ Remove local Docker volumes as well:
 docker compose down -v
 ```
 
+## Deploy To Streamlit Community Cloud
+
+See [`docs/streamlit-cloud.md`](docs/streamlit-cloud.md) for the hosted
+deployment settings, required secrets, and first-deploy data import flow.
+
 ## Architecture Diagram
 
 ![nexusgraph-ai service traffic flow](architecture-flow-simple.png)

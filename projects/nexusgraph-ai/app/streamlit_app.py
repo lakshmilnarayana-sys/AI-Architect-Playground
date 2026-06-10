@@ -16,6 +16,40 @@ import os
 from pyvis.network import Network
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+
+
+def hydrate_streamlit_secrets() -> None:
+    """Expose Streamlit Cloud secrets as env vars before backend modules import."""
+    keys = [
+        "LLM_PROVIDER",
+        "OPENAI_API_KEY",
+        "OPENAI_MODEL",
+        "GOOGLE_API_KEY",
+        "GOOGLE_MODEL",
+        "GROQ_API_KEY",
+        "GROQ_MODEL",
+        "OLLAMA_BASE_URL",
+        "OLLAMA_MODEL",
+        "NEO4J_URI",
+        "NEO4J_USERNAME",
+        "NEO4J_PASSWORD",
+        "NEXUSGRAPH_AUTO_IMPORT_NEO4J",
+    ]
+    try:
+        secrets = st.secrets
+    except Exception:
+        return
+    for key in keys:
+        try:
+            value = secrets.get(key)
+        except Exception:
+            value = None
+        if value and not os.getenv(key):
+            os.environ[key] = str(value)
+
+
+hydrate_streamlit_secrets()
+
 import chromadb
 from hybrid_rag import run_graph_rag, run_vector_rag
 from software_catalog import build_software_catalog
@@ -68,6 +102,40 @@ DESIGN_TOKENS_CSS = """
   }
 </style>
 """
+
+
+def env_flag(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+@st.cache_resource(show_spinner=False)
+def ensure_runtime_data() -> dict:
+    from config import DEFAULT_CHROMA_PATH, DEFAULT_COLLECTION
+    from vector_ingest import ingest_documents
+
+    status = {"vector_store": "existing", "neo4j_import": "skipped"}
+    vector_store_ready = False
+    if DEFAULT_CHROMA_PATH.exists():
+        try:
+            chromadb.PersistentClient(path=str(DEFAULT_CHROMA_PATH)).get_collection(DEFAULT_COLLECTION)
+            vector_store_ready = True
+        except Exception:
+            vector_store_ready = False
+
+    if not vector_store_ready:
+        ingest_documents()
+        status["vector_store"] = "created"
+
+    if env_flag("NEXUSGRAPH_AUTO_IMPORT_NEO4J"):
+        from import_to_neo4j import main as import_to_neo4j
+
+        import_to_neo4j()
+        status["neo4j_import"] = "completed"
+
+    return status
 
 
 def load_csv(name: str) -> pd.DataFrame:
@@ -759,6 +827,9 @@ def render_project_story(nodes_df: pd.DataFrame, edges_df: pd.DataFrame) -> None
 st.set_page_config(page_title='nexusgraph-ai', layout='wide')
 st.title('nexusgraph-ai')
 st.caption('GraphRAG for Organizational Knowledge and Decision Intelligence')
+
+with st.spinner("Preparing local retrieval stores..."):
+    ensure_runtime_data()
 
 nodes = load_csv('nodes.csv')
 edges = load_csv('edges.csv')
