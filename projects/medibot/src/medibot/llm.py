@@ -1,41 +1,45 @@
-"""Cloud-hosted LLM inference via the Groq API."""
+"""Cloud-hosted LLM inference via the OpenAI API."""
 
 import os
 
-from groq import Groq
+from openai import OpenAI
 
 from medibot.config import LLM_MODEL
 
 
 def _api_key() -> str:
-    key = os.environ.get("GROQ_API_KEY", "")
+    key = os.environ.get("OPENAI_API_KEY", "")
     if not key:
         try:  # Streamlit Cloud stores secrets in st.secrets
             import streamlit as st
 
-            key = st.secrets.get("GROQ_API_KEY", "")
+            key = st.secrets.get("OPENAI_API_KEY", "")
         except Exception:
             pass
     if not key:
         raise RuntimeError(
-            "GROQ_API_KEY is not set. Export it or add it to .streamlit/secrets.toml."
+            "OPENAI_API_KEY is not set. Export it or add it to .streamlit/secrets.toml."
         )
     return key
 
 
-_client: Groq | None = None
+def _model() -> str:
+    return os.environ.get("OPENAI_MODEL", LLM_MODEL)
+
+
+_client: OpenAI | None = None
 
 
 def complete(system: str, user: str, temperature: float = 0.1) -> str:
     global _client
+    _ = temperature  # Kept for the existing call sites; GPT-5.x uses defaults here.
     if _client is None:
-        _client = Groq(api_key=_api_key())
-    response = _client.chat.completions.create(
-        model=LLM_MODEL,
-        temperature=temperature,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
+        _client = OpenAI(api_key=_api_key())
+    response = _client.responses.create(
+        model=_model(),
+        instructions=system,
+        input=user,
+        reasoning={"effort": "low"},
+        text={"verbosity": "low"},
     )
-    return response.choices[0].message.content.strip()
+    return response.output_text.strip()

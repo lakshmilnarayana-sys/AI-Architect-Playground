@@ -30,7 +30,7 @@ flowchart TD
 | RBAC | `must access_roles == role` payload filter on **both prefetch legs and the fused query** — restricted chunks never leave Qdrant |
 | Reranking | fastembed cross-encoder `Xenova/ms-marco-MiniLM-L-6-v2`; top-10 candidates → top-3 to the LLM (scores shown in the UI) |
 | SQL RAG | `sql_rag_chain(question) -> str` in `src/medibot/sql_rag.py`: ① LLM NL→SQL ② regex-clean to bare `SELECT` ③ execute read-only + LLM phrases the answer. Restricted to `billing_executive` / `admin` |
-| LLM | Groq cloud inference (`llama-3.3-70b-versatile`) |
+| LLM | OpenAI Responses API (`gpt-5.4-mini` by default; override with `OPENAI_MODEL`) |
 | UI | Streamlit: login, role badge + accessible-collections sidebar, source citations, `Hybrid RAG` / `SQL RAG` label per answer, informative RBAC refusal messages |
 
 ## Setup & Run
@@ -39,9 +39,9 @@ flowchart TD
 # 1. Environment (Python 3.12)
 uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -r requirements.txt
 
-# 2. API key (Groq — free tier at console.groq.com)
+# 2. API key (OpenAI Platform)
 cp .streamlit/secrets.toml.example .streamlit/secrets.toml   # paste your key
-# or: export GROQ_API_KEY=gsk_...
+# or: export OPENAI_API_KEY=sk-proj-...
 
 # 3. Ingestion (optional; chunks.json is committed so you can skip this)
 uv pip install --python .venv/bin/python -r requirements-ingest.txt
@@ -55,7 +55,7 @@ PYTHONPATH=src .venv/bin/python -m medibot.ingest
 
 1. Push this folder to GitHub (already includes `data/processed/chunks.json`, so Docling never runs in the cloud).
 2. New app → repo `lakshmilnarayana-sys/AI-Architect-Playground`, branch `main`, main file path `projects/medibot/app.py`.
-3. Add `GROQ_API_KEY` in **Settings → Secrets**.
+3. Add `OPENAI_API_KEY` in **Settings → Secrets**.
 4. First boot downloads the fastembed models and builds the embedded Qdrant index, then it's cached.
 
 ### Demo credentials
@@ -106,7 +106,7 @@ src/medibot/
   retrieval.py          # hybrid query + server-side RBAC filter + reranker
   sql_rag.py            # sql_rag_chain(): NL→SQL→clean→execute→answer
   chat.py               # router + RBAC gate + cited answer generation
-  llm.py                # Groq client
+  llm.py                # OpenAI Responses API client
 scripts/test_rbac.py    # adversarial RBAC + hybrid-vs-dense + SQL RAG tests
 data/                   # source PDFs, mediassist.db, processed/chunks.json
 ```
