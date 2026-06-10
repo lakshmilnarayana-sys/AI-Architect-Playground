@@ -149,33 +149,37 @@ def extract_token_usage(response: Any) -> dict:
         "total_tokens": int(total_tokens),
     }
 
-# LLM for routing and synthesis
-provider = os.getenv("LLM_PROVIDER", LLM_PROVIDER).lower()
-
-if provider == "gemini":
-    llm = ChatGoogleGenerativeAI(
-        model=os.getenv("GOOGLE_MODEL", DEFAULT_GEMINI_MODEL),
-        temperature=0,
-        google_api_key=os.getenv("GOOGLE_API_KEY")
-    )
-elif provider == "groq":
-    llm = ChatGroq(
-        model=os.getenv("GROQ_MODEL", DEFAULT_GROQ_MODEL),
-        temperature=0
-    )
-elif provider == "ollama":
-    llm = ChatOllama(
-        model=os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL),
-        base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
-        temperature=0
-    )
-else: # default to openai
-    llm = ChatOpenAI(
-        model=os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL),
-        temperature=0
-    )
-
+llm = None
 graph: Neo4jGraph | None = None
+
+
+def get_llm():
+    global llm
+    if llm is None:
+        provider = os.getenv("LLM_PROVIDER", LLM_PROVIDER).lower()
+        if provider == "gemini":
+            llm = ChatGoogleGenerativeAI(
+                model=os.getenv("GOOGLE_MODEL", DEFAULT_GEMINI_MODEL),
+                temperature=0,
+                google_api_key=os.getenv("GOOGLE_API_KEY")
+            )
+        elif provider == "groq":
+            llm = ChatGroq(
+                model=os.getenv("GROQ_MODEL", DEFAULT_GROQ_MODEL),
+                temperature=0
+            )
+        elif provider == "ollama":
+            llm = ChatOllama(
+                model=os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL),
+                base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+                temperature=0
+            )
+        else: # default to openai
+            llm = ChatOpenAI(
+                model=os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL),
+                temperature=0
+            )
+    return llm
 
 
 def get_graph() -> Neo4jGraph:
@@ -809,7 +813,7 @@ def router(state: State) -> dict:
                    "Respond with ONLY the word 'vector', 'graph', or 'compare'."),
         ("human", "{query}")
     ])
-    chain = prompt | llm
+    chain = prompt | get_llm()
     response = chain.invoke({"query": state["query"]})
     route = response.content.strip().lower()
     
@@ -875,7 +879,7 @@ def graph_node(state: State) -> dict:
         ("system", "You are a Neo4j expert. Generate a simple, valid Cypher query. NO text other than the query."),
         ("human", CYPHER_GENERATION_TEMPLATE)
     ])
-    chain = prompt | llm
+    chain = prompt | get_llm()
     token_usage = EMPTY_TOKEN_USAGE
     direct_answer = None
     cypher = ""
@@ -1010,7 +1014,7 @@ def synthesizer_node(state: State) -> dict:
                    "Provide a concise and accurate answer based on the retrieved information."),
         ("human", "Context: {context}\n\nQuery: {query}\n\nAnswer:")
     ])
-    chain = prompt | llm
+    chain = prompt | get_llm()
     response = chain.invoke({"query": state["query"], "context": full_context})
     return {
         "answer": response.content,
