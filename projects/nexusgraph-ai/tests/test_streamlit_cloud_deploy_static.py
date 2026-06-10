@@ -1,4 +1,5 @@
 from pathlib import Path
+import tomllib
 import unittest
 
 
@@ -44,6 +45,21 @@ class StreamlitCloudDeployStaticTests(unittest.TestCase):
         self.assertIn("def ensure_runtime_data()", source)
         self.assertIn("ingest_documents()", source)
         self.assertIn("NEXUSGRAPH_AUTO_IMPORT_NEO4J", source)
+
+    def test_railway_uses_dockerfile_and_streamlit_healthcheck(self):
+        config = tomllib.loads((ROOT / "railway.toml").read_text())
+
+        self.assertEqual(config["build"]["builder"], "DOCKERFILE")
+        self.assertEqual(config["build"]["dockerfilePath"], "Dockerfile")
+        self.assertEqual(config["deploy"]["healthcheckPath"], "/_stcore/health")
+        self.assertGreaterEqual(config["deploy"]["healthcheckTimeout"], 300)
+
+    def test_docker_entrypoint_binds_streamlit_to_runtime_port(self):
+        entrypoint = (ROOT / "scripts" / "entrypoint.sh").read_text()
+
+        self.assertIn("PORT:-8501", entrypoint)
+        self.assertIn("--server.address=0.0.0.0", entrypoint)
+        self.assertIn("--server.port=${APP_PORT}", entrypoint)
 
 
 if __name__ == "__main__":

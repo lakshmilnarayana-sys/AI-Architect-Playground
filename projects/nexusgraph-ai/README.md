@@ -125,6 +125,11 @@ docker compose down -v
 See [`docs/streamlit-cloud.md`](docs/streamlit-cloud.md) for the hosted
 deployment settings, required secrets, and first-deploy data import flow.
 
+## Deploy To Railway
+
+See [`docs/railway.md`](docs/railway.md) for the Docker-based Railway setup,
+required variables, and Neo4j service options.
+
 ## Architecture Diagram
 
 ![nexusgraph-ai service traffic flow](architecture-flow-simple.png)

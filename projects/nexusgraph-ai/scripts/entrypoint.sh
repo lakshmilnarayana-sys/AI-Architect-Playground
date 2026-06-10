@@ -15,4 +15,5 @@ echo "--- Ingestion Complete ---"
 
 # 3. Start Streamlit
 echo "Starting Streamlit app..."
-exec streamlit run app/streamlit_app.py --server.address=0.0.0.0 --server.port=8501
+APP_PORT=${PORT:-8501}
+exec streamlit run app/streamlit_app.py --server.address=0.0.0.0 --server.port=${APP_PORT} --server.headless=true
