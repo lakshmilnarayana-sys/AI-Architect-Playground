@@ -10,6 +10,9 @@ class UiTraceTests(unittest.TestCase):
     def test_format_stage_elapsed_formats_seconds(self):
         self.assertEqual(format_stage_elapsed({"elapsed": 1.234}), "1.23s")
 
+    def test_format_stage_elapsed_shows_skipped_status(self):
+        self.assertEqual(format_stage_elapsed({"status": "skipped"}), "skipped")
+
     def test_evidence_counts(self):
         trace = {
             "evidence": {
