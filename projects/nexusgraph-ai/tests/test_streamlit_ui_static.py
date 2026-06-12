@@ -45,6 +45,13 @@ class StreamlitUiStaticTests(unittest.TestCase):
         for query in expected_queries:
             self.assertIn(query, source)
 
+    def test_demo_query_cards_wrap_across_rows(self):
+        source = APP_SOURCE.read_text()
+
+        self.assertIn("for start in range(0, len(DEMO_QUERIES), 3):", source)
+        self.assertIn("query_cols = st.columns(3)", source)
+        self.assertNotIn("with query_cols[i]:", source)
+
 
 if __name__ == "__main__":
     unittest.main()
