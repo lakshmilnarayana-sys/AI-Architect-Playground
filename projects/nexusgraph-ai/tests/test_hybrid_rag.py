@@ -408,6 +408,51 @@ class HybridRagTests(unittest.TestCase):
         self.assertNotIn("Graph retrieval fallback", stage_names)
         self.assertEqual(result["trace"]["stages"][0]["details"]["retry_count"], 1)
 
+    def test_graph_query_uses_native_driver_before_static_fallback(self):
+        class FailingGraph:
+            def query(self, cypher):
+                raise RuntimeError("wrapper connection failed")
+
+        class FakeRecord:
+            def data(self):
+                return {
+                    "service": "observability-service",
+                    "schedule": "Observability Platform On-call",
+                    "primary_oncall": "Emma Chen",
+                    "secondary_oncall": "Luca Romano",
+                    "owner_team": "Reliability Engineering",
+                }
+
+        class FakeSession:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, traceback):
+                return False
+
+            def run(self, cypher):
+                return [FakeRecord()]
+
+        class FakeDriver:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, traceback):
+                return False
+
+            def session(self, database=None):
+                return FakeSession()
+
+        with patch.object(hybrid_rag, "get_graph", side_effect=[FailingGraph(), FailingGraph()]), \
+             patch.object(hybrid_rag.GraphDatabase, "driver", return_value=FakeDriver()):
+            result = hybrid_rag.run_graph_rag("Who is oncall for observability-service?")
+
+        self.assertIn("| observability-service | Observability Platform On-call", result["answer"])
+        stage_names = [stage["name"] for stage in result["trace"]["stages"]]
+        self.assertIn("Graph retrieval", stage_names)
+        self.assertNotIn("Graph retrieval fallback", stage_names)
+        self.assertEqual(result["trace"]["stages"][0]["details"]["source"], "neo4j_driver")
+
     def test_run_graph_rag_returns_structured_payload(self):
         with patch.object(
             hybrid_rag,

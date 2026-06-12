@@ -12,6 +12,7 @@ from langchain_ollama import ChatOllama
 from langchain_neo4j import Neo4jGraph
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, END
+from neo4j import GraphDatabase
 
 # Use relative imports if possible, or assume src is in path
 try:
@@ -199,15 +200,31 @@ def reset_graph_client() -> None:
     graph = None
 
 
-def query_graph_with_retry(cypher: str, max_attempts: int = 2) -> tuple[list[dict], int]:
+def query_graph_with_neo4j_driver(cypher: str) -> list[dict]:
+    driver = GraphDatabase.driver(
+        os.getenv("NEO4J_URI", DEFAULT_NEO4J_URI),
+        auth=(
+            os.getenv("NEO4J_USERNAME", DEFAULT_NEO4J_USERNAME),
+            os.getenv("NEO4J_PASSWORD", DEFAULT_NEO4J_PASSWORD),
+        ),
+    )
+    with driver:
+        with driver.session(database=os.getenv("NEO4J_DATABASE") or None) as session:
+            return [record.data() for record in session.run(cypher)]
+
+
+def query_graph_with_retry(cypher: str, max_attempts: int = 2) -> tuple[list[dict], int, str]:
     last_error: Exception | None = None
     for attempt in range(max_attempts):
         try:
-            return get_graph().query(cypher), attempt
+            return get_graph().query(cypher), attempt, "langchain_neo4j"
         except Exception as exc:
             last_error = exc
             reset_graph_client()
-    raise last_error or RuntimeError("Neo4j query failed")
+    try:
+        return query_graph_with_neo4j_driver(cypher), max_attempts, "neo4j_driver"
+    except Exception:
+        raise last_error or RuntimeError("Neo4j query failed")
 
 import re
 
@@ -1013,7 +1030,7 @@ def graph_node(state: State) -> dict:
         print(f"--- EXECUTING CYPHER ---\n{cypher}\n-----------------------")
 
         # 5. Execute
-        results, retry_count = query_graph_with_retry(cypher)
+        results, retry_count, graph_source = query_graph_with_retry(cypher)
         graph_evidence = {
             "cypher": cypher,
             "row_count": len(results),
@@ -1032,6 +1049,7 @@ def graph_node(state: State) -> dict:
                 "token_usage": token_usage,
                 "token_stage": "Text-to-Cypher" if not used_deterministic_cypher else "Deterministic Cypher template",
                 "retry_count": retry_count,
+                "source": graph_source,
             },
         ))
         trace["evidence"]["graph"] = [graph_evidence]
