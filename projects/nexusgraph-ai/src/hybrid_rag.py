@@ -155,6 +155,21 @@ llm = None
 graph: Neo4jGraph | None = None
 
 
+class GraphQueryError(RuntimeError):
+    def __init__(self, langchain_error: Exception | None, driver_error: Exception | None):
+        self.langchain_error = langchain_error
+        self.driver_error = driver_error
+        super().__init__("Neo4j query failed through LangChain and the native driver.")
+
+    def trace_details(self) -> dict:
+        details = {}
+        if self.langchain_error:
+            details["langchain_neo4j_error"] = f"{type(self.langchain_error).__name__}: {self.langchain_error}"
+        if self.driver_error:
+            details["neo4j_driver_error"] = f"{type(self.driver_error).__name__}: {self.driver_error}"
+        return details
+
+
 def get_llm():
     global llm
     if llm is None:
@@ -223,8 +238,8 @@ def query_graph_with_retry(cypher: str, max_attempts: int = 2) -> tuple[list[dic
             reset_graph_client()
     try:
         return query_graph_with_neo4j_driver(cypher), max_attempts, "neo4j_driver"
-    except Exception:
-        raise last_error or RuntimeError("Neo4j query failed")
+    except Exception as driver_error:
+        raise GraphQueryError(last_error, driver_error)
 
 import re
 
@@ -1075,13 +1090,16 @@ def graph_node(state: State) -> dict:
             
     except Exception as e:
         graph_answer = f"Error querying graph. Check logs for details."
+        error_details = {"error": str(e), "cypher": cypher}
+        if isinstance(e, GraphQueryError):
+            error_details.update(e.trace_details())
         trace = empty_trace("graph")
         trace["stages"].append(make_trace_stage(
             "Graph retrieval",
             "error",
             "Graph query failed before a trusted result could be returned.",
             elapsed=time.perf_counter() - t0,
-            details={"error": str(e), "cypher": cypher},
+            details=error_details,
         ))
         trace["known_gaps"].append("Graph evidence is unavailable because the Neo4j query failed.")
         print(f"DEBUG Graph Error: {str(e)}")
