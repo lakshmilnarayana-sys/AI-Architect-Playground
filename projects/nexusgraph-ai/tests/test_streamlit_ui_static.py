@@ -29,6 +29,22 @@ class StreamlitUiStaticTests(unittest.TestCase):
         self.assertIn("summarize_backend_error(e)", source)
         self.assertNotIn('{"answer": None, "error": str(e)', source)
 
+    def test_sre_demo_queries_are_available(self):
+        source = APP_SOURCE.read_text()
+
+        expected_queries = [
+            "Who is oncall for playback-service?",
+            "What is the oncall-schedule for today?",
+            "Which dashboards cover ml-ranking-service and observability-service?",
+            "Which services are missing dashboard coverage in the catalog?",
+            "What does the playback service runbook cover?",
+            "What does the billing service runbook cover?",
+            "What is the current error budget burn rate for playback-service?",
+            "Which dashboards cover playback-service?",
+        ]
+        for query in expected_queries:
+            self.assertIn(query, source)
+
 
 if __name__ == "__main__":
     unittest.main()
