@@ -453,6 +453,30 @@ class HybridRagTests(unittest.TestCase):
         self.assertNotIn("Graph retrieval fallback", stage_names)
         self.assertEqual(result["trace"]["stages"][0]["details"]["source"], "neo4j_driver")
 
+    def test_graph_fallback_trace_includes_wrapper_and_native_driver_errors(self):
+        class FailingGraph:
+            def query(self, cypher):
+                raise RuntimeError("wrapper connection failed")
+
+        class FailingDriver:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, traceback):
+                return False
+
+            def session(self, database=None):
+                raise RuntimeError("native driver failed")
+
+        with patch.object(hybrid_rag, "get_graph", side_effect=[FailingGraph(), FailingGraph()]), \
+             patch.object(hybrid_rag.GraphDatabase, "driver", return_value=FailingDriver()):
+            result = hybrid_rag.run_graph_rag("Who is oncall for observability-service?")
+
+        details = result["trace"]["stages"][0]["details"]
+        self.assertIn("wrapper connection failed", details["langchain_neo4j_error"])
+        self.assertIn("native driver failed", details["neo4j_driver_error"])
+        self.assertIn("Neo4j query failed", result["trace"]["known_gaps"][0])
+
     def test_run_graph_rag_returns_structured_payload(self):
         with patch.object(
             hybrid_rag,
