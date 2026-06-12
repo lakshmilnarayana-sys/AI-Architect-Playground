@@ -988,25 +988,26 @@ with st.expander("Ask NexusGraph", expanded=True):
 with st.expander("GraphRAG Demo Queries", expanded=True):
     st.caption('Pick one curated graph relationship query.')
 
-    query_cols = st.columns(3)
-    for i, item in enumerate(DEMO_QUERIES):
-        with query_cols[i]:
-            st.markdown(
-                f"""
-                <div style="border:1px solid #263244;border-radius:8px;padding:12px;background:#0f172a;min-height:128px;margin-bottom:8px">
-                  <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-                    <div style="width:34px;height:34px;border-radius:8px;background:#312e81;color:#ddd6fe;display:grid;place-items:center;font-size:12px;font-weight:900">{html.escape(item['icon'])}</div>
-                    <div style="font-weight:800;color:#f8fafc">Query {i + 1}</div>
-                  </div>
-                  <div style="font-size:14px;color:#e5e7eb;line-height:1.35">{html.escape(item['query'])}</div>
-                  <div style="font-size:12px;color:#94a3b8;margin-top:8px">{html.escape(item['insight'])}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            if st.button("Use query", key=f"graph_query_{i}", width='stretch'):
-                st.session_state.pending_query = item['query']
-                st.rerun()
+    for start in range(0, len(DEMO_QUERIES), 3):
+        query_cols = st.columns(3)
+        for col, (i, item) in zip(query_cols, enumerate(DEMO_QUERIES[start:start + 3], start=start)):
+            with col:
+                st.markdown(
+                    f"""
+                    <div style="border:1px solid #263244;border-radius:8px;padding:12px;background:#0f172a;min-height:128px;margin-bottom:8px">
+                      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+                        <div style="width:34px;height:34px;border-radius:8px;background:#312e81;color:#ddd6fe;display:grid;place-items:center;font-size:12px;font-weight:900">{html.escape(item['icon'])}</div>
+                        <div style="font-weight:800;color:#f8fafc">Query {i + 1}</div>
+                      </div>
+                      <div style="font-size:14px;color:#e5e7eb;line-height:1.35">{html.escape(item['query'])}</div>
+                      <div style="font-size:12px;color:#94a3b8;margin-top:8px">{html.escape(item['insight'])}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                if st.button("Use query", key=f"graph_query_{i}", width='stretch'):
+                    st.session_state.pending_query = item['query']
+                    st.rerun()
 
 render_project_story(nodes, edges)
 
