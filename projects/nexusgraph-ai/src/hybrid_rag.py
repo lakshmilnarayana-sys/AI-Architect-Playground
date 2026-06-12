@@ -193,6 +193,22 @@ def get_graph() -> Neo4jGraph:
         )
     return graph
 
+
+def reset_graph_client() -> None:
+    global graph
+    graph = None
+
+
+def query_graph_with_retry(cypher: str, max_attempts: int = 2) -> tuple[list[dict], int]:
+    last_error: Exception | None = None
+    for attempt in range(max_attempts):
+        try:
+            return get_graph().query(cypher), attempt
+        except Exception as exc:
+            last_error = exc
+            reset_graph_client()
+    raise last_error or RuntimeError("Neo4j query failed")
+
 import re
 
 # Cypher generation prompt with extremely rigid schema for small models
@@ -949,13 +965,13 @@ def graph_node(state: State) -> dict:
     used_deterministic_cypher = False
     
     try:
-        neo4j_graph = get_graph()
         deterministic_cypher = deterministic_cypher_for_query(state["query"])
         used_deterministic_cypher = bool(deterministic_cypher)
         if deterministic_cypher:
             cypher = " ".join(deterministic_cypher.split())
         else:
             # 1. Generate
+            neo4j_graph = get_graph()
             schema = neo4j_graph.get_schema
             cypher_response = chain.invoke({"question": state["query"], "schema": schema})
             token_usage = extract_token_usage(cypher_response)
@@ -997,7 +1013,7 @@ def graph_node(state: State) -> dict:
         print(f"--- EXECUTING CYPHER ---\n{cypher}\n-----------------------")
 
         # 5. Execute
-        results = neo4j_graph.query(cypher)
+        results, retry_count = query_graph_with_retry(cypher)
         graph_evidence = {
             "cypher": cypher,
             "row_count": len(results),
@@ -1015,6 +1031,7 @@ def graph_node(state: State) -> dict:
                 "deterministic": used_deterministic_cypher,
                 "token_usage": token_usage,
                 "token_stage": "Text-to-Cypher" if not used_deterministic_cypher else "Deterministic Cypher template",
+                "retry_count": retry_count,
             },
         ))
         trace["evidence"]["graph"] = [graph_evidence]
