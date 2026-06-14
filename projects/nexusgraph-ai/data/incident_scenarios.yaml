@@ -1,0 +1,21 @@
+- id: "playback-latency-sev1"
+  incident_id: "incident:playback-latency-sev1"
+  title: "Playback Latency SEV1"
+  severity: "SEV1"
+  affected_services: ["Playback Service"]
+  signal: "p99 playback start latency breached SLO across US-East; customers report buffering."
+  recovered: true
+- id: "billing-double-charge-sev2"
+  incident_id: "incident:billing-double-charge"
+  title: "Billing Double Charge SEV2"
+  severity: "SEV2"
+  affected_services: ["Billing Service"]
+  signal: "Duplicate payment captures detected in ledger reconciliation job."
+  recovered: true
+- id: "identity-lockout-sev1"
+  incident_id: "incident:identity-lockout"
+  title: "Identity Lockout SEV1"
+  severity: "SEV1"
+  affected_services: ["Identity Service"]
+  signal: "Admin accounts locked out after MFA provider change; privileged access blocked."
+  recovered: false
