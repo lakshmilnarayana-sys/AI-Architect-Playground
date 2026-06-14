@@ -414,6 +414,7 @@ def distributed_coordinate(
     output: Path = typer.Option(Path("./outputs/distributed-coordinator-plan.json"), "--output"),
     base_config: str = typer.Option("./examples/sample-config.yaml", "--config"),
     compose_service: str = typer.Option("perfagent", "--compose-service"),
+    execute: bool = typer.Option(False, "--execute", help="Execute worker commands and merge available results."),
 ) -> None:
     plan = build_distributed_coordinator_plan(
         engine=engine,
@@ -423,6 +424,14 @@ def distributed_coordinate(
         base_config=base_config,
         compose_service=compose_service,
     )
+    if execute:
+        result = run_distributed_coordinator(plan, output_path=output)
+        typer.echo(f"Distributed coordinator executed: {output}")
+        typer.echo(f"Workers: {len(result['workers'])}")
+        typer.echo(f"Success: {result['success']}")
+        if not result["success"]:
+            raise typer.Exit(2)
+        return
     write_json(output, plan)
     typer.echo(f"Distributed coordinator plan: {output}")
     for worker in plan["worker_specs"]:

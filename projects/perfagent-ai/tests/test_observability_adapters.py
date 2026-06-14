@@ -112,6 +112,22 @@ def test_build_provider_query_pack_renders_queries():
     assert "api_key" in pack["required_config"]
     assert "cpu_usage" in pack["golden_signals"]
     assert "postgres" in pack["dependency_queries"]
+    assert "kubernetes" in pack["query_groups"]
+    assert "workload_cpu" in pack["query_groups"]["kubernetes"]
+    assert {"postgres", "redis", "kafka", "cassandra", "elasticsearch"}.issubset(pack["dependency_queries"])
+
+
+def test_provider_query_pack_validation_reports_dependency_coverage():
+    pack = adapters.validate_provider_query_pack(
+        "elasticsearch",
+        "payments-api",
+        {"base_url": "http://elastic:9200", "index": "traces-*"},
+    )
+
+    assert pack["valid"] is True
+    assert pack["coverage"]["golden_signals"] == ["latency_p95", "request_rate", "error_rate", "cpu_usage", "memory_usage"]
+    assert "cassandra" in pack["coverage"]["dependencies"]
+    assert "kubernetes" in pack["coverage"]["query_groups"]
 
 
 def test_validate_provider_query_pack_reports_missing_config():

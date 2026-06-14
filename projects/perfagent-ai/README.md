@@ -218,14 +218,14 @@ New extension surfaces:
 
 - `--engine ui` / `--engine browser` generates and executes a Playwright-style browser journey harness.
 - `distributed plan` writes a containerized distributed execution plan.
-- `distributed coordinate` writes worker commands plus the deterministic merge command for distributed load runs.
+- `distributed coordinate` writes worker commands plus the deterministic merge command, or executes them with `--execute`.
 - `distributed run` executes the worker commands and merges worker summaries when they are available.
 - `distributed merge` combines worker summaries into a merged summary and aligned time-series.
 - `profile plan` writes eBPF/system profiler capture plans by default, with runtime-specific profilers available as fallback.
 - `profile run` executes available profiler capture/render commands explicitly.
 - `evaluate --profile-auto` runs supported profiler capture commands during the load window.
 - `capacity search` runs iterative capacity probes and records the first breaking point.
-- `observability query-pack` renders and validates provider query packs for Datadog, New Relic, and Elasticsearch.
+- `observability query-pack` renders and validates provider query packs for Datadog, New Relic, and Elasticsearch, including golden signals, Kubernetes workload signals, and common dependency templates.
 - `ci comment` renders reusable Markdown for PR comments from `reports/summary.json`.
 - `storage dashboard` renders a cross-run trend dashboard from the run store.
 - `regression index` and `regression similar` combine deterministic SQL history with optional pgvector retrieval.
@@ -478,6 +478,18 @@ Run distributed workers and merge results:
   --workers 4 \
   --config ./examples/sample-config.yaml \
   --output ./outputs/distributed-run.json
+```
+
+The same coordinator can execute directly:
+
+```bash
+.venv/bin/python -m perfagent distributed coordinate \
+  --service-name payments-api \
+  --engine k6 \
+  --workers 4 \
+  --config ./examples/sample-config.yaml \
+  --output ./outputs/distributed-run.json \
+  --execute
 ```
 
 Generate a PR comment body from a completed run:

@@ -13,6 +13,8 @@ When `perf` is available, `profile run --mode ebpf` captures and post-processes:
 - `logs/profile-*.stdout.log` and `logs/profile-*.stderr.log`: profiler command logs
 - `profile-result.json`: command status, warnings, generated artifacts, and parsed top functions
 
+The interactive HTML report includes a Flamegraph Viewer section for SVG flamegraph artifacts, with a function-name search over parsed top functions when summaries are available.
+
 PerfAgent also plans optional eBPF profiler commands for `bpftrace`, Pyroscope eBPF, and Parca Agent when those binaries are present.
 
 ## Linux Host Requirements

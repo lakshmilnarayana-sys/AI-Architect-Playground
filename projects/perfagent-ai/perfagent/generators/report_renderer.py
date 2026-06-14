@@ -488,7 +488,7 @@ def _interactive_html(
     .chart-tooltip {{ position: absolute; display: none; pointer-events: none; min-width: 210px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); box-shadow: 0 10px 24px var(--tooltip-shadow); padding: 10px; font-size: 12px; z-index: 3; }}
     .chart-tooltip strong {{ display: block; margin-bottom: 6px; }}
     .controls {{ display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }}
-    select, button {{ border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); padding: 8px 10px; font-size: 14px; }}
+    select, button, input {{ border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); padding: 8px 10px; font-size: 14px; }}
     button {{ cursor: pointer; }}
     table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
     th, td {{ border-bottom: 1px solid var(--border); padding: 9px 8px; text-align: left; }}
@@ -564,6 +564,14 @@ def _interactive_html(
     <section class="panel" style="margin-top:16px">
       <h2>Profiling Artifacts</h2>
       <div id="profiles"></div>
+    </section>
+    <section class="panel" style="margin-top:16px">
+      <div class="controls">
+        <h2 style="margin-right:auto">Flamegraph Viewer</h2>
+        <label for="flamegraph-search">Search</label>
+        <input id="flamegraph-search" type="search" placeholder="function name">
+      </div>
+      <div id="flamegraph-viewer"></div>
     </section>
     <section class="panel" style="margin-top:16px">
       <h2>Profiling Phase Correlation</h2>
@@ -868,6 +876,29 @@ def _interactive_html(
       document.getElementById('profiles').innerHTML = profiles.length ? `<ul>${{profiles.map(item => `<li>${{item}}</li>`).join('')}}</ul>` : '<p>No profiling artifacts attached.</p>';
     }}
 
+    function flamegraphProfiles() {{
+      return [...(data.profiling.profiles || []), ...((data.profiling.auto_capture || {{}}).artifacts || [])]
+        .filter(item => item.type === 'flamegraph' || String(item.artifact_path || item.source_path || '').endsWith('.svg'));
+    }}
+
+    function renderFlamegraphViewer() {{
+      const search = (document.getElementById('flamegraph-search').value || '').toLowerCase();
+      const profiles = flamegraphProfiles();
+      if (!profiles.length) {{
+        document.getElementById('flamegraph-viewer').innerHTML = '<p>No SVG flamegraph artifact available.</p>';
+        return;
+      }}
+      const cards = profiles.map(item => {{
+        const path = item.artifact_path || item.source_path;
+        const topFunctions = ((item.summary || {{}}).top_functions || []).filter(fn => !search || String(fn.name || '').toLowerCase().includes(search));
+        const functions = topFunctions.length
+          ? `<ul>${{topFunctions.slice(0, 10).map(fn => `<li>${{fmt(fn.name)}} (${{fmt(fn.percent)}}%, samples=${{fmt(fn.samples)}})</li>`).join('')}}</ul>`
+          : '<p>No matching parsed functions.</p>';
+        return `<div class="panel" style="margin-top:12px"><p><strong>${{fmt(path)}}</strong></p><object data="${{path}}" type="image/svg+xml" style="width:100%; min-height:360px; border:1px solid var(--border); border-radius:6px; background:var(--surface-muted)"></object><h3>Parsed Top Functions</h3>${{functions}}</div>`;
+      }}).join('');
+      document.getElementById('flamegraph-viewer').innerHTML = cards;
+    }}
+
     function renderProfilePhaseCorrelation() {{
       const correlation = data.profilePhaseCorrelation || {{}};
       const windows = correlation.capture_windows || [];
@@ -911,6 +942,8 @@ def _interactive_html(
     initTheme();
     renderTable();
     renderProfiles();
+    document.getElementById('flamegraph-search').addEventListener('input', renderFlamegraphViewer);
+    renderFlamegraphViewer();
     renderProfilePhaseCorrelation();
   </script>
 </body>
