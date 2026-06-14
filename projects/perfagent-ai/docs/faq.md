@@ -27,7 +27,7 @@ LLM explains the evidence.
 - WebSocket demo: Python `websockets`
 - Storage: filesystem artifacts
 - Metrics: k6 summary JSON and k6 JSONL time-series
-- Analysis: deterministic feature extraction, solo time-series analysis, cross-metric correlation, bounded ReAct-style reasoning trace
+- Analysis: deterministic feature extraction, solo time-series analysis, cross-metric correlation, bounded ReAct-style reasoning over metric, dependency, and profiling evidence
 - CI examples: GitHub Actions, GitLab CI, Jenkins
 
 ## What is implemented today?
@@ -41,7 +41,7 @@ Implemented:
 - k6 JSONL time-series capture
 - 10-second aligned time buckets
 - solo metric analysis and cross-metric correlation
-- bounded ReAct-style reasoning over deterministic metric observations
+- bounded ReAct-style reasoning over deterministic metric, dependency, and profiling observations
 - Capacity and breakpoint extraction
 - Bottleneck classification rules
 - Interactive HTML report generation

@@ -56,8 +56,21 @@ def test_report_renderer_includes_capacity_and_profiling_sections(tmp_path):
         },
         react_reasoning={
             "mode": "bounded_react",
-            "trace": [{"step": 1, "thought": "inspect breach", "action": "inspect_slo_breaches", "observation": {"evidence": ["first breach in stress"]}}],
-            "conclusion": {"classification": "load_induced_breakpoint", "confidence": "medium", "summary": "Load induced breakpoint.", "evidence": ["first breach in stress"]},
+            "trace": [
+                {"step": 1, "thought": "inspect breach", "action": "inspect_slo_breaches", "observation": {"evidence": ["first breach in stress"]}},
+                {
+                    "step": 5,
+                    "thought": "inspect profile evidence",
+                    "action": "inspect_profile_evidence",
+                    "observation": {"evidence": ["profile hot function dbQuery consumed 42.5% samples=85"]},
+                },
+            ],
+            "conclusion": {
+                "classification": "dependency_profile_correlated_bottleneck",
+                "confidence": "high",
+                "summary": "Dependency metrics and profile evidence agree.",
+                "evidence": ["profile hot function dbQuery consumed 42.5% samples=85"],
+            },
         },
     )
 
@@ -71,7 +84,9 @@ def test_report_renderer_includes_capacity_and_profiling_sections(tmp_path):
     assert "CPU allocation: 500m" in report
     assert "Image tag: payments-api:v1.2.3" in report
     assert "Autonomous Time-Series Reasoning" in report
-    assert "load_induced_breakpoint" in report
+    assert "dependency_profile_correlated_bottleneck" in report
+    assert "inspect_profile_evidence" in report
+    assert "profile hot function dbQuery" in report
 
     html = paths["report_html_path"].read_text()
     assert 'id="perfagent-data"' in html

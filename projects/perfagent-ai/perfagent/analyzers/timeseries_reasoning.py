@@ -39,14 +39,16 @@ def reason_over_timeseries(
     timeseries_analysis: dict[str, Any],
     features: dict[str, Any],
     dependency_analysis: dict[str, Any] | None = None,
-    max_steps: int = 6,
+    profiling_artifacts: dict[str, Any] | None = None,
+    max_steps: int = 7,
 ) -> dict[str, Any]:
-    tools = _tool_results(timeseries_analysis, features, dependency_analysis or {})
+    tools = _tool_results(timeseries_analysis, features, dependency_analysis or {}, profiling_artifacts or {})
     ordered_tools = [
         "inspect_slo_breaches",
         "inspect_load_latency_correlation",
         "inspect_infra_correlation",
         "inspect_dependency_correlation",
+        "inspect_profile_evidence",
         "inspect_recovery",
         "inspect_missing_metrics",
     ][:max_steps]
@@ -64,7 +66,7 @@ def reason_over_timeseries(
         )
         observations.extend(observation.get("evidence", []))
 
-    conclusion = _conclude(timeseries_analysis, features, dependency_analysis or {})
+    conclusion = _conclude(timeseries_analysis, features, dependency_analysis or {}, profiling_artifacts or {})
     conclusion["evidence"] = _dedupe(observations + conclusion.get("evidence", []))
     return {
         "mode": "bounded_react",
@@ -209,6 +211,7 @@ def _tool_results(
     analysis: dict[str, Any],
     features: dict[str, Any],
     dependency_analysis: dict[str, Any],
+    profiling_artifacts: dict[str, Any],
 ) -> dict[str, dict[str, Any]]:
     correlations = analysis.get("correlations", [])
     dependency_correlations = [
@@ -226,6 +229,7 @@ def _tool_results(
         for item in correlations
         if item.get("metric") in LOAD_METRICS
     ]
+    profile_functions = _profile_top_functions(profiling_artifacts)
     return {
         "inspect_slo_breaches": {
             "evidence": _breach_evidence(analysis.get("slo_breaches", []), features),
@@ -245,6 +249,10 @@ def _tool_results(
             "correlations": dependency_correlations,
             "findings": dependency_analysis.get("findings", []),
         },
+        "inspect_profile_evidence": {
+            "evidence": _profile_evidence(profile_functions),
+            "top_functions": profile_functions[:10],
+        },
         "inspect_recovery": analysis.get("recovery", {"evidence": ["recovery status unavailable"]}),
         "inspect_missing_metrics": {
             "evidence": [
@@ -260,9 +268,12 @@ def _conclude(
     analysis: dict[str, Any],
     features: dict[str, Any],
     dependency_analysis: dict[str, Any],
+    profiling_artifacts: dict[str, Any],
 ) -> dict[str, Any]:
     correlations = analysis.get("correlations", [])
     dependency_findings = dependency_analysis.get("findings", [])
+    profile_functions = _profile_top_functions(profiling_artifacts)
+    profile_dependency_matches = _profile_dependency_matches(profile_functions, dependency_analysis)
     solo_metrics = analysis.get("solo_metrics", {})
     infra_hot = any(
         item.get("metric") in {"cpu_percent", "cpu_throttling_percent", "memory_mb"}
@@ -283,7 +294,11 @@ def _conclude(
             "summary": "No aligned time-series rows were available, so autonomous reasoning cannot establish a breakpoint.",
             "evidence": [],
         }
-    if dependency_hot:
+    if dependency_hot and profile_dependency_matches:
+        classification = "dependency_profile_correlated_bottleneck"
+        confidence = "high"
+        summary = "Dependency metrics and profiling evidence both point at dependency-related execution paths during the performance failure."
+    elif dependency_hot:
         classification = "dependency_correlated_bottleneck"
         confidence = "high" if dependency_findings else "medium"
         summary = "Latency or errors correlate with dependency metrics, so the likely constraint is downstream or upstream dependency behavior."
@@ -310,7 +325,7 @@ def _conclude(
         "estimated_capacity_rps": features.get("estimated_capacity_rps"),
         "breaking_point_rps": features.get("breaking_point_rps"),
         "first_slo_breach_phase": features.get("first_slo_breach_phase"),
-        "evidence": [],
+        "evidence": _profile_match_evidence(profile_dependency_matches),
     }
 
 
@@ -338,6 +353,71 @@ def _dependency_findings_evidence(findings: list[dict[str, Any]]) -> list[str]:
     return [
         f"{item.get('dependency')} {item.get('metric')} reached {item.get('value')} against threshold {item.get('threshold')}"
         for item in findings[:3]
+    ]
+
+
+def _profile_top_functions(profiling_artifacts: dict[str, Any]) -> list[dict[str, Any]]:
+    profiles = [
+        *profiling_artifacts.get("profiles", []),
+        *profiling_artifacts.get("auto_capture", {}).get("artifacts", []),
+    ]
+    functions: list[dict[str, Any]] = []
+    for profile in profiles:
+        summary = profile.get("summary", {})
+        for item in summary.get("top_functions", []):
+            name = str(item.get("name") or "").strip()
+            if not name:
+                continue
+            functions.append(
+                {
+                    "name": name,
+                    "percent": item.get("percent"),
+                    "samples": item.get("samples"),
+                    "profile_type": profile.get("type", "unknown"),
+                    "artifact_path": profile.get("artifact_path"),
+                }
+            )
+    functions.sort(key=lambda item: _to_float(item.get("percent")) or 0, reverse=True)
+    return functions
+
+
+def _profile_evidence(functions: list[dict[str, Any]]) -> list[str]:
+    if not functions:
+        return ["no profiling top-function evidence available"]
+    return [
+        f"profile hot function {item.get('name')} consumed {item.get('percent')}% samples={item.get('samples')}"
+        for item in functions[:5]
+    ]
+
+
+def _profile_dependency_matches(
+    functions: list[dict[str, Any]],
+    dependency_analysis: dict[str, Any],
+) -> list[dict[str, Any]]:
+    dependency_terms = []
+    for dependency in dependency_analysis.get("dependencies", []):
+        for key in ("name", "type"):
+            value = str(dependency.get(key) or "").lower()
+            if value:
+                dependency_terms.append(value)
+    for finding in dependency_analysis.get("findings", []):
+        value = str(finding.get("dependency") or "").lower()
+        if value:
+            dependency_terms.append(value)
+    dependency_terms = sorted(set(dependency_terms), key=len, reverse=True)
+    matches = []
+    for function in functions:
+        name = function["name"].lower()
+        matched = next((term for term in dependency_terms if term and term in name), None)
+        if matched:
+            matches.append(function | {"matched_dependency": matched})
+    return matches
+
+
+def _profile_match_evidence(matches: list[dict[str, Any]]) -> list[str]:
+    return [
+        f"profile hot function {item.get('name')} matched dependency {item.get('matched_dependency')} at {item.get('percent')}%"
+        for item in matches[:3]
     ]
 
 
@@ -394,6 +474,7 @@ def _thought_for_tool(tool_name: str) -> str:
         "inspect_load_latency_correlation": "Check whether latency or errors rise as offered load rises.",
         "inspect_infra_correlation": "Check whether service resources move with the user-facing symptom.",
         "inspect_dependency_correlation": "Check whether declared dependencies explain the symptom better than local saturation.",
+        "inspect_profile_evidence": "Check whether profiling hot functions corroborate the metric-based hypothesis.",
         "inspect_recovery": "Check whether the service returns to SLO after load drops.",
         "inspect_missing_metrics": "Identify which missing signals limit confidence.",
     }

@@ -23,7 +23,7 @@ The current MVP supports HTTP/OpenAPI end to end and includes first-class genera
 - Capture k6 summary output and execution logs
 - Generate aligned time-series CSV scaffold
 - Analyze each time-series metric independently and correlate load, latency, errors, infra, browser, and dependency metrics
-- Produce an auditable bounded ReAct-style reasoning trace from deterministic metric-tool observations
+- Produce an auditable bounded ReAct-style reasoning trace from deterministic metric, dependency, and profiling observations
 - Extract p95, p99, RPS, error rate, request count, first SLO breach, and release decision
 - Classify bottlenecks using deterministic rules
 - Generate `report.md`, `report.html`, `summary.json`, `features.json`, and `metric_contract.yaml`

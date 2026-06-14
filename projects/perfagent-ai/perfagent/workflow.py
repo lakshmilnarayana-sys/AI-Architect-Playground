@@ -282,6 +282,7 @@ def evaluate_service(
         timeseries_analysis=timeseries_analysis,
         features=features,
         dependency_analysis=dependency_analysis,
+        profiling_artifacts=profiling,
     )
     features["timeseries_reasoning_classification"] = react_reasoning["conclusion"]["classification"]
     features["timeseries_reasoning_confidence"] = react_reasoning["conclusion"]["confidence"]
@@ -309,6 +310,7 @@ def evaluate_service(
             "react_reasoning": react_reasoning,
             "bottleneck_analysis": bottleneck,
             "dependency_analysis": dependency_analysis,
+            "profiling_artifacts": profiling,
             "protocol_analysis": protocol_analysis,
             "metric_contract": _metric_contract(state, strategy),
             "warnings": state["warnings"],
@@ -526,6 +528,7 @@ def import_external_results(
         timeseries_analysis=timeseries_analysis,
         features=features,
         dependency_analysis=dependency_analysis or {"dependencies": [], "findings": []},
+        profiling_artifacts={},
     )
     write_json(workspace.processed_dir / "timeseries_analysis.json", timeseries_analysis)
     write_json(workspace.processed_dir / "react_reasoning.json", react_reasoning)

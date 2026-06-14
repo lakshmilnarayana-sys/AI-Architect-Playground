@@ -280,9 +280,13 @@ Interactive report should show:
 
 ### P2: Reasoning Integration
 
-The ReAct reasoning loop should get structured profile summaries, not raw flame graph files.
+The bounded ReAct reasoning loop consumes structured profile summaries, not raw flame graph files. It currently uses parsed top functions as an additional deterministic observation and can raise confidence when dependency findings and profile hot functions point to the same dependency path.
 
-Tool observations:
+Implemented tool observation:
+
+- `inspect_profile_evidence`
+
+Future profile-specific tool observations:
 
 - `inspect_cpu_profile`
 - `inspect_heap_profile`
@@ -298,12 +302,16 @@ Rules:
 
 ## Deterministic Profiling Rules
 
-PerfAgent should only cite profiling evidence when:
+PerfAgent can cite parsed top-function profiling evidence when:
 
-- profile capture overlaps the test phase being analyzed
 - runtime and profile type are known
 - top-function percentages are parsed deterministically
 - raw artifact path is preserved
+
+PerfAgent should only make phase-specific profiling claims when:
+
+- profile capture overlaps the test phase being analyzed
+- profile capture overlaps the first SLO breach window when citing breach-specific hot functions
 - conversion warnings are included
 
 ## Priority
