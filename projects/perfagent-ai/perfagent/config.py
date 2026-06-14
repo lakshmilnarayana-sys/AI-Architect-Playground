@@ -18,6 +18,7 @@ def resolve_evaluate_options(config: dict[str, Any], cli_values: dict[str, Any])
     service = config.get("service", {}) or {}
     slo = config.get("slo", {}) or {}
     test = config.get("test", {}) or {}
+    llm = config.get("llm", {}) or {}
     dependencies = _normalize_dependencies(config.get("dependencies", []))
     prometheus_enabled = prometheus.get("enabled", bool(prometheus.get("url")))
     resolved = {
@@ -41,11 +42,20 @@ def resolve_evaluate_options(config: dict[str, Any], cli_values: dict[str, Any])
             "image_tag": service.get("image_tag"),
         },
         "dependencies": dependencies,
+        "llm": {
+            "enabled": bool(llm.get("enabled", False)),
+            "provider": llm.get("provider", "ollama"),
+            "model": llm.get("model", "llama3.2"),
+            "base_url": llm.get("base_url", "http://localhost:11434"),
+        },
     }
     for key, value in cli_values.items():
         if value is not None:
             if key in {"cpu_allocation", "memory_allocation", "disk_allocation", "image_tag"}:
                 resolved["service_resources"][key] = value
+            elif key in {"llm_enabled", "llm_provider", "llm_model", "llm_base_url"}:
+                llm_key = key.replace("llm_", "")
+                resolved["llm"][llm_key] = value
             else:
                 resolved[key] = value
     return resolved
