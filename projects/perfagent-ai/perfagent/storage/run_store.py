@@ -50,8 +50,8 @@ class RunStore:
             rows = conn.execute(query, params).fetchall()
         return [_row_to_dict(row) for row in rows]
 
-    def latest_run(self, service_name: str) -> dict[str, Any] | None:
-        runs = self.list_runs(service_name)
+    def latest_run(self, service_name: str, *, exclude_run_id: str | None = None) -> dict[str, Any] | None:
+        runs = [run for run in self.list_runs(service_name) if run["run_id"] != exclude_run_id]
         return runs[0] if runs else None
 
     def apply_retention(self, *, retention_days: int, now: datetime | None = None) -> int:
@@ -92,10 +92,11 @@ def compare_to_latest_baseline(
     service_name: str,
     current_features: dict[str, Any],
     *,
+    exclude_run_id: str | None = None,
     max_p95_regression_percent: float = 20,
     max_error_rate_delta_percent: float = 0.5,
 ) -> dict[str, Any]:
-    baseline = store.latest_run(service_name)
+    baseline = store.latest_run(service_name, exclude_run_id=exclude_run_id)
     if not baseline:
         return {"regression_detected": False, "baseline_run_id": None, "findings": ["no baseline run available"]}
     baseline_features = json.loads(baseline["features_json"])

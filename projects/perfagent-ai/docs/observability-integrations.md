@@ -5,7 +5,7 @@ PerfAgent uses observability data for two jobs:
 1. derive production traffic profiles
 2. collect service/dependency evidence for bottleneck analysis
 
-The implemented executable client today is Prometheus-compatible `/api/v1/query_range`. Datadog, New Relic, and ELK examples below define the adapter contract and query mappings to add next.
+The executable clients include Prometheus-compatible `/api/v1/query_range`, Datadog `/api/v1/query`, New Relic GraphQL NRQL, and Elasticsearch `_search` traffic-profile adapters.
 
 ## Common Mapping
 
@@ -91,7 +91,7 @@ dependencies:
       memory_utilization_percent: 'avg:redis.mem.used{service:{service}} / avg:redis.mem.max{service:{service}} * 100'
 ```
 
-Adapter endpoint to implement:
+Implemented adapter endpoint:
 
 ```text
 POST /api/v1/query/timeseries
@@ -151,7 +151,7 @@ dependencies:
         WHERE appName = '{service}' AND datastoreType = 'Elasticsearch'
 ```
 
-Adapter endpoint to implement:
+Implemented adapter endpoint:
 
 ```text
 POST https://api.newrelic.com/graphql
@@ -201,7 +201,7 @@ dependencies:
         metric_field: elasticsearch.thread_pool.search.rejected
 ```
 
-Adapter endpoint to implement:
+Implemented adapter endpoint:
 
 ```text
 POST /<index>/_search
@@ -209,11 +209,17 @@ POST /<index>/_search
 
 ## Implementation Contract
 
-Each provider adapter should expose:
+Provider adapters expose:
 
 ```python
 collect_traffic_profile(provider_config, service_name, start, end) -> dict
 collect_dependency_metrics(provider_config, dependencies, start, end) -> dict
+```
+
+Current provider adapter module:
+
+```python
+from perfagent.collectors.observability_adapters import collect_observability_traffic_profile
 ```
 
 Then PerfAgent can keep the same deterministic analysis path:

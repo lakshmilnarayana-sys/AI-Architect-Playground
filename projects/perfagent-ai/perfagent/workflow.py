@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -9,7 +10,9 @@ from perfagent.analyzers.dependencies import analyze_dependencies
 from perfagent.analyzers.features import extract_features
 from perfagent.collectors.external_results import load_external_results
 from perfagent.collectors.k6_collector import read_k6_summary, run_k6
+from perfagent.collectors.observability_adapters import collect_observability_traffic_profile
 from perfagent.collectors.profiling_collector import collect_profiling_artifacts
+from perfagent.collectors.protocol_collectors import duration_to_seconds, run_protocol_script
 from perfagent.collectors.prometheus_collector import (
     collect_dependency_metrics,
     collect_prometheus_metrics,
@@ -31,6 +34,7 @@ from perfagent.generators.synthetic_data import generate_test_data
 from perfagent.generators.websocket_generator import generate_websocket_load_test
 from perfagent.llm.client import disabled_ai_analysis, explain_with_ollama
 from perfagent.parsers.openapi_parser import parse_openapi
+from perfagent.storage.postgres_store import PostgresRunStore
 from perfagent.storage.run_store import RunStore
 
 
@@ -50,6 +54,7 @@ def evaluate_service(
     dependencies: list[dict[str, Any]] | None = None,
     llm: dict[str, Any] | None = None,
     traffic_profile_config: dict[str, Any] | None = None,
+    observability_config: dict[str, Any] | None = None,
     storage: dict[str, Any] | None = None,
     prometheus_url: str | None = None,
     prometheus_service_label: str | None = None,
@@ -84,11 +89,18 @@ def evaluate_service(
     state["contract_analysis"] = contract
     write_json(workspace.processed_dir / "contract_analysis.json", contract)
 
-    traffic_profile = collect_prometheus_traffic_profile(
-        prometheus_url,
-        prometheus_service_label,
-        traffic_profile_config or {"enabled": False},
-    )
+    traffic_profile_settings = traffic_profile_config or {"enabled": False}
+    if traffic_profile_settings.get("enabled") and traffic_profile_settings.get("source") not in {None, "prometheus"}:
+        traffic_profile = collect_observability_traffic_profile(
+            observability_config or traffic_profile_settings,
+            service_name,
+        )
+    else:
+        traffic_profile = collect_prometheus_traffic_profile(
+            prometheus_url,
+            prometheus_service_label,
+            traffic_profile_settings,
+        )
     write_json(workspace.processed_dir / "traffic_profile.json", traffic_profile)
 
     if traffic_profile.get("enabled") and traffic_profile.get("endpoint_mix"):
@@ -118,13 +130,13 @@ def evaluate_service(
     state["generated_k6_script_path"] = str(script_path)
     generate_locustfile(contract, test_data, target_url, workspace.generated_dir / "locustfile.py")
     generate_jmeter_plan(contract, test_data, strategy, target_url, workspace.generated_dir / "jmeter_test_plan.jmx")
-    generate_grpc_load_test(
+    grpc_script_path = generate_grpc_load_test(
         service_name=service_name,
         target=target_url.replace("http://", "").replace("https://", ""),
         proto_path="./protos/service.proto",
         output_path=workspace.generated_dir / "grpc_load.py",
     )
-    generate_websocket_load_test(
+    websocket_script_path = generate_websocket_load_test(
         service_name=service_name,
         target_url=target_url.replace("http://", "ws://").replace("https://", "wss://"),
         output_path=workspace.generated_dir / "websocket_load.py",
@@ -132,7 +144,9 @@ def evaluate_service(
 
     summary_path = workspace.raw_dir / "k6_summary.json"
     timeseries_path = workspace.raw_dir / "k6_timeseries.jsonl"
-    if skip_run or engine.lower() != "k6":
+    engine_name = engine.lower()
+    protocol_aligned: list[dict[str, Any]] | None = None
+    if skip_run or engine_name not in {"k6", "grpc", "websocket"}:
         execution_result: dict[str, Any] = {
             "exit_code": 0,
             "skipped": True,
@@ -140,10 +154,19 @@ def evaluate_service(
             "timeseries_path": str(timeseries_path),
             "stdout": "",
             "stderr": f"{engine} execution skipped by PerfAgent evaluate; import external results after tool execution"
-            if engine.lower() != "k6"
+            if engine_name != "k6"
             else "k6 execution skipped by user",
         }
         k6_summary = {"metrics": {}}
+    elif engine_name in {"grpc", "websocket"}:
+        execution_result, k6_summary, protocol_aligned = run_protocol_script(
+            tool=engine_name,
+            script_path=grpc_script_path if engine_name == "grpc" else websocket_script_path,
+            summary_path=summary_path,
+            execution_log_path=workspace.raw_dir / "execution.log",
+            duration_seconds=duration_to_seconds(duration),
+            concurrency=max(1, int(strategy.get("stages", [{}])[0].get("target", 10) or 10)),
+        )
     else:
         execution_result = run_k6(script_path, summary_path, timeseries_path, workspace.raw_dir / "execution.log")
         k6_summary = read_k6_summary(summary_path)
@@ -152,7 +175,7 @@ def evaluate_service(
     write_json(summary_path, k6_summary)
     write_json(workspace.raw_dir / "execution_result.json", execution_result)
 
-    aligned = align_k6_jsonl(timeseries_path, strategy) or fallback_aligned_timeseries(k6_summary)
+    aligned = protocol_aligned or align_k6_jsonl(timeseries_path, strategy) or fallback_aligned_timeseries(k6_summary)
 
     prometheus_query_templates = load_prometheus_query_config(prometheus_query_config_path)
     prometheus_metrics = collect_prometheus_metrics(
@@ -270,9 +293,8 @@ def generate_only(*, service_name: str, openapi_path: Path, target_url: str, out
 def _persist_run(storage: dict[str, Any], state: EvaluationState, features: dict[str, Any]) -> None:
     if storage and not storage.get("enabled", True):
         return
-    db_path = Path(storage.get("path", "./outputs/perfagent.db") if storage else "./outputs/perfagent.db")
     retention_days = int(storage.get("retention_days", 30) if storage else 30)
-    store = RunStore(db_path)
+    store = _run_store_from_config(storage or {})
     store.record_run(
         {
             "run_id": state["run_id"],
@@ -283,6 +305,16 @@ def _persist_run(storage: dict[str, Any], state: EvaluationState, features: dict
         }
     )
     store.apply_retention(retention_days=retention_days)
+
+
+def _run_store_from_config(storage: dict[str, Any]) -> Any:
+    backend = str(storage.get("backend", "sqlite")).lower()
+    if backend == "postgres":
+        dsn = storage.get("dsn") or os.getenv(str(storage.get("dsn_env", "PERFAGENT_DATABASE_URL")))
+        if not dsn:
+            raise RuntimeError("Postgres storage requires storage.dsn or PERFAGENT_DATABASE_URL.")
+        return PostgresRunStore(str(dsn))
+    return RunStore(Path(storage.get("path", "./outputs/perfagent.db")))
 
 
 def import_external_results(

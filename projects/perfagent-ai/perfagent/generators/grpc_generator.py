@@ -12,6 +12,7 @@ This is a first-class PerfAgent protocol artifact. Fill in the generated stub im
 """
 
 import argparse
+import json
 import time
 
 import grpc
@@ -20,6 +21,7 @@ import grpc
 SERVICE_NAME = {service_name!r}
 TARGET = {target!r}
 PROTO_PATH = {proto_path!r}
+MAX_RETAINED_LATENCIES = 10000
 
 
 def run(duration_seconds: int, concurrency: int) -> dict:
@@ -32,11 +34,13 @@ def run(duration_seconds: int, concurrency: int) -> dict:
             start = time.perf_counter()
             try:
                 # TODO: import generated *_pb2_grpc stubs and call the target RPC.
-                channel.channel_ready_future().result(timeout=2)
+                remaining = max(deadline - time.time(), 0.001)
+                grpc.channel_ready_future(channel).result(timeout=min(2, remaining))
             except Exception:
                 error_count += 1
             finally:
-                latencies_ms.append((time.perf_counter() - start) * 1000)
+                if len(latencies_ms) < MAX_RETAINED_LATENCIES:
+                    latencies_ms.append((time.perf_counter() - start) * 1000)
                 request_count += 1
     return {{"service": SERVICE_NAME, "requests": request_count, "errors": error_count, "latencies_ms": latencies_ms, "concurrency": concurrency}}
 
@@ -46,7 +50,7 @@ if __name__ == "__main__":
     parser.add_argument("--duration-seconds", type=int, default=60)
     parser.add_argument("--concurrency", type=int, default=10)
     args = parser.parse_args()
-    print(run(args.duration_seconds, args.concurrency))
+    print(json.dumps(run(args.duration_seconds, args.concurrency)))
 '''
     )
     return output_path

@@ -18,6 +18,7 @@ import websockets
 
 SERVICE_NAME = {service_name!r}
 TARGET_URL = {target_url!r}
+MAX_RETAINED_LATENCIES = 10000
 
 
 async def worker(duration_seconds: int, worker_id: int) -> dict:
@@ -25,18 +26,25 @@ async def worker(duration_seconds: int, worker_id: int) -> dict:
     request_count = 0
     error_count = 0
     latencies_ms = []
-    async with websockets.connect(TARGET_URL) as websocket:
-        while time.time() < deadline:
-            payload = {{"type": "ping", "service": SERVICE_NAME, "worker": worker_id, "request": request_count}}
-            start = time.perf_counter()
-            try:
-                await websocket.send(json.dumps(payload))
-                await websocket.recv()
-            except Exception:
-                error_count += 1
-            finally:
-                latencies_ms.append((time.perf_counter() - start) * 1000)
-                request_count += 1
+    try:
+        async with websockets.connect(TARGET_URL) as websocket:
+            while time.time() < deadline:
+                payload = {{"type": "ping", "service": SERVICE_NAME, "worker": worker_id, "request": request_count}}
+                start = time.perf_counter()
+                try:
+                    await websocket.send(json.dumps(payload))
+                    await websocket.recv()
+                except Exception:
+                    error_count += 1
+                finally:
+                    if len(latencies_ms) < MAX_RETAINED_LATENCIES:
+                        latencies_ms.append((time.perf_counter() - start) * 1000)
+                    request_count += 1
+    except Exception:
+        start = time.perf_counter()
+        error_count += 1
+        request_count += 1
+        latencies_ms.append((time.perf_counter() - start) * 1000)
     return {{"requests": request_count, "errors": error_count, "latencies_ms": latencies_ms}}
 
 
@@ -49,7 +57,7 @@ if __name__ == "__main__":
     parser.add_argument("--duration-seconds", type=int, default=60)
     parser.add_argument("--connections", type=int, default=10)
     args = parser.parse_args()
-    print(asyncio.run(run(args.duration_seconds, args.connections)))
+    print(json.dumps(asyncio.run(run(args.duration_seconds, args.connections))))
 '''
     )
     return output_path

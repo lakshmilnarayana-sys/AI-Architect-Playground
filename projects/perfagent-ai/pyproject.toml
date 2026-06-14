@@ -20,6 +20,9 @@ dev = [
   "grpcio-tools>=1.76.0",
   "websockets>=15.0.1",
 ]
+postgres = [
+  "psycopg[binary]>=3.2",
+]
 
 [project.scripts]
 perfagent = "perfagent.cli:main"

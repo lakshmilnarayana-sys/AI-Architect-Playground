@@ -49,6 +49,7 @@ storage:
   enabled: true
   backend: sqlite
   path: ./outputs/perfagent.db
+  dsn_env: PERFAGENT_DATABASE_URL
   retention_days: 30
 dependencies:
   postgres:

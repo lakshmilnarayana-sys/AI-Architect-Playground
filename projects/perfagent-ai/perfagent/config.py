@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,7 @@ def resolve_evaluate_options(config: dict[str, Any], cli_values: dict[str, Any])
     test = config.get("test", {}) or {}
     llm = config.get("llm", {}) or {}
     traffic_profile = config.get("traffic_profile", {}) or {}
+    observability = config.get("observability", {}) or {}
     storage = config.get("storage", {}) or {}
     dependencies = _normalize_dependencies(config.get("dependencies", []))
     prometheus_enabled = prometheus.get("enabled", bool(prometheus.get("url")))
@@ -61,10 +63,13 @@ def resolve_evaluate_options(config: dict[str, Any], cli_values: dict[str, Any])
                 'sum by (route) (rate(http_requests_total{service="{service}"}[5m]))',
             ),
         },
+        "observability": _resolve_observability_config(observability, traffic_profile),
         "storage": {
             "enabled": bool(storage.get("enabled", True)),
             "backend": storage.get("backend", "sqlite"),
             "path": storage.get("path", "./outputs/perfagent.db"),
+            "dsn": storage.get("dsn"),
+            "dsn_env": storage.get("dsn_env", "PERFAGENT_DATABASE_URL"),
             "retention_days": int(storage.get("retention_days", 30)),
         },
     }
@@ -101,6 +106,23 @@ def _normalize_dependencies(value: Any) -> list[dict[str, Any]]:
                 dependencies.append(dependency)
         return dependencies
     return []
+
+
+def _resolve_observability_config(observability: dict[str, Any], traffic_profile: dict[str, Any]) -> dict[str, Any]:
+    provider = str(traffic_profile.get("source") or observability.get("provider") or "prometheus").lower()
+    provider_config = dict(observability.get(provider, {}) or {})
+    provider_config.update({key: value for key, value in observability.items() if key not in {"datadog", "newrelic", "new_relic", "elasticsearch", "elk"}})
+    provider_config.update({key: value for key, value in traffic_profile.items() if key not in {"enabled", "source"}})
+    provider_config["provider"] = provider
+    for key in ("api_key", "app_key", "account_id"):
+        env_name = provider_config.get(f"{key}_env")
+        if env_name and os.getenv(str(env_name)):
+            provider_config[key] = os.getenv(str(env_name))
+    if provider == "datadog" and provider_config.get("site") and not str(provider_config["site"]).startswith("http"):
+        provider_config["site"] = "https://api." + str(provider_config["site"])
+    if provider == "elasticsearch" and provider_config.get("url") and not provider_config.get("base_url"):
+        provider_config["base_url"] = provider_config["url"]
+    return provider_config
 
 
 def default_strategy(

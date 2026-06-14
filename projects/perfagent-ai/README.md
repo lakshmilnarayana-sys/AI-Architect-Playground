@@ -261,6 +261,8 @@ Continuous performance guide: [docs/continuous-performance.md](docs/continuous-p
 
 FAQ: [docs/faq.md](docs/faq.md).
 
+MCP extension point: the same workflow can be exposed as MCP tools such as `evaluate_service`, `compare_regression`, `query_runs`, and `generate_report`, allowing IDEs and agent platforms to drive PerfAgent through a standard integration layer.
+
 ## CLI Reference
 
 Evaluate a service:

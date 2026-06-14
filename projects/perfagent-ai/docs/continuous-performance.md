@@ -12,6 +12,16 @@ storage:
   retention_days: 30
 ```
 
+Shared CI storage can use Postgres:
+
+```yaml
+storage:
+  enabled: true
+  backend: postgres
+  dsn_env: PERFAGENT_DATABASE_URL
+  retention_days: 30
+```
+
 Every `evaluate` run records:
 
 - run ID
@@ -34,6 +44,17 @@ Manage retained runs:
 .venv/bin/python -m perfagent storage retention \
   --db-path ./outputs/perfagent.db \
   --retention-days 30
+```
+
+Compare a run against the latest stored baseline:
+
+```bash
+.venv/bin/python -m perfagent regression compare \
+  --run-dir ./outputs/payments-api \
+  --db-path ./outputs/perfagent.db \
+  --max-p95-regression-percent 20 \
+  --max-error-rate-delta-percent 0.5 \
+  --fail-on-regression
 ```
 
 ## PR Complexity Triggering
@@ -125,6 +146,6 @@ perfagent evaluate \
   --fail-on BLOCK,WARN,UNKNOWN
 ```
 
-## Future Database Backends
+## Database Backends
 
-SQLite is the MVP backend. The storage interface is intentionally small so Postgres can replace it later for multi-runner or shared CI deployments.
+SQLite is the default local backend. Postgres is available for multi-runner or shared CI deployments through the optional `perfagent-ai[postgres]` dependency.

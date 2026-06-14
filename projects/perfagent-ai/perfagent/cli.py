@@ -8,7 +8,7 @@ from perfagent.core.artifacts import read_json
 from perfagent.config import load_run_config, resolve_evaluate_options
 from perfagent.collectors.prometheus_collector import load_prometheus_query_config, validate_prometheus_queries
 from perfagent.core.artifacts import write_json
-from perfagent.storage.run_store import RunStore
+from perfagent.storage.run_store import RunStore, compare_to_latest_baseline
 from perfagent.workflow import evaluate_service, generate_only, import_external_results
 
 
@@ -16,9 +16,11 @@ app = typer.Typer(help="PerfAgent AI: from API contract to performance report.")
 prometheus_app = typer.Typer(help="Prometheus helpers.")
 baseline_app = typer.Typer(help="Baseline management.")
 storage_app = typer.Typer(help="Run database management.")
+regression_app = typer.Typer(help="Regression comparison gates.")
 app.add_typer(prometheus_app, name="prometheus")
 app.add_typer(baseline_app, name="baseline")
 app.add_typer(storage_app, name="storage")
+app.add_typer(regression_app, name="regression")
 
 
 @app.command()
@@ -101,6 +103,7 @@ def evaluate(
         dependencies=options.get("dependencies", []),
         llm=options.get("llm"),
         traffic_profile_config=options.get("traffic_profile"),
+        observability_config=options.get("observability"),
         storage=options.get("storage"),
         prometheus_url=options.get("prometheus_url"),
         prometheus_service_label=options.get("prometheus_service_label"),
@@ -260,6 +263,38 @@ def storage_retention(
 ) -> None:
     deleted = RunStore(db_path).apply_retention(retention_days=retention_days)
     typer.echo(f"Deleted {deleted} runs older than {retention_days} days")
+
+
+@regression_app.command("compare")
+def regression_compare(
+    run_dir: Path = typer.Option(..., "--run-dir", exists=True, file_okay=False),
+    db_path: Path = typer.Option(Path("./outputs/perfagent.db"), "--db-path"),
+    max_p95_regression_percent: float = typer.Option(20.0, "--max-p95-regression-percent"),
+    max_error_rate_delta_percent: float = typer.Option(0.5, "--max-error-rate-delta-percent"),
+    output_json: Path | None = typer.Option(None, "--output-json"),
+    fail_on_regression: bool = typer.Option(False, "--fail-on-regression"),
+) -> None:
+    summary = read_json(run_dir / "reports" / "summary.json")
+    service_name = summary.get("service_name")
+    if not service_name:
+        raise typer.BadParameter("summary.json is missing service_name")
+    result = compare_to_latest_baseline(
+        RunStore(db_path),
+        service_name,
+        summary.get("features", {}),
+        exclude_run_id=summary.get("run_id"),
+        max_p95_regression_percent=max_p95_regression_percent,
+        max_error_rate_delta_percent=max_error_rate_delta_percent,
+    )
+    if output_json:
+        write_json(output_json, result)
+    typer.echo(f"Regression comparison for {service_name}")
+    typer.echo(f"Baseline run: {result.get('baseline_run_id') or 'none'}")
+    typer.echo(f"Regression detected: {result['regression_detected']}")
+    for finding in result.get("findings", []):
+        typer.echo(f"- {finding}")
+    if fail_on_regression and result["regression_detected"]:
+        raise typer.Exit(2)
 
 
 def main() -> None:

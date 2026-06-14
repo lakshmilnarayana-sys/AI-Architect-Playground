@@ -295,9 +295,15 @@ Current limits:
 
 ## What about Datadog, New Relic, and ELK?
 
-The executable client today is Prometheus-compatible. Datadog, New Relic, and ELK mappings are captured in `docs/observability-integrations.md` with example queries and the adapter contract.
+PerfAgent includes traffic-profile adapters for Datadog, New Relic, and Elasticsearch. They normalize provider results into the same `traffic_profile` shape used by the Prometheus path.
 
 Those providers should normalize traffic and dependency data into the same PerfAgent traffic profile shape, so the downstream strategy generation, analysis, bottleneck rules, and AI report narrative stay the same.
+
+Dependency metrics still depend on explicit provider-specific mappings because labels, metric names, facets, and index schemas vary by platform.
+
+## Can PerfAgent be exposed through MCP?
+
+Yes. The CLI/workflow engine can be wrapped as an MCP server with tools such as `evaluate_service`, `compare_regression`, `query_runs`, `validate_prometheus`, and `generate_report`. That would let IDEs, chat agents, and automation platforms drive PerfAgent through a standard protocol while the deterministic engine remains the source of truth.
 
 ## Where are golden signals stored?
 
