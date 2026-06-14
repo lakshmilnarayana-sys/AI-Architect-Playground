@@ -7,6 +7,7 @@ from perfagent.analyzers.alignment import align_k6_jsonl, fallback_aligned_times
 from perfagent.analyzers.bottlenecks import classify_bottleneck
 from perfagent.analyzers.dependencies import analyze_dependencies
 from perfagent.analyzers.features import extract_features
+from perfagent.analyzers.profile_phase_correlation import analyze_profile_phase_correlation
 from perfagent.analyzers.protocols import analyze_protocol_metrics
 from perfagent.analyzers.timeseries_reasoning import analyze_timeseries, reason_over_timeseries
 from perfagent.collectors.k6_collector import read_k6_summary, run_k6
@@ -406,12 +407,19 @@ def _stage_analyze_results(state: GraphInput) -> GraphInput:
     )
     dependency_analysis = analyze_dependencies(state.get("dependencies") or [], aligned)
     protocol_analysis = analyze_protocol_metrics(state["k6_summary"], aligned)
+    profile_phase_correlation = analyze_profile_phase_correlation(
+        state.get("profiling_artifacts") or {},
+        aligned,
+        features=features,
+    )
     features["dependency_findings"] = dependency_analysis["findings"]
     features["protocol_findings"] = protocol_analysis["findings"]
     evaluation_state["dependency_analysis"] = dependency_analysis
     evaluation_state["protocol_analysis"] = protocol_analysis
+    evaluation_state["profile_phase_correlation"] = profile_phase_correlation
     write_json(workspace.processed_dir / "dependency_analysis.json", dependency_analysis)
     write_json(workspace.processed_dir / "protocol_analysis.json", protocol_analysis)
+    write_json(workspace.processed_dir / "profile_phase_correlation.json", profile_phase_correlation)
 
     timeseries_analysis = analyze_timeseries(
         aligned,
@@ -422,6 +430,7 @@ def _stage_analyze_results(state: GraphInput) -> GraphInput:
         timeseries_analysis=timeseries_analysis,
         features=features,
         dependency_analysis=dependency_analysis,
+        profiling_artifacts=state.get("profiling_artifacts") or {},
     )
     features["timeseries_reasoning_classification"] = react_reasoning["conclusion"]["classification"]
     features["timeseries_reasoning_confidence"] = react_reasoning["conclusion"]["confidence"]
@@ -452,6 +461,8 @@ def _stage_analyze_results(state: GraphInput) -> GraphInput:
             "react_reasoning": react_reasoning,
             "bottleneck_analysis": bottleneck,
             "dependency_analysis": dependency_analysis,
+            "profiling_artifacts": state.get("profiling_artifacts") or {},
+            "profile_phase_correlation": profile_phase_correlation,
             "protocol_analysis": protocol_analysis,
             "metric_contract": _metric_contract(evaluation_state, state["strategy"]),
             "warnings": evaluation_state["warnings"],
@@ -462,6 +473,7 @@ def _stage_analyze_results(state: GraphInput) -> GraphInput:
     state["features"] = features
     state["dependency_analysis"] = dependency_analysis
     state["protocol_analysis"] = protocol_analysis
+    state["profile_phase_correlation"] = profile_phase_correlation
     state["timeseries_analysis"] = timeseries_analysis
     state["react_reasoning"] = react_reasoning
     state["bottleneck_analysis"] = bottleneck

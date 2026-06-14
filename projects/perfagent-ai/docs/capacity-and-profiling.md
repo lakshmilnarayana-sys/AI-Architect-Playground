@@ -171,6 +171,8 @@ PerfAgent starts capture-phase commands before load execution and finalizes/rend
 
 When Linux `perf` is available, PerfAgent writes `perf.data`, converts `perf script` output into `perf.folded`, and renders `perf-flamegraph.svg`. See [eBPF Profiling Setup](ebpf-profiling.md) for Linux, Docker Compose, and Kubernetes setup.
 
+PerfAgent also writes `processed/profile_phase_correlation.json`. That artifact maps profile capture windows and profile artifacts to aligned test phases and the first SLO breach window when timestamps are available.
+
 Runtime-specific profilers are still available with `--mode runtime` for cases where eBPF is not available or a runtime-native profile is required.
 
 ## CI Gates

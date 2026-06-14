@@ -220,6 +220,7 @@ def build_profile_capture_plan(
         "mode": mode,
         "duration_seconds": duration_seconds,
         "output_dir": str(output_dir),
+        "profile_target": {"pid": pid, "container": container},
         "commands": commands,
         "warnings": warnings,
         "execute_supported": True,
@@ -357,9 +358,12 @@ def finish_profile_capture_plan(
     render_results = _run_render_commands(plan, log_dir=log_dir)
     warnings.extend(render_results["warnings"])
     captured_artifacts = _captured_artifacts(Path(plan.get("output_dir", log_dir)))
+    capture_window = _capture_window(completed)
     return {
         "enabled": capture.get("enabled", False),
         "plan": _public_plan(plan),
+        "profile_target": plan.get("profile_target", {}),
+        "capture_window": capture_window,
         "started_count": len(capture.get("started", [])),
         "skipped": capture.get("skipped", []),
         "completed": completed,
@@ -390,6 +394,36 @@ def execute_profile_capture_plan(plan: dict[str, Any], *, log_dir: Path, timeout
     capture = start_profile_capture_plan(plan, log_dir=log_dir)
     wait_timeout = timeout_seconds if timeout_seconds is not None else int(plan.get("duration_seconds", 60)) + 30
     return finish_profile_capture_plan(plan, capture, log_dir=log_dir, timeout_seconds=wait_timeout)
+
+
+def _capture_window(completed: list[dict[str, Any]]) -> dict[str, Any]:
+    starts = [_parse_datetime(item.get("started_at")) for item in completed]
+    ends = [_parse_datetime(item.get("ended_at")) for item in completed]
+    starts = [item for item in starts if item is not None]
+    ends = [item for item in ends if item is not None]
+    if not starts or not ends:
+        return {"started_at": None, "ended_at": None, "duration_seconds": 0}
+    started_at = min(starts)
+    ended_at = max(ends)
+    return {
+        "started_at": started_at.isoformat(),
+        "ended_at": ended_at.isoformat(),
+        "duration_seconds": round((ended_at - started_at).total_seconds(), 4),
+    }
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    text = str(value)
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
 
 
 def _run_render_commands(plan: dict[str, Any], *, log_dir: Path) -> dict[str, Any]:

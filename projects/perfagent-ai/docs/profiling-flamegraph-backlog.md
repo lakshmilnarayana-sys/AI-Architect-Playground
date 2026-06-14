@@ -93,7 +93,9 @@ Today the report does not yet embed:
 
 ### P0: Profiling Artifact Contract
 
-Add `processed/profiling_summary.json` as a durable processed artifact. The collector now emits the same core shape in memory and `raw/profiling_artifacts.json`; the remaining work is to write the processed copy and have reports consume the structured fields directly.
+PerfAgent writes `processed/profiling_summary.json` as a durable processed artifact. The collector emits the same core shape in memory, `raw/profiling_artifacts.json`, and the processed copy.
+
+PerfAgent also writes `processed/profile_phase_correlation.json` to map capture windows and profile artifacts to aligned test phases and the first SLO breach window when timestamps are available.
 
 ```json
 {
@@ -322,4 +324,4 @@ PerfAgent should only make phase-specific profiling claims when:
 4. Add py-spy Speedscope capture.
 5. Add Java JFR summary capture.
 6. Add Node.js Clinic/V8 profile support.
-7. Correlate profile windows with SLO breach windows.
+7. Add phase-specific profile assertions to the autonomous reasoning loop.

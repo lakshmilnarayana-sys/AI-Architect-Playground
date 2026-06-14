@@ -200,6 +200,22 @@ def test_execute_profile_capture_plan_runs_available_commands(tmp_path):
     assert result["started_count"] == 1
     assert result["completed"][0]["exit_code"] == 0
     assert result["rendered"][0]["exit_code"] == 0
+    assert result["capture_window"]["started_at"]
+    assert result["capture_window"]["ended_at"]
+    assert result["capture_window"]["duration_seconds"] >= 0
+
+
+def test_profile_capture_result_includes_target_metadata(tmp_path):
+    plan = build_profile_capture_plan(
+        runtime="python",
+        output_dir=tmp_path / "captured",
+        duration_seconds=1,
+        pid="4242",
+        container="payments-api",
+        mode="runtime",
+    )
+
+    assert plan["profile_target"] == {"pid": "4242", "container": "payments-api"}
 
 
 def test_execute_profile_capture_plan_generates_perf_folded_and_svg(tmp_path, monkeypatch):

@@ -45,6 +45,7 @@ def test_evaluate_skip_run_creates_mvp_artifacts(tmp_path):
     assert (output / "generated" / "ui_journey.py").exists()
     assert (output / "processed" / "features.json").exists()
     assert (output / "processed" / "profiling_summary.json").exists()
+    assert (output / "processed" / "profile_phase_correlation.json").exists()
     assert (output / "processed" / "bottleneck_analysis.json").exists()
     assert (output / "reports" / "report.md").exists()
     assert (output / "reports" / "report.html").exists()

@@ -8,6 +8,7 @@ from perfagent.analyzers.alignment import align_k6_jsonl, fallback_aligned_times
 from perfagent.analyzers.bottlenecks import classify_bottleneck
 from perfagent.analyzers.dependencies import analyze_dependencies
 from perfagent.analyzers.features import extract_features
+from perfagent.analyzers.profile_phase_correlation import analyze_profile_phase_correlation
 from perfagent.analyzers.protocols import analyze_protocol_metrics
 from perfagent.analyzers.timeseries_reasoning import analyze_timeseries, reason_over_timeseries
 from perfagent.collectors.external_results import load_external_results
@@ -265,14 +266,17 @@ def evaluate_service(
         slo_p95_ms=slo_p95_ms,
         slo_error_rate_percent=slo_error_rate_percent,
     )
+    profile_phase_correlation = analyze_profile_phase_correlation(profiling, aligned, features=features)
     dependency_analysis = analyze_dependencies(dependencies or [], aligned)
     protocol_analysis = analyze_protocol_metrics(k6_summary, aligned)
     features["dependency_findings"] = dependency_analysis["findings"]
     features["protocol_findings"] = protocol_analysis["findings"]
     state["dependency_analysis"] = dependency_analysis
     state["protocol_analysis"] = protocol_analysis
+    state["profile_phase_correlation"] = profile_phase_correlation
     write_json(workspace.processed_dir / "dependency_analysis.json", dependency_analysis)
     write_json(workspace.processed_dir / "protocol_analysis.json", protocol_analysis)
+    write_json(workspace.processed_dir / "profile_phase_correlation.json", profile_phase_correlation)
     timeseries_analysis = analyze_timeseries(
         aligned,
         slo_p95_ms=slo_p95_ms,
@@ -311,6 +315,7 @@ def evaluate_service(
             "bottleneck_analysis": bottleneck,
             "dependency_analysis": dependency_analysis,
             "profiling_artifacts": profiling,
+            "profile_phase_correlation": profile_phase_correlation,
             "protocol_analysis": protocol_analysis,
             "metric_contract": _metric_contract(state, strategy),
             "warnings": state["warnings"],
@@ -406,6 +411,7 @@ def _persist_run(storage: dict[str, Any], state: EvaluationState, features: dict
                 {"type": "timeseries_analysis", "path": str(Path(state["output_dir"]) / "processed" / "timeseries_analysis.json")},
                 {"type": "react_reasoning", "path": str(Path(state["output_dir"]) / "processed" / "react_reasoning.json")},
                 {"type": "profiling_summary", "path": str(Path(state["output_dir"]) / "processed" / "profiling_summary.json")},
+                {"type": "profile_phase_correlation", "path": str(Path(state["output_dir"]) / "processed" / "profile_phase_correlation.json")},
                 {"type": "protocol_analysis", "path": str(Path(state["output_dir"]) / "processed" / "protocol_analysis.json")},
             ],
             "aligned_timeseries": state.get("aligned_timeseries", []),
@@ -517,6 +523,8 @@ def import_external_results(
     )
     features["source_tool"] = tool.lower()
     write_json(workspace.processed_dir / "features.json", features)
+    profile_phase_correlation = analyze_profile_phase_correlation({}, aligned, features=features)
+    write_json(workspace.processed_dir / "profile_phase_correlation.json", profile_phase_correlation)
     bottleneck = classify_bottleneck(features)
     write_json(workspace.processed_dir / "bottleneck_analysis.json", bottleneck)
     timeseries_analysis = analyze_timeseries(

@@ -147,6 +147,8 @@ outputs/sample-payments-api/
 ├── processed/aligned_timeseries.csv
 ├── processed/features.json
 ├── processed/bottleneck_analysis.json
+├── processed/profiling_summary.json
+├── processed/profile_phase_correlation.json
 ├── processed/metric_contract.yaml
 ├── reports/report.md
 ├── reports/report.html
@@ -265,6 +267,8 @@ Both targets now import the external tool output back into PerfAgent and regener
 The default strategy includes warmup, baseline load, stress, and recovery stages. Capacity output appears in `processed/features.json` and in the report as estimated capacity RPS, first breaking point RPS, headroom, basis, and confidence.
 
 PerfAgent now captures k6 JSONL time-series samples with `--out json=raw/k6_timeseries.jsonl`, buckets them into `processed/aligned_timeseries.csv`, and uses those buckets for capacity and breakpoint detection.
+
+When profiling metadata is available, PerfAgent writes `processed/profile_phase_correlation.json` to map profile capture windows and artifacts to test phases and the first SLO breach window.
 
 Every evaluation writes both `reports/report.md` and an interactive, self-contained `reports/report.html`. The HTML report embeds the run data locally, so it can be uploaded as a CI artifact and opened without a backend.
 
