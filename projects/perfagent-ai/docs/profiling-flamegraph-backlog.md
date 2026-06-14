@@ -282,11 +282,12 @@ Interactive report should show:
 
 ### P2: Reasoning Integration
 
-The bounded ReAct reasoning loop consumes structured profile summaries, not raw flame graph files. It currently uses parsed top functions as an additional deterministic observation and can raise confidence when dependency findings and profile hot functions point to the same dependency path.
+The bounded ReAct reasoning loop consumes structured profile summaries and profile phase correlation metadata, not raw flame graph files. It uses parsed top functions as deterministic observations, can raise confidence when dependency findings and profile hot functions point to the same dependency path, and only makes breach-specific profile claims when profile phase correlation reports `breach_overlap=true`.
 
-Implemented tool observation:
+Implemented tool observations:
 
 - `inspect_profile_evidence`
+- `inspect_profile_phase_alignment`
 
 Future profile-specific tool observations:
 
@@ -294,7 +295,6 @@ Future profile-specific tool observations:
 - `inspect_heap_profile`
 - `inspect_thread_or_goroutine_profile`
 - `inspect_gc_or_runtime_pauses`
-- `inspect_profile_test_window_alignment`
 
 Rules:
 
@@ -324,4 +324,4 @@ PerfAgent should only make phase-specific profiling claims when:
 4. Add py-spy Speedscope capture.
 5. Add Java JFR summary capture.
 6. Add Node.js Clinic/V8 profile support.
-7. Add phase-specific profile assertions to the autonomous reasoning loop.
+7. Add embedded interactive flamegraph zoom/search in the HTML report.

@@ -431,6 +431,7 @@ def _stage_analyze_results(state: GraphInput) -> GraphInput:
         features=features,
         dependency_analysis=dependency_analysis,
         profiling_artifacts=state.get("profiling_artifacts") or {},
+        profile_phase_correlation=profile_phase_correlation,
     )
     features["timeseries_reasoning_classification"] = react_reasoning["conclusion"]["classification"]
     features["timeseries_reasoning_confidence"] = react_reasoning["conclusion"]["confidence"]
@@ -502,6 +503,7 @@ def _stage_render_report(state: GraphInput) -> GraphInput:
         aligned_timeseries=state["aligned_timeseries"],
         timeseries_analysis=state["timeseries_analysis"],
         react_reasoning=state["react_reasoning"],
+        profile_phase_correlation=state.get("profile_phase_correlation") or {},
     )
     evaluation_state["report_md_path"] = str(reports["report_md_path"])
     evaluation_state["report_html_path"] = str(reports["report_html_path"])

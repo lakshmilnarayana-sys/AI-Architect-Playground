@@ -63,3 +63,79 @@ def test_timeseries_reasoning_combines_dependency_and_profile_evidence():
     assert reasoning["conclusion"]["classification"] == "dependency_profile_correlated_bottleneck"
     assert reasoning["conclusion"]["confidence"] == "high"
     assert any("postgresClient.query" in item for item in reasoning["conclusion"]["evidence"])
+
+
+def test_timeseries_reasoning_uses_profile_phase_alignment_for_breach_specific_claims():
+    rows = [
+        {"timestamp": "2026-06-14T10:00:00Z", "phase": "baseline", "rps": 200, "p95_latency_ms": 180, "error_rate_percent": 0.1, "dep_postgres_latency_ms": 20},
+        {"timestamp": "2026-06-14T10:00:10Z", "phase": "stress", "rps": 450, "p95_latency_ms": 620, "error_rate_percent": 1.8, "dep_postgres_latency_ms": 120},
+        {"timestamp": "2026-06-14T10:00:20Z", "phase": "recovery", "rps": 100, "p95_latency_ms": 240, "error_rate_percent": 0.2, "dep_postgres_latency_ms": 30},
+    ]
+    analysis = analyze_timeseries(rows, slo_p95_ms=500, slo_error_rate_percent=1)
+    phase_correlation = {
+        "capture_windows": [
+            {
+                "overlapped_phases": ["stress"],
+                "breach_overlap": True,
+                "overlap_confidence": "high",
+                "capture_window": {"started_at": "2026-06-14T10:00:05Z", "ended_at": "2026-06-14T10:00:15Z"},
+            }
+        ],
+        "artifact_correlations": [
+            {
+                "artifact_path": "raw/profiles/captured/perf.folded",
+                "overlapped_phases": ["stress"],
+                "breach_overlap": True,
+                "overlap_confidence": "high",
+                "top_functions": [{"name": "postgresClient.query", "percent": 47.5, "samples": 95}],
+            }
+        ],
+    }
+
+    reasoning = reason_over_timeseries(
+        timeseries_analysis=analysis,
+        features={"breaking_point_rps": 450, "first_slo_breach_phase": "stress"},
+        dependency_analysis={
+            "dependencies": [{"name": "postgres", "type": "postgres"}],
+            "findings": [{"dependency": "postgres", "metric": "latency_ms", "value": 120, "threshold": 100}],
+        },
+        profiling_artifacts={},
+        profile_phase_correlation=phase_correlation,
+    )
+
+    assert any(step["action"] == "inspect_profile_phase_alignment" for step in reasoning["trace"])
+    assert reasoning["conclusion"]["classification"] == "dependency_profile_phase_correlated_bottleneck"
+    assert reasoning["conclusion"]["confidence"] == "high"
+    assert any("during first SLO breach" in item for item in reasoning["conclusion"]["evidence"])
+
+
+def test_timeseries_reasoning_does_not_make_breach_profile_claim_without_overlap():
+    rows = [
+        {"timestamp": "2026-06-14T10:00:00Z", "phase": "baseline", "rps": 200, "p95_latency_ms": 180, "error_rate_percent": 0.1, "dep_postgres_latency_ms": 20},
+        {"timestamp": "2026-06-14T10:00:10Z", "phase": "stress", "rps": 450, "p95_latency_ms": 620, "error_rate_percent": 1.8, "dep_postgres_latency_ms": 120},
+        {"timestamp": "2026-06-14T10:00:20Z", "phase": "recovery", "rps": 100, "p95_latency_ms": 240, "error_rate_percent": 0.2, "dep_postgres_latency_ms": 30},
+    ]
+    analysis = analyze_timeseries(rows, slo_p95_ms=500, slo_error_rate_percent=1)
+
+    reasoning = reason_over_timeseries(
+        timeseries_analysis=analysis,
+        features={"breaking_point_rps": 450, "first_slo_breach_phase": "stress"},
+        dependency_analysis={
+            "dependencies": [{"name": "postgres", "type": "postgres"}],
+            "findings": [{"dependency": "postgres", "metric": "latency_ms", "value": 120, "threshold": 100}],
+        },
+        profile_phase_correlation={
+            "artifact_correlations": [
+                {
+                    "artifact_path": "raw/profiles/captured/perf.folded",
+                    "overlapped_phases": ["recovery"],
+                    "breach_overlap": False,
+                    "overlap_confidence": "high",
+                    "top_functions": [{"name": "postgresClient.query", "percent": 47.5, "samples": 95}],
+                }
+            ]
+        },
+    )
+
+    assert reasoning["conclusion"]["classification"] == "dependency_correlated_bottleneck"
+    assert not any("during first SLO breach" in item for item in reasoning["conclusion"]["evidence"])

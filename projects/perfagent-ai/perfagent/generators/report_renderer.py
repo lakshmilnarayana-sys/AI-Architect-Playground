@@ -27,6 +27,7 @@ def render_reports(
     aligned_timeseries: list[dict[str, Any]] | None = None,
     timeseries_analysis: dict[str, Any] | None = None,
     react_reasoning: dict[str, Any] | None = None,
+    profile_phase_correlation: dict[str, Any] | None = None,
 ) -> dict[str, Path]:
     reports_dir = output_dir / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
@@ -46,6 +47,7 @@ def render_reports(
         traffic_profile or {},
         timeseries_analysis or {},
         react_reasoning or {},
+        profile_phase_correlation or {},
     )
     md_path = reports_dir / "report.md"
     html_path = reports_dir / "report.html"
@@ -69,6 +71,7 @@ def render_reports(
             aligned_timeseries=aligned_timeseries or [],
             timeseries_analysis=timeseries_analysis or {},
             react_reasoning=react_reasoning or {},
+            profile_phase_correlation=profile_phase_correlation or {},
         )
     )
     write_json(
@@ -87,6 +90,7 @@ def render_reports(
             "aligned_timeseries": aligned_timeseries or [],
             "timeseries_analysis": timeseries_analysis or {},
             "react_reasoning": react_reasoning or {},
+            "profile_phase_correlation": profile_phase_correlation or {},
         },
     )
     return {"report_md_path": md_path, "report_html_path": html_path, "summary_path": summary_path}
@@ -108,6 +112,7 @@ def _markdown(
     traffic_profile: dict[str, Any],
     timeseries_analysis: dict[str, Any],
     react_reasoning: dict[str, Any],
+    profile_phase_correlation: dict[str, Any],
 ) -> str:
     endpoints = contract_analysis.get("endpoints", [])
     evidence = "\n".join(f"- {item}" for item in bottleneck.get("evidence", [])) or "- No evidence available."
@@ -122,6 +127,7 @@ def _markdown(
     traffic = _traffic_profile_lines(traffic_profile)
     react = _react_lines(react_reasoning)
     timeseries = _timeseries_lines(timeseries_analysis)
+    profile_phase = _profile_phase_lines(profile_phase_correlation)
     return f"""# PerfAgent AI Report: {service_name}
 
 ## Executive Summary
@@ -199,6 +205,10 @@ Max p95 latency was {features.get("max_p95_latency_ms", 0)} ms against an SLO of
 
 {profiles}
 
+## Profiling Phase Correlation
+
+{profile_phase}
+
 ## Release Decision
 
 Decision: {features.get("release_decision", "UNKNOWN")}
@@ -232,6 +242,37 @@ def _profile_lines(profiling: dict[str, Any]) -> str:
             )
         return "\n".join(lines)
     return "\n".join(f"- {item}" for item in profiling.get("artifacts", [])) or "- No profiling artifacts attached."
+
+
+def _profile_phase_lines(profile_phase_correlation: dict[str, Any]) -> str:
+    artifacts = profile_phase_correlation.get("artifact_correlations", [])
+    windows = profile_phase_correlation.get("capture_windows", [])
+    warnings = profile_phase_correlation.get("warnings", [])
+    if not artifacts and not windows:
+        return "\n".join(f"- Warning: {item}" for item in warnings) or "- No profile phase correlation available."
+    lines = []
+    for window in windows:
+        capture = window.get("capture_window", {})
+        lines.append(
+            f"- Capture: {capture.get('started_at')} to {capture.get('ended_at')}; "
+            f"Phases: {', '.join(window.get('overlapped_phases', [])) or 'none'}; "
+            f"Breach overlap: {window.get('breach_overlap')}; "
+            f"Confidence: {window.get('overlap_confidence', 'unknown')}"
+        )
+    for artifact in artifacts:
+        top_functions = artifact.get("top_functions", [])
+        lines.append(
+            f"- Artifact: {artifact.get('artifact_path')}; "
+            f"Phases: {', '.join(artifact.get('overlapped_phases', [])) or 'none'}; "
+            f"Breach overlap: {artifact.get('breach_overlap')}; "
+            f"Confidence: {artifact.get('overlap_confidence', 'unknown')}"
+        )
+        lines.extend(
+            f"  - top during overlap: {item.get('name')} ({item.get('percent')}%, samples={item.get('samples')})"
+            for item in top_functions[:5]
+        )
+    lines.extend(f"- Warning: {item}" for item in warnings)
+    return "\n".join(lines)
 
 
 def _dependency_lines(dependency_analysis: dict[str, Any]) -> str:
@@ -362,6 +403,7 @@ def _interactive_html(
     aligned_timeseries: list[dict[str, Any]],
     timeseries_analysis: dict[str, Any],
     react_reasoning: dict[str, Any],
+    profile_phase_correlation: dict[str, Any],
 ) -> str:
     payload = {
         "serviceName": service_name,
@@ -380,6 +422,7 @@ def _interactive_html(
         "timeseries": aligned_timeseries,
         "timeseriesAnalysis": timeseries_analysis,
         "reactReasoning": react_reasoning,
+        "profilePhaseCorrelation": profile_phase_correlation,
     }
     data = html.escape(json.dumps(payload, sort_keys=True), quote=False)
     title = html.escape(f"PerfAgent Report: {service_name}")
@@ -521,6 +564,10 @@ def _interactive_html(
     <section class="panel" style="margin-top:16px">
       <h2>Profiling Artifacts</h2>
       <div id="profiles"></div>
+    </section>
+    <section class="panel" style="margin-top:16px">
+      <h2>Profiling Phase Correlation</h2>
+      <div id="profile-phase-correlation"></div>
     </section>
   </main>
   <script>
@@ -821,6 +868,35 @@ def _interactive_html(
       document.getElementById('profiles').innerHTML = profiles.length ? `<ul>${{profiles.map(item => `<li>${{item}}</li>`).join('')}}</ul>` : '<p>No profiling artifacts attached.</p>';
     }}
 
+    function renderProfilePhaseCorrelation() {{
+      const correlation = data.profilePhaseCorrelation || {{}};
+      const windows = correlation.capture_windows || [];
+      const artifacts = correlation.artifact_correlations || [];
+      const warnings = correlation.warnings || [];
+      if (!windows.length && !artifacts.length) {{
+        document.getElementById('profile-phase-correlation').innerHTML = warnings.length
+          ? `<ul>${{warnings.map(item => `<li>${{fmt(item)}}</li>`).join('')}}</ul>`
+          : '<p>No profile phase correlation available.</p>';
+        return;
+      }}
+      const windowRows = windows.map(item => {{
+        const capture = item.capture_window || {{}};
+        return `<tr><td>${{fmt(capture.started_at)}}</td><td>${{fmt(capture.ended_at)}}</td><td>${{fmt((item.overlapped_phases || []).join(', '))}}</td><td>${{fmt(item.breach_overlap)}}</td><td>${{fmt(item.overlap_confidence)}}</td></tr>`;
+      }}).join('');
+      const artifactRows = artifacts.map(item => {{
+        const topFunctions = (item.top_functions || []).slice(0, 5).map(fn => `${{fmt(fn.name)}} (${{fmt(fn.percent)}}%)`).join('<br>') || 'n/a';
+        return `<tr><td>${{fmt(item.artifact_path)}}</td><td>${{fmt(item.type)}}</td><td>${{fmt((item.overlapped_phases || []).join(', '))}}</td><td>${{fmt(item.breach_overlap)}}</td><td>${{fmt(item.overlap_confidence)}}</td><td>${{topFunctions}}</td></tr>`;
+      }}).join('');
+      const warningList = warnings.length ? `<h3>Warnings</h3><ul>${{warnings.map(item => `<li>${{fmt(item)}}</li>`).join('')}}</ul>` : '';
+      document.getElementById('profile-phase-correlation').innerHTML = `
+        <h3>Capture Windows</h3>
+        <table><thead><tr><th>Started</th><th>Ended</th><th>Phases</th><th>Breach overlap</th><th>Confidence</th></tr></thead><tbody>${{windowRows || '<tr><td colspan="5">No capture windows available.</td></tr>'}}</tbody></table>
+        <h3>Artifacts</h3>
+        <table><thead><tr><th>Artifact</th><th>Type</th><th>Phases</th><th>Breach overlap</th><th>Confidence</th><th>Top functions</th></tr></thead><tbody>${{artifactRows || '<tr><td colspan="6">No artifact correlations available.</td></tr>'}}</tbody></table>
+        ${{warningList}}
+      `;
+    }}
+
     renderMeta();
     renderKpis();
     renderServiceResources();
@@ -835,6 +911,7 @@ def _interactive_html(
     initTheme();
     renderTable();
     renderProfiles();
+    renderProfilePhaseCorrelation();
   </script>
 </body>
 </html>

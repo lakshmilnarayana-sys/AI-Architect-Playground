@@ -40,15 +40,23 @@ def reason_over_timeseries(
     features: dict[str, Any],
     dependency_analysis: dict[str, Any] | None = None,
     profiling_artifacts: dict[str, Any] | None = None,
-    max_steps: int = 7,
+    profile_phase_correlation: dict[str, Any] | None = None,
+    max_steps: int = 8,
 ) -> dict[str, Any]:
-    tools = _tool_results(timeseries_analysis, features, dependency_analysis or {}, profiling_artifacts or {})
+    tools = _tool_results(
+        timeseries_analysis,
+        features,
+        dependency_analysis or {},
+        profiling_artifacts or {},
+        profile_phase_correlation or {},
+    )
     ordered_tools = [
         "inspect_slo_breaches",
         "inspect_load_latency_correlation",
         "inspect_infra_correlation",
         "inspect_dependency_correlation",
         "inspect_profile_evidence",
+        "inspect_profile_phase_alignment",
         "inspect_recovery",
         "inspect_missing_metrics",
     ][:max_steps]
@@ -66,7 +74,13 @@ def reason_over_timeseries(
         )
         observations.extend(observation.get("evidence", []))
 
-    conclusion = _conclude(timeseries_analysis, features, dependency_analysis or {}, profiling_artifacts or {})
+    conclusion = _conclude(
+        timeseries_analysis,
+        features,
+        dependency_analysis or {},
+        profiling_artifacts or {},
+        profile_phase_correlation or {},
+    )
     conclusion["evidence"] = _dedupe(observations + conclusion.get("evidence", []))
     return {
         "mode": "bounded_react",
@@ -212,6 +226,7 @@ def _tool_results(
     features: dict[str, Any],
     dependency_analysis: dict[str, Any],
     profiling_artifacts: dict[str, Any],
+    profile_phase_correlation: dict[str, Any],
 ) -> dict[str, dict[str, Any]]:
     correlations = analysis.get("correlations", [])
     dependency_correlations = [
@@ -253,6 +268,11 @@ def _tool_results(
             "evidence": _profile_evidence(profile_functions),
             "top_functions": profile_functions[:10],
         },
+        "inspect_profile_phase_alignment": {
+            "evidence": _profile_phase_evidence(profile_phase_correlation),
+            "capture_windows": profile_phase_correlation.get("capture_windows", []),
+            "artifact_correlations": profile_phase_correlation.get("artifact_correlations", []),
+        },
         "inspect_recovery": analysis.get("recovery", {"evidence": ["recovery status unavailable"]}),
         "inspect_missing_metrics": {
             "evidence": [
@@ -269,11 +289,13 @@ def _conclude(
     features: dict[str, Any],
     dependency_analysis: dict[str, Any],
     profiling_artifacts: dict[str, Any],
+    profile_phase_correlation: dict[str, Any],
 ) -> dict[str, Any]:
     correlations = analysis.get("correlations", [])
     dependency_findings = dependency_analysis.get("findings", [])
     profile_functions = _profile_top_functions(profiling_artifacts)
     profile_dependency_matches = _profile_dependency_matches(profile_functions, dependency_analysis)
+    phase_dependency_matches = _profile_phase_dependency_matches(profile_phase_correlation, dependency_analysis)
     solo_metrics = analysis.get("solo_metrics", {})
     infra_hot = any(
         item.get("metric") in {"cpu_percent", "cpu_throttling_percent", "memory_mb"}
@@ -294,7 +316,11 @@ def _conclude(
             "summary": "No aligned time-series rows were available, so autonomous reasoning cannot establish a breakpoint.",
             "evidence": [],
         }
-    if dependency_hot and profile_dependency_matches:
+    if dependency_hot and phase_dependency_matches:
+        classification = "dependency_profile_phase_correlated_bottleneck"
+        confidence = "high"
+        summary = "Dependency metrics and profiling evidence overlap the failing phase, so the dependency-related hot path is tied to the observed SLO breach."
+    elif dependency_hot and profile_dependency_matches:
         classification = "dependency_profile_correlated_bottleneck"
         confidence = "high"
         summary = "Dependency metrics and profiling evidence both point at dependency-related execution paths during the performance failure."
@@ -325,7 +351,7 @@ def _conclude(
         "estimated_capacity_rps": features.get("estimated_capacity_rps"),
         "breaking_point_rps": features.get("breaking_point_rps"),
         "first_slo_breach_phase": features.get("first_slo_breach_phase"),
-        "evidence": _profile_match_evidence(profile_dependency_matches),
+        "evidence": _profile_phase_match_evidence(phase_dependency_matches) or _profile_match_evidence(profile_dependency_matches),
     }
 
 
@@ -421,6 +447,67 @@ def _profile_match_evidence(matches: list[dict[str, Any]]) -> list[str]:
     ]
 
 
+def _profile_phase_evidence(profile_phase_correlation: dict[str, Any]) -> list[str]:
+    artifacts = profile_phase_correlation.get("artifact_correlations", [])
+    if not artifacts:
+        return ["no profile phase correlation evidence available"]
+    evidence = []
+    for artifact in artifacts[:5]:
+        phases = ", ".join(artifact.get("overlapped_phases", [])) or "none"
+        breach = "overlaps first SLO breach" if artifact.get("breach_overlap") else "does not overlap first SLO breach"
+        top = artifact.get("top_functions", [{}])[0].get("name") if artifact.get("top_functions") else "no top function"
+        evidence.append(
+            f"profile artifact {artifact.get('artifact_path')} overlaps phases={phases}; {breach}; top_function={top}"
+        )
+    return evidence
+
+
+def _profile_phase_dependency_matches(
+    profile_phase_correlation: dict[str, Any],
+    dependency_analysis: dict[str, Any],
+) -> list[dict[str, Any]]:
+    dependency_terms = _dependency_terms(dependency_analysis)
+    matches = []
+    for artifact in profile_phase_correlation.get("artifact_correlations", []):
+        if not artifact.get("breach_overlap"):
+            continue
+        for function in artifact.get("top_functions", []):
+            name = str(function.get("name") or "").lower()
+            matched = next((term for term in dependency_terms if term and term in name), None)
+            if matched:
+                matches.append(
+                    function
+                    | {
+                        "matched_dependency": matched,
+                        "artifact_path": artifact.get("artifact_path"),
+                        "overlapped_phases": artifact.get("overlapped_phases", []),
+                        "breach_overlap": artifact.get("breach_overlap"),
+                    }
+                )
+    return matches
+
+
+def _profile_phase_match_evidence(matches: list[dict[str, Any]]) -> list[str]:
+    return [
+        f"profile hot function {item.get('name')} matched dependency {item.get('matched_dependency')} during first SLO breach; phases={', '.join(item.get('overlapped_phases', []))}; percent={item.get('percent')}%"
+        for item in matches[:3]
+    ]
+
+
+def _dependency_terms(dependency_analysis: dict[str, Any]) -> list[str]:
+    dependency_terms = []
+    for dependency in dependency_analysis.get("dependencies", []):
+        for key in ("name", "type"):
+            value = str(dependency.get(key) or "").lower()
+            if value:
+                dependency_terms.append(value)
+    for finding in dependency_analysis.get("findings", []):
+        value = str(finding.get("dependency") or "").lower()
+        if value:
+            dependency_terms.append(value)
+    return sorted(set(dependency_terms), key=len, reverse=True)
+
+
 def _missing_core_metrics(metrics: list[str]) -> list[str]:
     required = ["rps", "p95_latency_ms", "error_rate_percent"]
     return [metric for metric in required if metric not in metrics]
@@ -475,6 +562,7 @@ def _thought_for_tool(tool_name: str) -> str:
         "inspect_infra_correlation": "Check whether service resources move with the user-facing symptom.",
         "inspect_dependency_correlation": "Check whether declared dependencies explain the symptom better than local saturation.",
         "inspect_profile_evidence": "Check whether profiling hot functions corroborate the metric-based hypothesis.",
+        "inspect_profile_phase_alignment": "Check whether profile capture overlaps the failing phase or first SLO breach window before making phase-specific profile claims.",
         "inspect_recovery": "Check whether the service returns to SLO after load drops.",
         "inspect_missing_metrics": "Identify which missing signals limit confidence.",
     }

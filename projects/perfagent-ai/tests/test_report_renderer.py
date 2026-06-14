@@ -72,6 +72,27 @@ def test_report_renderer_includes_capacity_and_profiling_sections(tmp_path):
                 "evidence": ["profile hot function dbQuery consumed 42.5% samples=85"],
             },
         },
+        profile_phase_correlation={
+            "capture_windows": [
+                {
+                    "capture_window": {"started_at": "2026-06-13T10:00:05Z", "ended_at": "2026-06-13T10:00:15Z"},
+                    "overlapped_phases": ["stress"],
+                    "breach_overlap": True,
+                    "overlap_confidence": "high",
+                }
+            ],
+            "artifact_correlations": [
+                {
+                    "artifact_path": "raw/profiles/cpu.pprof",
+                    "type": "pprof",
+                    "overlapped_phases": ["stress"],
+                    "breach_overlap": True,
+                    "overlap_confidence": "high",
+                    "top_functions": [{"name": "dbQuery", "percent": 42.5, "samples": 85}],
+                }
+            ],
+            "warnings": [],
+        },
     )
 
     report = paths["report_md_path"].read_text()
@@ -87,6 +108,9 @@ def test_report_renderer_includes_capacity_and_profiling_sections(tmp_path):
     assert "dependency_profile_correlated_bottleneck" in report
     assert "inspect_profile_evidence" in report
     assert "profile hot function dbQuery" in report
+    assert "Profiling Phase Correlation" in report
+    assert "Breach overlap: True" in report
+    assert "Phases: stress" in report
 
     html = paths["report_html_path"].read_text()
     assert 'id="perfagent-data"' in html
@@ -97,9 +121,11 @@ def test_report_renderer_includes_capacity_and_profiling_sections(tmp_path):
     assert 'id="chart-tooltip"' in html
     assert 'id="theme-toggle"' in html
     assert 'id="react-reasoning"' in html
+    assert 'id="profile-phase-correlation"' in html
     assert 'id="timeseries-analysis"' in html
     assert "function setTheme" in html
     assert "function renderReactReasoning" in html
+    assert "function renderProfilePhaseCorrelation" in html
     assert "Render status" in html
     assert "X-axis: time buckets" in html
     assert "Left Y-axis: p95 latency" in html
