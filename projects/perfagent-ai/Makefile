@@ -13,7 +13,7 @@ OPENAPI ?= ./examples/sample-payments-api/openapi.yaml
 OUTPUT ?= ./outputs/$(SERVICE_NAME)
 COMPOSE ?= docker compose
 
-.PHONY: help setup test test-grpc test-websocket test-ui generate inspect run-sample evaluate-local build compose-config demo-up demo-down dependencies-up dependencies-down evaluate-compose prepare-compose-artifacts locust-run jmeter-run experiment-compose clean
+.PHONY: help setup test test-grpc test-websocket test-ui generate inspect run-sample evaluate-local evaluate-grpc-artifacts evaluate-websocket-artifacts evaluate-ui-artifacts report-suite build compose-config demo-up demo-down dependencies-up dependencies-down evaluate-compose prepare-compose-artifacts locust-run jmeter-run experiment-compose clean
 
 help:
 	@printf "PerfAgent AI commands\n\n"
@@ -26,6 +26,7 @@ help:
 	@printf "  make inspect            Validate generated k6 script with k6 inspect\n"
 	@printf "  make run-sample         Start HTTP sample app on LOCAL_PORT (default 8080)\n"
 	@printf "  make evaluate-local     Run PerfAgent against LOCAL_TARGET_URL\n"
+	@printf "  make report-suite       Generate HTTP/gRPC/WebSocket/UI reports without executing targets\n"
 	@printf "  make build              Build PerfAgent container image\n"
 	@printf "  make compose-config     Validate docker compose config, including demo/tools profiles\n"
 	@printf "  make demo-up            Start demo services with docker compose\n"
@@ -79,6 +80,49 @@ evaluate-local:
 		--mode $(MODE) \
 		--duration $(DURATION) \
 		--output $(OUTPUT)
+
+evaluate-grpc-artifacts:
+	$(PYTHON) -m perfagent evaluate \
+		--config ./examples/sample-config.yaml \
+		--service-name grpc-payments-api \
+		--target-url http://localhost:8082 \
+		--engine grpc \
+		--output ./outputs/report-suite/grpc-payments-api \
+		--no-store \
+		--skip-run
+
+evaluate-websocket-artifacts:
+	$(PYTHON) -m perfagent evaluate \
+		--config ./examples/sample-config.yaml \
+		--service-name websocket-payments-api \
+		--target-url http://localhost:8081 \
+		--engine websocket \
+		--output ./outputs/report-suite/websocket-payments-api \
+		--no-store \
+		--skip-run
+
+evaluate-ui-artifacts:
+	$(PYTHON) -m perfagent evaluate \
+		--config ./examples/sample-config.yaml \
+		--service-name ui-checkout \
+		--openapi ./examples/sample-openapi.yaml \
+		--target-url http://localhost:8083 \
+		--engine ui \
+		--output ./outputs/report-suite/ui-checkout \
+		--no-store \
+		--skip-run
+
+report-suite:
+	$(PYTHON) -m perfagent evaluate \
+		--config ./examples/sample-config.yaml \
+		--service-name http-payments-api \
+		--engine k6 \
+		--output ./outputs/report-suite/http-payments-api \
+		--no-store \
+		--skip-run
+	$(MAKE) evaluate-grpc-artifacts
+	$(MAKE) evaluate-websocket-artifacts
+	$(MAKE) evaluate-ui-artifacts
 
 build:
 	$(COMPOSE) build perfagent

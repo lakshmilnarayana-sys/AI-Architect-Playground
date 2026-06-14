@@ -63,6 +63,7 @@ def evaluate(
     ),
     profile: list[Path] | None = typer.Option(None, "--profile", help="Path to an existing profiling artifact to attach."),
     workflow_engine: str = typer.Option("deterministic", "--workflow", help="Workflow engine: deterministic or langgraph."),
+    store: bool = typer.Option(True, "--store/--no-store", help="Persist run metadata to the configured run store."),
     skip_run: bool = typer.Option(False, "--skip-run"),
     fail_on: str = typer.Option("", "--fail-on", help="Comma-separated release decisions that should fail the command."),
 ) -> None:
@@ -96,6 +97,8 @@ def evaluate(
     missing = [key for key in ["service_name", "openapi_path", "target_url", "runtime", "slo_p95_ms", "slo_error_rate_percent", "output_dir"] if options.get(key) is None]
     if missing:
         raise typer.BadParameter(f"Missing required evaluate options: {', '.join(missing)}")
+    if not store:
+        options["storage"] = {"enabled": False}
     typer.echo("Creating evaluation run...")
     evaluate_kwargs = {
         "service_name": options["service_name"],

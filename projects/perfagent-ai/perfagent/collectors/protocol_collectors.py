@@ -71,6 +71,7 @@ def protocol_result_to_summary(result: Any, *, elapsed_seconds: float) -> dict[s
     errors = sum(int(row.get("errors", 0) or 0) for row in rows if isinstance(row, dict))
     latencies: list[float] = []
     browser_metrics: list[dict[str, Any]] = []
+    protocol_metrics: dict[str, Any] = {}
     for row in rows:
         if isinstance(row, dict):
             latencies.extend(float(value) for value in row.get("latencies_ms", []) if _is_number(value))
@@ -79,6 +80,11 @@ def protocol_result_to_summary(result: Any, *, elapsed_seconds: float) -> dict[s
                 browser_metrics.append(raw_browser_metrics)
             else:
                 browser_metrics.extend(item for item in raw_browser_metrics if isinstance(item, dict))
+            _merge_protocol_metrics(protocol_metrics, row.get("protocol_metrics", {}))
+            _merge_protocol_metrics(
+                protocol_metrics,
+                {key: row[key] for key in ("grpc_status", "websocket_messages", "connection_errors") if key in row},
+            )
     p95 = _percentile(latencies, 95)
     p99 = _percentile(latencies, 99)
     failed_rate = errors / requests if requests else 0.0
@@ -93,6 +99,8 @@ def protocol_result_to_summary(result: Any, *, elapsed_seconds: float) -> dict[s
     }
     if browser_metrics:
         summary["browser_metrics"] = _average_browser_metrics(browser_metrics)
+    if protocol_metrics:
+        summary["protocol_metrics"] = protocol_metrics
     return summary
 
 
@@ -109,6 +117,8 @@ def protocol_summary_to_aligned(summary: dict[str, Any], *, timestamp: str) -> l
     }
     for key, value in summary.get("browser_metrics", {}).items():
         row[f"browser_{key}"] = value
+    for key, value in summary.get("protocol_metrics", {}).items():
+        row[key] = json.dumps(value, sort_keys=True, separators=(",", ":")) if isinstance(value, dict) else value
     return [row]
 
 
@@ -149,6 +159,19 @@ def _is_number(value: Any) -> bool:
         return True
     except (TypeError, ValueError):
         return False
+
+
+def _merge_protocol_metrics(target: dict[str, Any], source: Any) -> None:
+    if not isinstance(source, dict):
+        return
+    for key, value in source.items():
+        if key == "grpc_status" and isinstance(value, dict):
+            status_counts = target.setdefault("grpc_status", {})
+            for status, count in value.items():
+                if _is_number(count):
+                    status_counts[str(status)] = status_counts.get(str(status), 0) + int(count)
+        elif _is_number(value):
+            target[key] = target.get(key, 0) + float(value)
 
 
 def _truncate(value: str, limit: int = 20000) -> str:

@@ -28,6 +28,8 @@ def test_generate_grpc_load_test_artifact(tmp_path):
     assert "PB2_MODULE = 'payments_pb2'" in content
     assert "_build_rpc_client" in content
     assert "rpc(request_type(**REQUEST_JSON)" in content
+    assert "grpc_status" in content
+    assert "grpc.RpcError" in content
     assert "payments-api" in content
     assert "localhost:8082" in content
 
@@ -57,5 +59,7 @@ def test_generate_websocket_load_test_artifact(tmp_path):
     assert "MESSAGE_SEQUENCE" in content
     assert "expect_json_field" in content
     assert "think_time_ms" in content
+    assert "websocket_messages" in content
+    assert "connection_errors" in content
     assert "payments-api" in content
     assert "ws://localhost:8081/ws" in content

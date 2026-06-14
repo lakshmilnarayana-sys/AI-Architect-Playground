@@ -32,6 +32,7 @@ class EvaluationState(TypedDict, total=False):
     dependency_analysis: dict[str, Any]
     timeseries_analysis: dict[str, Any]
     react_reasoning: dict[str, Any]
+    aligned_timeseries: list[dict[str, Any]]
     ai_analysis: dict[str, Any]
     aligned_timeseries_path: str
     features: dict[str, Any]
@@ -96,6 +97,7 @@ def initial_state(
         "dependency_analysis": {},
         "timeseries_analysis": {},
         "react_reasoning": {},
+        "aligned_timeseries": [],
         "ai_analysis": {},
         "llm": llm or {"enabled": False},
         "aligned_timeseries_path": "",

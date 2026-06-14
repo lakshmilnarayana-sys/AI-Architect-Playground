@@ -4,6 +4,8 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import Any, Callable
 
+from perfagent.storage.run_store import normalize_artifacts, normalize_findings
+
 
 class PostgresRunStore:
     def __init__(self, dsn: str, *, connect: Callable[..., Any] | None = None) -> None:
@@ -78,15 +80,24 @@ class PostgresRunStore:
                         json.dumps(features, sort_keys=True),
                     ),
                 )
-                for artifact_type, path in (run.get("artifacts") or {}).items():
-                    cursor.execute(
-                        """
-                        INSERT INTO perf_artifacts (run_id, artifact_type, artifact_path)
-                        VALUES (%s, %s, %s)
-                        ON CONFLICT (run_id, artifact_type, artifact_path) DO NOTHING
-                        """,
-                        (run["run_id"], artifact_type, str(path)),
-                    )
+                self._record_artifacts(cursor, run["run_id"], run.get("artifacts") or [])
+                self._record_timeseries(cursor, run["run_id"], run.get("timeseries") or run.get("aligned_timeseries") or [])
+                self._record_findings(cursor, run["run_id"], run.get("findings") or [])
+
+    def record_artifacts(self, run_id: str, artifacts: Any) -> int:
+        with self._connect(self.dsn) as conn:
+            with conn.cursor() as cursor:
+                return self._record_artifacts(cursor, run_id, artifacts)
+
+    def record_timeseries(self, run_id: str, samples: list[dict[str, Any]]) -> int:
+        with self._connect(self.dsn) as conn:
+            with conn.cursor() as cursor:
+                return self._record_timeseries(cursor, run_id, samples)
+
+    def record_findings(self, run_id: str, findings: list[Any]) -> int:
+        with self._connect(self.dsn) as conn:
+            with conn.cursor() as cursor:
+                return self._record_findings(cursor, run_id, findings)
 
     def list_runs(self, service_name: str | None = None) -> list[dict[str, Any]]:
         query = "SELECT * FROM perf_runs"
@@ -154,11 +165,16 @@ class PostgresRunStore:
                       run_id TEXT NOT NULL REFERENCES perf_runs(run_id) ON DELETE CASCADE,
                       artifact_type TEXT NOT NULL,
                       artifact_path TEXT NOT NULL,
+                      content_type TEXT,
+                      size_bytes BIGINT,
+                      checksum TEXT,
+                      payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
                       created_at TIMESTAMPTZ DEFAULT now(),
                       UNIQUE(run_id, artifact_type, artifact_path)
                     )
                     """
                 )
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_perf_artifacts_run ON perf_artifacts(run_id)")
                 cursor.execute(
                     """
                     CREATE TABLE IF NOT EXISTS perf_regression_results (
@@ -180,10 +196,13 @@ class PostgresRunStore:
                       severity TEXT NOT NULL,
                       evidence TEXT NOT NULL,
                       recommendation TEXT,
+                      source TEXT,
+                      payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
                       created_at TIMESTAMPTZ DEFAULT now()
                     )
                     """
                 )
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_perf_findings_run ON perf_findings(run_id)")
                 cursor.execute(
                     """
                     CREATE TABLE IF NOT EXISTS perf_timeseries (
@@ -194,11 +213,15 @@ class PostgresRunStore:
                       p95_latency_ms DOUBLE PRECISION,
                       p99_latency_ms DOUBLE PRECISION,
                       error_rate_percent DOUBLE PRECISION,
+                      virtual_users DOUBLE PRECISION,
+                      cpu_percent DOUBLE PRECISION,
+                      memory_mb DOUBLE PRECISION,
                       payload_json JSONB,
                       PRIMARY KEY (run_id, timestamp, phase)
                     )
                     """
                 )
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_perf_timeseries_run ON perf_timeseries(run_id, timestamp)")
                 cursor.execute(
                     """
                     CREATE TABLE IF NOT EXISTS perf_dependencies (
@@ -214,6 +237,91 @@ class PostgresRunStore:
                     """
                 )
 
+    def _record_artifacts(self, cursor: Any, run_id: str, artifacts: Any) -> int:
+        rows = normalize_artifacts(artifacts)
+        for artifact in rows:
+            cursor.execute(
+                """
+                INSERT INTO perf_artifacts (
+                  run_id, artifact_type, artifact_path, content_type,
+                  size_bytes, checksum, payload_json
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb)
+                ON CONFLICT (run_id, artifact_type, artifact_path) DO UPDATE SET
+                  content_type = EXCLUDED.content_type,
+                  size_bytes = EXCLUDED.size_bytes,
+                  checksum = EXCLUDED.checksum,
+                  payload_json = EXCLUDED.payload_json
+                """,
+                (
+                    run_id,
+                    artifact["artifact_type"],
+                    artifact["artifact_path"],
+                    artifact.get("content_type"),
+                    artifact.get("size_bytes"),
+                    artifact.get("checksum"),
+                    json.dumps(artifact.get("payload", artifact), sort_keys=True, default=str),
+                ),
+            )
+        return len(rows)
+
+    def _record_timeseries(self, cursor: Any, run_id: str, samples: list[dict[str, Any]]) -> int:
+        for sample in samples:
+            timestamp = sample.get("timestamp") or sample.get("time") or sample.get("ts") or datetime.now(UTC).isoformat()
+            phase = str(sample.get("phase") or "")
+            cursor.execute(
+                """
+                INSERT INTO perf_timeseries (
+                  run_id, timestamp, phase, rps, p95_latency_ms, p99_latency_ms,
+                  error_rate_percent, virtual_users, cpu_percent, memory_mb, payload_json
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                ON CONFLICT (run_id, timestamp, phase) DO UPDATE SET
+                  rps = EXCLUDED.rps,
+                  p95_latency_ms = EXCLUDED.p95_latency_ms,
+                  p99_latency_ms = EXCLUDED.p99_latency_ms,
+                  error_rate_percent = EXCLUDED.error_rate_percent,
+                  virtual_users = EXCLUDED.virtual_users,
+                  cpu_percent = EXCLUDED.cpu_percent,
+                  memory_mb = EXCLUDED.memory_mb,
+                  payload_json = EXCLUDED.payload_json
+                """,
+                (
+                    run_id,
+                    timestamp,
+                    phase,
+                    _optional_float(sample.get("rps")),
+                    _optional_float(sample.get("p95_latency_ms") or sample.get("p95")),
+                    _optional_float(sample.get("p99_latency_ms") or sample.get("p99")),
+                    _optional_float(sample.get("error_rate_percent") or sample.get("error_rate")),
+                    _optional_float(sample.get("virtual_users") or sample.get("vus")),
+                    _optional_float(sample.get("cpu_percent") or sample.get("cpu")),
+                    _optional_float(sample.get("memory_mb") or sample.get("memory")),
+                    json.dumps(sample, sort_keys=True, default=str),
+                ),
+            )
+        return len(samples)
+
+    def _record_findings(self, cursor: Any, run_id: str, findings: list[Any]) -> int:
+        rows = normalize_findings(findings)
+        for finding in rows:
+            cursor.execute(
+                """
+                INSERT INTO perf_findings (
+                  run_id, finding_type, severity, evidence, recommendation,
+                  source, payload_json
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb)
+                """,
+                (
+                    run_id,
+                    finding["finding_type"],
+                    finding["severity"],
+                    finding["evidence"],
+                    finding.get("recommendation"),
+                    finding.get("source"),
+                    json.dumps(finding.get("payload", finding), sort_keys=True, default=str),
+                ),
+            )
+        return len(rows)
+
 
 def _load_psycopg_connect() -> Callable[..., Any]:
     try:
@@ -221,3 +329,9 @@ def _load_psycopg_connect() -> Callable[..., Any]:
     except ImportError as exc:  # pragma: no cover - depends on optional environment
         raise RuntimeError("Postgres storage requires psycopg. Install perfagent-ai[postgres].") from exc
     return psycopg.connect
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    return float(value)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 from typing import Any, Callable
 
@@ -25,6 +26,57 @@ def deterministic_embedding(text: str, *, dimensions: int = 32) -> list[float]:
         values[index] += 1.0
     norm = math.sqrt(sum(value * value for value in values)) or 1.0
     return [round(value / norm, 6) for value in values]
+
+
+def build_run_narrative_chunks(
+    *,
+    report_text: str | None = None,
+    summary: dict[str, Any] | None = None,
+    logs: dict[str, str] | list[str] | None = None,
+    chunk_size: int = 1200,
+    overlap: int = 120,
+) -> dict[str, list[str]]:
+    chunks: dict[str, list[str]] = {}
+    if report_text:
+        chunks["report"] = chunk_text(report_text, chunk_size=chunk_size, overlap=overlap)
+    if summary:
+        summary_text = json.dumps(summary, sort_keys=True, default=str)
+        chunks["summary"] = chunk_text(summary_text, chunk_size=chunk_size, overlap=overlap)
+    if isinstance(logs, dict):
+        for name, text in logs.items():
+            log_chunks = chunk_text(text, chunk_size=chunk_size, overlap=overlap)
+            if log_chunks:
+                chunks[f"log:{name}"] = log_chunks
+    else:
+        for index, text in enumerate(logs or []):
+            log_chunks = chunk_text(text, chunk_size=chunk_size, overlap=overlap)
+            if log_chunks:
+                chunks[f"log:{index}"] = log_chunks
+    return chunks
+
+
+def index_run_narratives(
+    vector_store: Any,
+    *,
+    run_id: str,
+    report_text: str | None = None,
+    summary: dict[str, Any] | None = None,
+    logs: dict[str, str] | list[str] | None = None,
+    model: str = "deterministic-local",
+    chunk_size: int = 1200,
+    overlap: int = 120,
+) -> int:
+    total = 0
+    chunks_by_type = build_run_narrative_chunks(
+        report_text=report_text,
+        summary=summary,
+        logs=logs,
+        chunk_size=chunk_size,
+        overlap=overlap,
+    )
+    for chunk_type, chunks in chunks_by_type.items():
+        total += vector_store.upsert_chunks(run_id=run_id, chunk_type=chunk_type, chunks=chunks, model=model)
+    return total
 
 
 class PgVectorStore:

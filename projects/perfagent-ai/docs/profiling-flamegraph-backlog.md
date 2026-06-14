@@ -19,6 +19,24 @@ perfagent evaluate \
 
 The framework copies supplied files into `raw/profiles/`, lists them in `reports/report.md`, and exposes them in `reports/report.html`.
 
+The profiling collector also emits deterministic `profiling_summary.json`-style metadata in the run state and `raw/profiling_artifacts.json`:
+
+```json
+{
+  "profiles": [
+    {
+      "source_path": "./profiles/cpu.pprof",
+      "artifact_path": "raw/profiles/cpu.pprof",
+      "type": "pprof",
+      "render_status": "not_rendered",
+      "warnings": ["Rendering is not implemented for pprof profiles yet."]
+    }
+  ]
+}
+```
+
+Attached SVG profile artifacts are classified as `flamegraph` with `render_status: "provided"` so reports and downstream processors can surface them as already-rendered artifacts.
+
 Built-in profiler execution and rendered flame graphs are not complete yet.
 
 ## What Users Can See Today
@@ -29,10 +47,12 @@ Today the report can show:
 - profile artifact names
 - profile warnings for missing files
 - attached runtime artifacts such as `.pprof`, `.jfr`, `py-spy`, Clinic.js, collapsed stacks, and Speedscope files
+- structured profile entries with source path, copied artifact path, detected type, render status, and per-profile warnings
+- supplied SVG flame graph artifacts as visible profiling entries
 
 Today the report does not yet embed:
 
-- SVG flame graphs
+- SVG flame graphs directly in report pages
 - interactive Speedscope iframe/viewer
 - top CPU functions
 - allocation hot spots
@@ -44,7 +64,7 @@ Today the report does not yet embed:
 
 ### P0: Profiling Artifact Contract
 
-Add `processed/profiling_summary.json`:
+Add `processed/profiling_summary.json` as a durable processed artifact. The collector now emits the same core shape in memory and `raw/profiling_artifacts.json`; the remaining work is to write the processed copy and have reports consume the structured fields directly.
 
 ```json
 {
@@ -66,8 +86,8 @@ Add `processed/profiling_summary.json`:
 
 Acceptance criteria:
 
-- profile summary is generated for every attached profile
-- report links to raw profile and rendered flame graph when available
+- profile summary is generated for every attached profile: complete in collector output
+- report links to raw profile and rendered flame graph when available: raw artifact links exist; structured flame graph rendering is pending
 - missing parser/converter emits warnings, not false conclusions
 
 ### P1: Go Profiling

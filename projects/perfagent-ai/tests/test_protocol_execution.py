@@ -47,6 +47,25 @@ print(json.dumps([{"requests": 4, "errors": 1, "latencies_ms": [5, 10, 15, 20]}]
     assert (tmp_path / "execution.log").exists()
 
 
+def test_protocol_result_to_summary_preserves_protocol_metrics():
+    summary = protocol_result_to_summary(
+        [
+            {"requests": 2, "errors": 0, "latencies_ms": [10, 20], "protocol_metrics": {"grpc_status": {"OK": 2}}},
+            {
+                "requests": 1,
+                "errors": 1,
+                "latencies_ms": [30],
+                "protocol_metrics": {"grpc_status": {"UNAVAILABLE": 1}, "websocket_messages": 2, "connection_errors": 1},
+            },
+        ],
+        elapsed_seconds=3,
+    )
+
+    assert summary["protocol_metrics"]["grpc_status"] == {"OK": 2, "UNAVAILABLE": 1}
+    assert summary["protocol_metrics"]["websocket_messages"] == 2
+    assert summary["protocol_metrics"]["connection_errors"] == 1
+
+
 def test_duration_to_seconds_parses_units():
     assert duration_to_seconds("500ms") == 1
     assert duration_to_seconds("2m") == 120

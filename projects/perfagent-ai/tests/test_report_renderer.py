@@ -24,7 +24,18 @@ def test_report_renderer_includes_capacity_and_profiling_sections(tmp_path):
             "first_slo_breach_phase": "stress",
         },
         bottleneck_analysis={"bottleneck": "dependency_or_unknown", "confidence": "medium", "evidence": [], "recommendations": []},
-        profiling_artifacts={"artifacts": ["raw/profiles/cpu.pprof"]},
+        profiling_artifacts={
+            "artifacts": ["raw/profiles/cpu.pprof"],
+            "profiles": [
+                {
+                    "artifact_path": "raw/profiles/cpu.pprof",
+                    "source_path": "./cpu.pprof",
+                    "type": "pprof",
+                    "render_status": "not_rendered",
+                    "warnings": ["Rendering is not implemented for pprof profiles yet."],
+                }
+            ],
+        },
         service_resources={
             "cpu_allocation": "500m",
             "memory_allocation": "512Mi",
@@ -55,6 +66,8 @@ def test_report_renderer_includes_capacity_and_profiling_sections(tmp_path):
     assert "Breaking point RPS: 500" in report
     assert "Capacity confidence: medium" in report
     assert "raw/profiles/cpu.pprof" in report
+    assert "type=pprof" in report
+    assert "render_status=not_rendered" in report
     assert "CPU allocation: 500m" in report
     assert "Image tag: payments-api:v1.2.3" in report
     assert "Autonomous Time-Series Reasoning" in report
@@ -72,6 +85,7 @@ def test_report_renderer_includes_capacity_and_profiling_sections(tmp_path):
     assert 'id="timeseries-analysis"' in html
     assert "function setTheme" in html
     assert "function renderReactReasoning" in html
+    assert "Render status" in html
     assert "X-axis: time buckets" in html
     assert "Left Y-axis: p95 latency" in html
     assert "Right Y-axis: throughput" in html

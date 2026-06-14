@@ -109,7 +109,7 @@ def _markdown(
     recommendations = "\n".join(
         f"{index}. {item}" for index, item in enumerate(bottleneck.get("recommendations", []), start=1)
     ) or "1. Collect more metrics and re-run the test."
-    profiles = "\n".join(f"- {item}" for item in profiling.get("artifacts", [])) or "- No profiling artifacts attached."
+    profiles = _profile_lines(profiling)
     resources = _resource_lines(service_resources)
     dependencies = _dependency_lines(dependency_analysis)
     ai = _ai_lines(ai_analysis)
@@ -203,6 +203,20 @@ def _resource_lines(service_resources: dict[str, Any]) -> str:
         ("Image tag", "image_tag"),
     ]
     return "\n".join(f"- {label}: {service_resources.get(key) or 'n/a'}" for label, key in labels)
+
+
+def _profile_lines(profiling: dict[str, Any]) -> str:
+    profiles = profiling.get("profiles", [])
+    if profiles:
+        lines = []
+        for profile in profiles:
+            warning_text = "; warnings=" + "; ".join(profile.get("warnings", [])) if profile.get("warnings") else ""
+            lines.append(
+                f"- {profile.get('artifact_path') or profile.get('source_path')}: "
+                f"type={profile.get('type', 'unknown')}, render_status={profile.get('render_status', 'unknown')}{warning_text}"
+            )
+        return "\n".join(lines)
+    return "\n".join(f"- {item}" for item in profiling.get("artifacts", [])) or "- No profiling artifacts attached."
 
 
 def _dependency_lines(dependency_analysis: dict[str, Any]) -> str:
@@ -737,6 +751,15 @@ def _interactive_html(
     }}
 
     function renderProfiles() {{
+      const structuredProfiles = data.profiling.profiles || [];
+      if (structuredProfiles.length) {{
+        const rows = structuredProfiles.map(item => {{
+          const warnings = (item.warnings || []).join('; ') || 'none';
+          return `<tr><td>${{fmt(item.artifact_path || item.source_path)}}</td><td>${{fmt(item.type)}}</td><td>${{fmt(item.render_status)}}</td><td>${{fmt(warnings)}}</td></tr>`;
+        }}).join('');
+        document.getElementById('profiles').innerHTML = `<table><thead><tr><th>Artifact</th><th>Type</th><th>Render status</th><th>Warnings</th></tr></thead><tbody>${{rows}}</tbody></table>`;
+        return;
+      }}
       const profiles = data.profiling.artifacts || [];
       document.getElementById('profiles').innerHTML = profiles.length ? `<ul>${{profiles.map(item => `<li>${{item}}</li>`).join('')}}</ul>` : '<p>No profiling artifacts attached.</p>';
     }}

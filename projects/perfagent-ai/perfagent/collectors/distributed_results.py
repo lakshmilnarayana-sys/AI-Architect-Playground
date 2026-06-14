@@ -14,6 +14,8 @@ def merge_worker_summaries(paths: list[Path]) -> tuple[dict[str, Any], list[dict
     failed_count = sum(_failed_count(summary) for summary in summaries)
     p95 = max((_metric(summary, "http_req_duration", "p(95)") for summary in summaries), default=0.0)
     p99 = max((_metric(summary, "http_req_duration", "p(99)") for summary in summaries), default=0.0)
+    browser_metrics = _merge_browser_metrics(summaries)
+    protocol_metrics = _merge_protocol_metrics(summaries)
     merged = {
         "metrics": {
             "http_reqs": {"count": total_count, "rate": total_rate},
@@ -22,9 +24,16 @@ def merge_worker_summaries(paths: list[Path]) -> tuple[dict[str, Any], list[dict
             "checks": {"passes": max(total_count - failed_count, 0), "fails": failed_count},
             "iterations": {"count": total_count},
         },
+        "worker_metadata": _worker_metadata(paths, summaries),
         "workers": [{"path": str(path), "summary": summary} for path, summary in zip(paths, summaries)],
     }
+    if browser_metrics:
+        merged["browser_metrics"] = browser_metrics
+    if protocol_metrics:
+        merged["protocol_metrics"] = protocol_metrics
     aligned = protocol_summary_to_aligned(merged, timestamp=_first_timestamp(summaries))
+    for row in aligned:
+        _add_protocol_metrics_to_row(row, protocol_metrics)
     return merged, aligned
 
 
@@ -61,3 +70,77 @@ def _first_timestamp(summaries: list[dict[str, Any]]) -> str:
         if timestamp:
             return str(timestamp)
     return "1970-01-01T00:00:00Z"
+
+
+def _worker_metadata(paths: list[Path], summaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    workers = []
+    for path, summary in zip(paths, summaries):
+        metadata = summary.get("worker_metadata") or summary.get("worker") or summary.get("metadata") or {}
+        row = {"path": str(path)}
+        if isinstance(metadata, dict):
+            row.update(metadata)
+        workers.append(row)
+    return workers
+
+
+def _merge_browser_metrics(summaries: list[dict[str, Any]]) -> dict[str, float]:
+    values: dict[str, list[float]] = {}
+    for summary in summaries:
+        browser_metrics = summary.get("browser_metrics", {})
+        if not isinstance(browser_metrics, dict):
+            continue
+        for key, value in browser_metrics.items():
+            if _is_number(value):
+                values.setdefault(key, []).append(float(value))
+    return {key: round(sum(items) / len(items), 4) for key, items in sorted(values.items()) if items}
+
+
+def _merge_protocol_metrics(summaries: list[dict[str, Any]]) -> dict[str, Any]:
+    merged: dict[str, Any] = {}
+    for summary in summaries:
+        metrics = {}
+        protocol_metrics = summary.get("protocol_metrics", {})
+        if isinstance(protocol_metrics, dict):
+            metrics.update(protocol_metrics)
+        for key in ("grpc_status", "websocket_messages", "connection_errors"):
+            if key in summary:
+                metrics[key] = summary[key]
+        _merge_protocol_values(merged, metrics)
+    return merged
+
+
+def _merge_protocol_values(merged: dict[str, Any], metrics: dict[str, Any]) -> None:
+    for key, value in metrics.items():
+        if key == "grpc_status":
+            status_counts = _grpc_status_counts(value)
+            if not status_counts:
+                continue
+            current = merged.setdefault("grpc_status", {})
+            for status, count in status_counts.items():
+                current[status] = current.get(status, 0) + count
+        elif _is_number(value):
+            merged[key] = merged.get(key, 0) + float(value)
+
+
+def _grpc_status_counts(value: Any) -> dict[str, int]:
+    if isinstance(value, dict):
+        return {str(status): int(count) for status, count in sorted(value.items()) if _is_number(count)}
+    if isinstance(value, str) and value:
+        return {value: 1}
+    return {}
+
+
+def _add_protocol_metrics_to_row(row: dict[str, Any], protocol_metrics: dict[str, Any]) -> None:
+    for key, value in protocol_metrics.items():
+        if key == "grpc_status" and isinstance(value, dict):
+            row[key] = json.dumps(value, sort_keys=True, separators=(",", ":"))
+        else:
+            row[key] = int(value) if isinstance(value, float) and value.is_integer() else value
+
+
+def _is_number(value: Any) -> bool:
+    try:
+        float(value)
+        return True
+    except (TypeError, ValueError):
+        return False

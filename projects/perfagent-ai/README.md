@@ -77,6 +77,12 @@ Run the containerized experiment:
 make experiment-compose
 ```
 
+Generate one report per supported demo surface without executing targets:
+
+```bash
+make report-suite
+```
+
 Useful override examples:
 
 ```bash
@@ -185,6 +191,12 @@ Build, start demos, run the evaluation, and stop the demos:
 
 ```bash
 make experiment-compose
+```
+
+Generate report artifacts for HTTP, gRPC, WebSocket, and UI without requiring the demo services to be running:
+
+```bash
+make report-suite
 ```
 
 Protocol demo targets:

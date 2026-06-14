@@ -44,6 +44,7 @@ def test_evaluate_skip_run_creates_mvp_artifacts(tmp_path):
     assert (output / "generated" / "jmeter_test_plan.jmx").exists()
     assert (output / "generated" / "ui_journey.py").exists()
     assert (output / "processed" / "features.json").exists()
+    assert (output / "processed" / "profiling_summary.json").exists()
     assert (output / "processed" / "bottleneck_analysis.json").exists()
     assert (output / "reports" / "report.md").exists()
     assert (output / "reports" / "report.html").exists()
@@ -108,3 +109,42 @@ def test_evaluate_fail_on_exits_non_zero_for_matching_decision(tmp_path, monkeyp
 
     assert result.exit_code == 2
     assert "Performance gate failed: BLOCK" in result.output
+
+
+def test_evaluate_no_store_disables_configured_run_store(tmp_path):
+    output = tmp_path / "reports" / "payments-api"
+    db_path = tmp_path / "perfagent.db"
+    config = tmp_path / "perfagent.yaml"
+    config.write_text(
+        f"""
+service_name: payments-api
+runtime: python
+target_url: http://localhost:8080
+openapi_path: examples/sample-openapi.yaml
+slo:
+  p95_latency_ms: 500
+  error_rate_percent: 1
+test:
+  duration: 10s
+storage:
+  enabled: true
+  backend: sqlite
+  path: {db_path}
+output:
+  directory: {output}
+""".lstrip()
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "evaluate",
+            "--config",
+            str(config),
+            "--skip-run",
+            "--no-store",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert not db_path.exists()

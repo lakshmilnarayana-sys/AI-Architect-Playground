@@ -37,6 +37,8 @@ async def worker(duration_seconds: int, worker_id: int) -> dict:
     deadline = time.time() + duration_seconds
     request_count = 0
     error_count = 0
+    websocket_messages = 0
+    connection_errors = 0
     latencies_ms = []
     try:
         async with websockets.connect(TARGET_URL) as websocket:
@@ -49,7 +51,9 @@ async def worker(duration_seconds: int, worker_id: int) -> dict:
                     start = time.perf_counter()
                     try:
                         await websocket.send(json.dumps(payload))
+                        websocket_messages += 1
                         response = await websocket.recv()
+                        websocket_messages += 1
                         expect_field = step.get("expect_json_field")
                         if expect_field:
                             parsed = json.loads(response)
@@ -67,9 +71,20 @@ async def worker(duration_seconds: int, worker_id: int) -> dict:
     except Exception:
         start = time.perf_counter()
         error_count += 1
+        connection_errors += 1
         request_count += 1
         latencies_ms.append((time.perf_counter() - start) * 1000)
-    return {{"requests": request_count, "errors": error_count, "latencies_ms": latencies_ms}}
+    return {{
+        "requests": request_count,
+        "errors": error_count,
+        "latencies_ms": latencies_ms,
+        "websocket_messages": websocket_messages,
+        "connection_errors": connection_errors,
+        "protocol_metrics": {{
+            "websocket_messages": websocket_messages,
+            "connection_errors": connection_errors,
+        }},
+    }}
 
 
 async def run(duration_seconds: int, connections: int) -> list[dict]:

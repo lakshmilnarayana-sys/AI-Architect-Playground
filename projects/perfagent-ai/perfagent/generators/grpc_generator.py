@@ -65,6 +65,7 @@ def run(duration_seconds: int, concurrency: int) -> dict:
     request_count = 0
     error_count = 0
     latencies_ms = []
+    grpc_status = {{}}
     with grpc.insecure_channel(TARGET) as channel:
         rpc_client = _build_rpc_client(channel)
         while time.time() < deadline:
@@ -76,13 +77,28 @@ def run(duration_seconds: int, concurrency: int) -> dict:
                     rpc(request_type(**REQUEST_JSON), timeout=min(2, remaining))
                 else:
                     grpc.channel_ready_future(channel).result(timeout=min(2, remaining))
+                status = "OK"
+            except grpc.RpcError as exc:
+                code = exc.code()
+                status = getattr(code, "name", str(code))
+                error_count += 1
             except Exception:
+                status = "EXCEPTION"
                 error_count += 1
             finally:
+                grpc_status[status] = grpc_status.get(status, 0) + 1
                 if len(latencies_ms) < MAX_RETAINED_LATENCIES:
                     latencies_ms.append((time.perf_counter() - start) * 1000)
                 request_count += 1
-    return {{"service": SERVICE_NAME, "requests": request_count, "errors": error_count, "latencies_ms": latencies_ms, "concurrency": concurrency}}
+    return {{
+        "service": SERVICE_NAME,
+        "requests": request_count,
+        "errors": error_count,
+        "latencies_ms": latencies_ms,
+        "concurrency": concurrency,
+        "grpc_status": grpc_status,
+        "protocol_metrics": {{"grpc_status": grpc_status}},
+    }}
 
 
 if __name__ == "__main__":

@@ -207,12 +207,14 @@ def evaluate_service(
     state["profiling_artifacts"] = profiling
     state["service_resources"] = service_resources or {}
     write_json(workspace.raw_dir / "profiling_artifacts.json", profiling)
+    write_json(workspace.processed_dir / "profiling_summary.json", profiling)
     state["warnings"].extend(profiling.get("warnings", []))
 
     aligned = merge_prometheus_metrics(aligned, prometheus_metrics)
     aligned = merge_dependency_metrics(aligned, dependency_metrics)
     aligned_path = write_aligned_csv(workspace.processed_dir / "aligned_timeseries.csv", aligned)
     state["aligned_timeseries_path"] = str(aligned_path)
+    state["aligned_timeseries"] = aligned
 
     features = extract_features(
         k6_summary,
@@ -351,7 +353,10 @@ def _persist_run(storage: dict[str, Any], state: EvaluationState, features: dict
                 {"type": "features", "path": str(Path(state["output_dir"]) / "processed" / "features.json")},
                 {"type": "timeseries_analysis", "path": str(Path(state["output_dir"]) / "processed" / "timeseries_analysis.json")},
                 {"type": "react_reasoning", "path": str(Path(state["output_dir"]) / "processed" / "react_reasoning.json")},
+                {"type": "profiling_summary", "path": str(Path(state["output_dir"]) / "processed" / "profiling_summary.json")},
             ],
+            "aligned_timeseries": state.get("aligned_timeseries", []),
+            "findings": _storage_findings(state),
         }
     )
     store.apply_retention(retention_days=retention_days)
@@ -365,6 +370,41 @@ def _run_store_from_config(storage: dict[str, Any]) -> Any:
             raise RuntimeError("Postgres storage requires storage.dsn or PERFAGENT_DATABASE_URL.")
         return PostgresRunStore(str(dsn))
     return RunStore(Path(storage.get("path", "./outputs/perfagent.db")))
+
+
+def _storage_findings(state: EvaluationState) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
+    bottleneck = state.get("bottleneck_analysis", {})
+    for evidence in bottleneck.get("evidence", []):
+        findings.append(
+            {
+                "type": bottleneck.get("bottleneck", "bottleneck"),
+                "severity": "info",
+                "evidence": evidence,
+                "recommendation": "; ".join(bottleneck.get("recommendations", [])[:2]),
+                "source": "bottleneck_analysis",
+            }
+        )
+    for finding in state.get("dependency_analysis", {}).get("findings", []):
+        findings.append(
+            {
+                "type": "dependency",
+                "severity": "warn",
+                "evidence": str(finding),
+                "source": "dependency_analysis",
+                "payload": finding,
+            }
+        )
+    for evidence in state.get("react_reasoning", {}).get("conclusion", {}).get("evidence", []):
+        findings.append(
+            {
+                "type": state.get("react_reasoning", {}).get("conclusion", {}).get("classification", "timeseries_reasoning"),
+                "severity": "info",
+                "evidence": evidence,
+                "source": "react_reasoning",
+            }
+        )
+    return findings
 
 
 def import_external_results(

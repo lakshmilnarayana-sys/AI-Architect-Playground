@@ -18,6 +18,9 @@ PerfAgent answers three related questions:
 - `capacity_confidence`: `low`, `medium`, or later `high` as richer time-series arrives.
 - `headroom_rps`: difference between estimated capacity and first breaking point when available.
 - `capacity_limit_phase`: phase where capacity was first limited.
+- `capacity_limit_reason`: why capacity was limited, such as `latency_slo_breach`, `error_slo_breach`, `latency_and_error_slo_breach`, `slo_not_breached_within_tested_range`, or `insufficient_timeseries_rows`.
+- `capacity_safe_phase`: phase for the highest observed RPS before the first SLO breach.
+- `capacity_stress_phase`: phase for the first SLO breach.
 
 This is intentionally evidence-based. PerfAgent does not claim capacity beyond the tested range.
 
@@ -40,7 +43,7 @@ The JSONL file is parsed into 10-second buckets in `processed/aligned_timeseries
 - error rate percent
 - virtual users
 
-The feature extractor uses these rows for breakpoint and capacity detection. If the JSONL file is missing, PerfAgent falls back to summary-level evidence and marks capacity confidence lower.
+The feature extractor sorts timestamped rows before breakpoint and capacity detection so the first breach is chronological even if ingestion produced rows out of order. If the JSONL file is missing or aligned rows are unavailable, PerfAgent falls back to summary-level evidence, sets `capacity_confidence` to `low`, uses `capacity_basis` of `insufficient aligned time-series rows for capacity estimate`, and sets `capacity_limit_reason` to `insufficient_timeseries_rows`.
 
 The same aligned rows are embedded into `reports/report.html` for an interactive chart, phase filter, and sortable time-series table.
 
@@ -52,6 +55,8 @@ A breakpoint is the first point where either:
 - error rate exceeds `--slo-error-rate`.
 
 For a useful capacity run, use staged load that includes baseline and stress phases. If the service never breaches an SLO, the report says the tested peak was sustained, not that the service has infinite capacity.
+
+When a breach is detected, `capacity_safe_phase` names the highest-RPS pre-breach phase and `capacity_stress_phase` names the breaching phase. If no breach occurs, `capacity_safe_phase` names the highest tested phase and `capacity_stress_phase` remains empty.
 
 ## Profiling Artifacts
 
