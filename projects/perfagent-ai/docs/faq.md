@@ -52,12 +52,12 @@ Implemented:
 - HTTP, gRPC, WebSocket, and UI demo apps
 - CI examples and Make commands
 - Profiling artifact attachment
+- profile phase correlation with breach-overlap gated reasoning
 
 Scaffolded but not fully active:
 
 - LLM narrative analysis
 - Prometheus saturation metrics
-- profile phase correlation beyond top-function summaries
 - distributed worker orchestration beyond merge
 
 ## Can I see flame graphs?

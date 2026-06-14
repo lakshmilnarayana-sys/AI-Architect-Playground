@@ -287,6 +287,7 @@ def evaluate_service(
         features=features,
         dependency_analysis=dependency_analysis,
         profiling_artifacts=profiling,
+        profile_phase_correlation=profile_phase_correlation,
     )
     features["timeseries_reasoning_classification"] = react_reasoning["conclusion"]["classification"]
     features["timeseries_reasoning_confidence"] = react_reasoning["conclusion"]["confidence"]
@@ -342,6 +343,7 @@ def evaluate_service(
         aligned_timeseries=aligned,
         timeseries_analysis=timeseries_analysis,
         react_reasoning=react_reasoning,
+        profile_phase_correlation=profile_phase_correlation,
     )
     state["report_md_path"] = str(reports["report_md_path"])
     state["report_html_path"] = str(reports["report_html_path"])
@@ -537,6 +539,7 @@ def import_external_results(
         features=features,
         dependency_analysis=dependency_analysis or {"dependencies": [], "findings": []},
         profiling_artifacts={},
+        profile_phase_correlation=profile_phase_correlation,
     )
     write_json(workspace.processed_dir / "timeseries_analysis.json", timeseries_analysis)
     write_json(workspace.processed_dir / "react_reasoning.json", react_reasoning)
@@ -562,6 +565,7 @@ def import_external_results(
         aligned_timeseries=aligned,
         timeseries_analysis=timeseries_analysis,
         react_reasoning=react_reasoning,
+        profile_phase_correlation=profile_phase_correlation,
     )
     return {
         "tool": tool.lower(),
