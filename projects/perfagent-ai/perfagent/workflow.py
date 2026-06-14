@@ -8,6 +8,7 @@ from perfagent.analyzers.alignment import align_k6_jsonl, fallback_aligned_times
 from perfagent.analyzers.bottlenecks import classify_bottleneck
 from perfagent.analyzers.dependencies import analyze_dependencies
 from perfagent.analyzers.features import extract_features
+from perfagent.analyzers.protocols import analyze_protocol_metrics
 from perfagent.analyzers.timeseries_reasoning import analyze_timeseries, reason_over_timeseries
 from perfagent.collectors.external_results import load_external_results
 from perfagent.collectors.k6_collector import read_k6_summary, run_k6
@@ -39,6 +40,7 @@ from perfagent.llm.client import disabled_ai_analysis, explain_with_ollama
 from perfagent.parsers.openapi_parser import parse_openapi
 from perfagent.storage.postgres_store import PostgresRunStore
 from perfagent.storage.run_store import RunStore
+from perfagent.storage.vector_store import PgVectorStore, index_run_narratives
 
 
 def evaluate_service(
@@ -223,9 +225,13 @@ def evaluate_service(
         slo_error_rate_percent=slo_error_rate_percent,
     )
     dependency_analysis = analyze_dependencies(dependencies or [], aligned)
+    protocol_analysis = analyze_protocol_metrics(k6_summary, aligned)
     features["dependency_findings"] = dependency_analysis["findings"]
+    features["protocol_findings"] = protocol_analysis["findings"]
     state["dependency_analysis"] = dependency_analysis
+    state["protocol_analysis"] = protocol_analysis
     write_json(workspace.processed_dir / "dependency_analysis.json", dependency_analysis)
+    write_json(workspace.processed_dir / "protocol_analysis.json", protocol_analysis)
     timeseries_analysis = analyze_timeseries(
         aligned,
         slo_p95_ms=slo_p95_ms,
@@ -262,6 +268,7 @@ def evaluate_service(
             "react_reasoning": react_reasoning,
             "bottleneck_analysis": bottleneck,
             "dependency_analysis": dependency_analysis,
+            "protocol_analysis": protocol_analysis,
             "metric_contract": _metric_contract(state, strategy),
             "warnings": state["warnings"],
         },
@@ -290,6 +297,7 @@ def evaluate_service(
     state["report_md_path"] = str(reports["report_md_path"])
     state["report_html_path"] = str(reports["report_html_path"])
     _persist_run(storage or {}, state, features)
+    _index_run_vectors(storage or {}, state)
     workspace.write_state(state)
     return state
 
@@ -354,6 +362,7 @@ def _persist_run(storage: dict[str, Any], state: EvaluationState, features: dict
                 {"type": "timeseries_analysis", "path": str(Path(state["output_dir"]) / "processed" / "timeseries_analysis.json")},
                 {"type": "react_reasoning", "path": str(Path(state["output_dir"]) / "processed" / "react_reasoning.json")},
                 {"type": "profiling_summary", "path": str(Path(state["output_dir"]) / "processed" / "profiling_summary.json")},
+                {"type": "protocol_analysis", "path": str(Path(state["output_dir"]) / "processed" / "protocol_analysis.json")},
             ],
             "aligned_timeseries": state.get("aligned_timeseries", []),
             "findings": _storage_findings(state),
@@ -370,6 +379,26 @@ def _run_store_from_config(storage: dict[str, Any]) -> Any:
             raise RuntimeError("Postgres storage requires storage.dsn or PERFAGENT_DATABASE_URL.")
         return PostgresRunStore(str(dsn))
     return RunStore(Path(storage.get("path", "./outputs/perfagent.db")))
+
+
+def _index_run_vectors(storage: dict[str, Any], state: EvaluationState) -> None:
+    vector_dsn = storage.get("vector_dsn") or os.getenv(str(storage.get("vector_dsn_env", "PERFAGENT_VECTOR_DSN")))
+    if not vector_dsn:
+        return
+    output_dir = Path(state["output_dir"])
+    report_path = Path(state["report_md_path"])
+    summary_path = output_dir / "reports" / "summary.json"
+    execution_log_path = output_dir / "raw" / "execution.log"
+    try:
+        index_run_narratives(
+            PgVectorStore(str(vector_dsn)),
+            run_id=state["run_id"],
+            report_text=report_path.read_text() if report_path.exists() else None,
+            summary=read_json(summary_path) if summary_path.exists() else None,
+            logs={"execution": execution_log_path.read_text()} if execution_log_path.exists() else None,
+        )
+    except Exception as exc:  # pragma: no cover - optional integration failures vary
+        state["warnings"].append(f"Vector indexing skipped: {exc}")
 
 
 def _storage_findings(state: EvaluationState) -> list[dict[str, Any]]:
@@ -392,6 +421,16 @@ def _storage_findings(state: EvaluationState) -> list[dict[str, Any]]:
                 "severity": "warn",
                 "evidence": str(finding),
                 "source": "dependency_analysis",
+                "payload": finding,
+            }
+        )
+    for finding in state.get("protocol_analysis", {}).get("findings", []):
+        findings.append(
+            {
+                "type": finding.get("type", "protocol"),
+                "severity": finding.get("severity", "warn"),
+                "evidence": finding.get("evidence", str(finding)),
+                "source": "protocol_analysis",
                 "payload": finding,
             }
         )

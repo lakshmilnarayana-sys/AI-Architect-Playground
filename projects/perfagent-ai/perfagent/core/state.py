@@ -30,6 +30,7 @@ class EvaluationState(TypedDict, total=False):
     service_resources: dict[str, Any]
     dependencies: list[dict[str, Any]]
     dependency_analysis: dict[str, Any]
+    protocol_analysis: dict[str, Any]
     timeseries_analysis: dict[str, Any]
     react_reasoning: dict[str, Any]
     aligned_timeseries: list[dict[str, Any]]
@@ -95,6 +96,7 @@ def initial_state(
         "service_resources": service_resources or {},
         "dependencies": dependencies or [],
         "dependency_analysis": {},
+        "protocol_analysis": {},
         "timeseries_analysis": {},
         "react_reasoning": {},
         "aligned_timeseries": [],

@@ -23,6 +23,57 @@ def collect_observability_traffic_profile(
     return {"enabled": False, "source": provider or "unknown", "endpoint_mix": [], "warnings": ["unsupported observability provider"]}
 
 
+def build_provider_query_pack(provider: str, service_name: str, config: dict[str, Any] | None = None) -> dict[str, Any]:
+    config = config or {}
+    provider_name = provider.lower()
+    if provider_name == "datadog":
+        queries = {
+            "request_rate": "sum:trace.http.request.hits{service:{service}} by {resource_name}.as_rate()",
+            "latency_p95": "p95:trace.http.request.duration{service:{service}} by {resource_name}",
+            "error_rate": "sum:trace.http.request.errors{service:{service}} by {resource_name}.as_rate()",
+        }
+        required = ["api_key", "app_key", "site"]
+    elif provider_name in {"newrelic", "new_relic"}:
+        queries = {
+            "request_rate": "SELECT rate(count(*), 1 second) FROM Transaction WHERE appName = '{service}' FACET request.uri",
+            "latency_p95": "SELECT percentile(duration, 95) FROM Transaction WHERE appName = '{service}' FACET request.uri",
+            "error_rate": "SELECT percentage(count(*), WHERE error IS true) FROM Transaction WHERE appName = '{service}' FACET request.uri",
+        }
+        required = ["account_id", "api_key"]
+    elif provider_name in {"elasticsearch", "elk"}:
+        queries = {
+            "request_rate": {"terms_field": config.get("endpoint_field", "url.path"), "service_field": config.get("service_field", "service.name")},
+            "latency_p95": {"percentile_field": config.get("duration_field", "event.duration"), "percentile": 95},
+            "error_rate": {"error_field": config.get("error_field", "event.outcome")},
+        }
+        required = ["base_url", "index"]
+    else:
+        return {"provider": provider_name or "unknown", "supported": False, "queries": {}, "required_config": [], "warnings": ["unsupported provider"]}
+    rendered = {
+        name: _render_query(query, service_name)
+        for name, query in queries.items()
+    }
+    return {
+        "provider": provider_name,
+        "supported": True,
+        "service_name": service_name,
+        "queries": rendered,
+        "required_config": required,
+        "warnings": [],
+    }
+
+
+def validate_provider_query_pack(provider: str, service_name: str, config: dict[str, Any] | None = None) -> dict[str, Any]:
+    config = config or {}
+    pack = build_provider_query_pack(provider, service_name, config)
+    missing = [key for key in pack.get("required_config", []) if not config.get(key)]
+    pack["valid"] = bool(pack.get("supported")) and not missing
+    pack["missing_config"] = missing
+    if missing:
+        pack["warnings"] = [*pack.get("warnings", []), "missing provider config: " + ", ".join(missing)]
+    return pack
+
+
 def collect_datadog_traffic_profile(
     config: dict[str, Any],
     service_name: str,
@@ -147,6 +198,14 @@ def _json_request(url: str, *, headers: dict[str, str], body: Any | None = None,
     req = request.Request(url, data=data, headers=headers)
     with request.urlopen(req, timeout=timeout_seconds) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def _render_query(query: Any, service_name: str) -> Any:
+    if isinstance(query, str):
+        return query.replace("{service}", service_name)
+    if isinstance(query, dict):
+        return {key: _render_query(value, service_name) for key, value in query.items()}
+    return query
 
 
 def _extract_datadog_label(series: dict[str, Any], label: str) -> str | None:

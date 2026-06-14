@@ -37,6 +37,18 @@ The profiling collector also emits deterministic `profiling_summary.json`-style 
 
 Attached SVG profile artifacts are classified as `flamegraph` with `render_status: "provided"` so reports and downstream processors can surface them as already-rendered artifacts.
 
+PerfAgent can also create a deterministic profiler capture plan:
+
+```bash
+perfagent profile plan \
+  --runtime go \
+  --profile-endpoint http://localhost:6060/debug/pprof \
+  --duration-seconds 60 \
+  --output-json ./outputs/profile-plan.json
+```
+
+The plan includes runtime-specific commands for Go pprof, JVM/JFR, py-spy, and Node.js/Clinic.js when the required local tools and target details are available. It records command availability and warnings, but it does not automatically execute profilers during the load test yet.
+
 Built-in profiler execution and rendered flame graphs are not complete yet.
 
 ## What Users Can See Today

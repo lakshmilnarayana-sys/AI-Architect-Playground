@@ -7,6 +7,7 @@ from perfagent.analyzers.alignment import align_k6_jsonl, fallback_aligned_times
 from perfagent.analyzers.bottlenecks import classify_bottleneck
 from perfagent.analyzers.dependencies import analyze_dependencies
 from perfagent.analyzers.features import extract_features
+from perfagent.analyzers.protocols import analyze_protocol_metrics
 from perfagent.analyzers.timeseries_reasoning import analyze_timeseries, reason_over_timeseries
 from perfagent.collectors.k6_collector import read_k6_summary, run_k6
 from perfagent.collectors.observability_adapters import collect_observability_traffic_profile
@@ -34,7 +35,7 @@ from perfagent.generators.synthetic_data import generate_test_data
 from perfagent.generators.ui_generator import generate_ui_journey_test
 from perfagent.generators.websocket_generator import generate_websocket_load_test
 from perfagent.parsers.openapi_parser import parse_openapi
-from perfagent.workflow import _metric_contract, _persist_run, _run_ai_analysis
+from perfagent.workflow import _index_run_vectors, _metric_contract, _persist_run, _run_ai_analysis
 
 
 class GraphInput(TypedDict, total=False):
@@ -363,9 +364,13 @@ def _stage_analyze_results(state: GraphInput) -> GraphInput:
         slo_error_rate_percent=state["slo_error_rate_percent"],
     )
     dependency_analysis = analyze_dependencies(state.get("dependencies") or [], aligned)
+    protocol_analysis = analyze_protocol_metrics(state["k6_summary"], aligned)
     features["dependency_findings"] = dependency_analysis["findings"]
+    features["protocol_findings"] = protocol_analysis["findings"]
     evaluation_state["dependency_analysis"] = dependency_analysis
+    evaluation_state["protocol_analysis"] = protocol_analysis
     write_json(workspace.processed_dir / "dependency_analysis.json", dependency_analysis)
+    write_json(workspace.processed_dir / "protocol_analysis.json", protocol_analysis)
 
     timeseries_analysis = analyze_timeseries(
         aligned,
@@ -406,6 +411,7 @@ def _stage_analyze_results(state: GraphInput) -> GraphInput:
             "react_reasoning": react_reasoning,
             "bottleneck_analysis": bottleneck,
             "dependency_analysis": dependency_analysis,
+            "protocol_analysis": protocol_analysis,
             "metric_contract": _metric_contract(evaluation_state, state["strategy"]),
             "warnings": evaluation_state["warnings"],
         },
@@ -414,6 +420,7 @@ def _stage_analyze_results(state: GraphInput) -> GraphInput:
     write_json(workspace.processed_dir / "ai_analysis.json", ai_analysis)
     state["features"] = features
     state["dependency_analysis"] = dependency_analysis
+    state["protocol_analysis"] = protocol_analysis
     state["timeseries_analysis"] = timeseries_analysis
     state["react_reasoning"] = react_reasoning
     state["bottleneck_analysis"] = bottleneck
@@ -445,6 +452,7 @@ def _stage_render_report(state: GraphInput) -> GraphInput:
     evaluation_state["report_md_path"] = str(reports["report_md_path"])
     evaluation_state["report_html_path"] = str(reports["report_html_path"])
     _persist_run(state.get("storage") or {}, evaluation_state, state["features"])
+    _index_run_vectors(state.get("storage") or {}, evaluation_state)
     workspace.write_state(evaluation_state)
     state["result"] = evaluation_state
     return state

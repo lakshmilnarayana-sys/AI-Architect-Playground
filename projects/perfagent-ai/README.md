@@ -216,7 +216,11 @@ New extension surfaces:
 
 - `--engine ui` / `--engine browser` generates and executes a Playwright-style browser journey harness.
 - `distributed plan` writes a containerized distributed execution plan.
+- `distributed coordinate` writes worker commands plus the deterministic merge command for distributed load runs.
 - `distributed merge` combines worker summaries into a merged summary and aligned time-series.
+- `profile plan` writes runtime-specific profiler capture/render command plans for Go, JVM, Python, and Node.js.
+- `observability query-pack` renders and validates provider query packs for Datadog, New Relic, and Elasticsearch.
+- `ci comment` renders reusable Markdown for PR comments from `reports/summary.json`.
 - `storage dashboard` renders a cross-run trend dashboard from the run store.
 - `regression index` and `regression similar` combine deterministic SQL history with optional pgvector retrieval.
 - `mcp` exposes stdio MCP-style tools, including `evaluate_service`.
@@ -338,6 +342,18 @@ Validate Prometheus query coverage:
   --prometheus-query-config ./examples/prometheus-queries.yaml
 ```
 
+Validate a provider query pack before wiring it into CI:
+
+```bash
+.venv/bin/python -m perfagent observability query-pack \
+  --provider datadog \
+  --service-name payments-api \
+  --site datadoghq.com \
+  --api-key "$DATADOG_API_KEY" \
+  --app-key "$DATADOG_APP_KEY" \
+  --output-json ./outputs/datadog-query-pack.json
+```
+
 Derive test load from observed production traffic:
 
 ```bash
@@ -373,6 +389,37 @@ ollama serve
 ```
 
 The LLM receives only structured evidence from `features.json`, `bottleneck_analysis.json`, `dependency_analysis.json`, the metric contract, and warnings. It does not calculate metrics or release decisions.
+
+Plan profiler capture and flamegraph rendering commands:
+
+```bash
+.venv/bin/python -m perfagent profile plan \
+  --runtime go \
+  --profile-endpoint http://localhost:6060/debug/pprof \
+  --duration-seconds 60 \
+  --output-json ./outputs/profile-plan.json
+```
+
+Plan distributed worker execution:
+
+```bash
+.venv/bin/python -m perfagent distributed coordinate \
+  --service-name payments-api \
+  --engine k6 \
+  --workers 4 \
+  --config ./examples/sample-config.yaml \
+  --output ./outputs/distributed-coordinate.json
+```
+
+Generate a PR comment body from a completed run:
+
+```bash
+.venv/bin/python -m perfagent ci comment \
+  --summary ./outputs/payments-api/reports/summary.json \
+  --output ./outputs/perfagent-pr-comment.md
+```
+
+When `storage.vector_dsn` is configured, or `PERFAGENT_VECTOR_DSN` is set, each evaluation automatically indexes report narratives, summaries, and execution logs into pgvector. Structured metrics, release decisions, capacity, and regression gates remain in SQL/filesystem artifacts.
 
 Save and compare baselines:
 

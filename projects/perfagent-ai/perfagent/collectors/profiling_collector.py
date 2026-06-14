@@ -97,3 +97,113 @@ def collect_profiling_artifacts(profile_paths: list[Path], output_dir: Path) -> 
         "warnings": warnings,
         "supported_formats": SUPPORTED_FORMATS,
     }
+
+
+def build_profile_capture_plan(
+    *,
+    runtime: str,
+    output_dir: Path,
+    duration_seconds: int = 60,
+    pid: str | None = None,
+    profile_endpoint: str | None = None,
+    container: str | None = None,
+) -> dict[str, Any]:
+    runtime_name = runtime.lower()
+    output_dir = Path(output_dir)
+    commands: list[dict[str, Any]] = []
+    warnings: list[str] = []
+
+    if runtime_name == "go":
+        target = profile_endpoint or "http://localhost:6060/debug/pprof"
+        cpu = output_dir / "cpu.pprof"
+        commands.append(
+            _command(
+                "go",
+                ["go", "tool", "pprof", "-proto", f"{target}/profile?seconds={duration_seconds}", "-output", str(cpu)],
+                "Capture Go CPU profile from pprof endpoint.",
+            )
+        )
+        commands.append(
+            _command("go", ["go", "tool", "pprof", "-svg", str(cpu)], "Render Go CPU profile as SVG flame graph.")
+        )
+    elif runtime_name in {"java", "jvm"}:
+        target_pid = pid or "<pid>"
+        jfr = output_dir / "perfagent.jfr"
+        commands.append(
+            _command(
+                "jcmd",
+                [
+                    "jcmd",
+                    target_pid,
+                    "JFR.start",
+                    "name=perfagent",
+                    "settings=profile",
+                    f"duration={duration_seconds}s",
+                    f"filename={jfr}",
+                ],
+                "Capture Java Flight Recorder profile.",
+            )
+        )
+        commands.append(_command("jcmd", ["jcmd", target_pid, "Thread.print"], "Capture Java thread dump."))
+    elif runtime_name == "python":
+        target_pid = pid or "<pid>"
+        commands.append(
+            _command(
+                "py-spy",
+                [
+                    "py-spy",
+                    "record",
+                    "--pid",
+                    target_pid,
+                    "--duration",
+                    str(duration_seconds),
+                    "--format",
+                    "speedscope",
+                    "--output",
+                    str(output_dir / "py-spy.speedscope.json"),
+                ],
+                "Capture Python CPU profile in Speedscope format.",
+            )
+        )
+    elif runtime_name in {"node", "nodejs", "javascript"}:
+        if container:
+            commands.append(
+                _command(
+                    "docker",
+                    ["docker", "exec", container, "node", "--cpu-prof", "--heap-prof", "server.js"],
+                    "Capture Node.js V8 CPU and heap profiles inside a container.",
+                )
+            )
+        commands.append(
+            _command(
+                "clinic",
+                ["clinic", "flame", "--", "node", "server.js"],
+                "Capture Node.js Clinic flame profile.",
+            )
+        )
+    else:
+        warnings.append(f"Unsupported runtime for automatic profiling plan: {runtime}")
+
+    for command in commands:
+        if not command["available"]:
+            warnings.append(f"Required profiler binary not found: {command['binary']}")
+
+    return {
+        "runtime": runtime,
+        "duration_seconds": duration_seconds,
+        "output_dir": str(output_dir),
+        "commands": commands,
+        "warnings": warnings,
+        "execute_supported": False,
+        "execution_note": "PerfAgent currently plans profiler commands; automatic execution is intentionally opt-in future work.",
+    }
+
+
+def _command(binary: str, argv: list[str], description: str) -> dict[str, Any]:
+    return {
+        "binary": binary,
+        "available": shutil.which(binary) is not None,
+        "argv": argv,
+        "command": " ".join(argv),
+        "description": description,
+    }

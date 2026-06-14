@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from perfagent.collectors.profiling_collector import collect_profiling_artifacts
+from perfagent.collectors.profiling_collector import build_profile_capture_plan, collect_profiling_artifacts
 
 
 def test_collect_profiling_artifacts_copies_existing_profiles(tmp_path):
@@ -87,3 +87,17 @@ def test_collect_profiling_artifacts_marks_svg_flamegraphs_visible(tmp_path):
             "warnings": [],
         }
     ]
+
+
+def test_build_profile_capture_plan_for_go_pprof(tmp_path):
+    plan = build_profile_capture_plan(
+        runtime="go",
+        output_dir=tmp_path,
+        duration_seconds=30,
+        profile_endpoint="http://svc:6060/debug/pprof",
+    )
+
+    assert plan["runtime"] == "go"
+    assert plan["commands"][0]["binary"] == "go"
+    assert "profile?seconds=30" in plan["commands"][0]["command"]
+    assert plan["execute_supported"] is False

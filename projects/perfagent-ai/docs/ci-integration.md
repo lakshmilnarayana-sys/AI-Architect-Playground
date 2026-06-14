@@ -27,6 +27,16 @@ docker compose run --rm perfagent evaluate \
   --output ./outputs/sample-payments-api
 ```
 
+To publish a reusable PR comment body, generate Markdown after the run completes:
+
+```bash
+docker compose run --rm perfagent ci comment \
+  --summary ./outputs/sample-payments-api/reports/summary.json \
+  --output ./outputs/sample-payments-api/perfagent-pr-comment.md
+```
+
+GitHub Actions can post that file with `gh pr comment`, `actions/github-script`, or a standard PR-comment action. The command is intentionally separated from the GitHub API call so the same report body can be reused by GitLab, Jenkins, Buildkite, and local release gates.
+
 ## GitLab CI
 
 Use [examples/ci/gitlab-ci.yml](../examples/ci/gitlab-ci.yml).

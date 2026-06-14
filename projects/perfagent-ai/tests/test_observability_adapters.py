@@ -102,3 +102,18 @@ def test_elasticsearch_adapter_derives_endpoint_mix(monkeypatch):
 
     assert profile["observed_peak_rps"] == 1.5
     assert profile["endpoint_mix"][0]["path"] == "/v1/payments"
+
+
+def test_build_provider_query_pack_renders_queries():
+    pack = adapters.build_provider_query_pack("datadog", "payments-api", {})
+
+    assert pack["supported"] is True
+    assert "payments-api" in pack["queries"]["request_rate"]
+    assert "api_key" in pack["required_config"]
+
+
+def test_validate_provider_query_pack_reports_missing_config():
+    pack = adapters.validate_provider_query_pack("newrelic", "payments-api", {"api_key": "key"})
+
+    assert pack["valid"] is False
+    assert pack["missing_config"] == ["account_id"]

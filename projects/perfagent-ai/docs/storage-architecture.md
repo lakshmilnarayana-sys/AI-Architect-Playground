@@ -243,4 +243,16 @@ Current implementation includes pgvector-compatible scaffolding:
   --postgres-dsn "$PERFAGENT_DATABASE_URL"
 ```
 
+Evaluations can also index automatically after each run:
+
+```yaml
+storage:
+  enabled: true
+  backend: sqlite
+  path: ./outputs/perfagent.db
+  vector_dsn_env: PERFAGENT_VECTOR_DSN
+```
+
+If `storage.vector_dsn` is set, or the configured environment variable resolves to a DSN, PerfAgent indexes report narratives, run summaries, and execution logs after the deterministic run record is persisted. Indexing failures are recorded as warnings and do not change release decisions.
+
 The local deterministic embedding helper is for development and tests. Production deployments should replace it with an approved embedding model while preserving the same guardrail: embeddings retrieve context, SQL stores facts.

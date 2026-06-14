@@ -8,14 +8,17 @@ from perfagent.core.artifacts import read_json
 from perfagent.config import load_run_config, resolve_evaluate_options
 from perfagent.collectors.prometheus_collector import load_prometheus_query_config, validate_prometheus_queries
 from perfagent.collectors.distributed_results import write_merged_worker_results
+from perfagent.collectors.profiling_collector import build_profile_capture_plan
+from perfagent.collectors.observability_adapters import validate_provider_query_pack
 from perfagent.core.artifacts import write_json
 from perfagent.analyzers.similar_regressions import find_similar_regressions
-from perfagent.executors.distributed import build_distributed_plan
+from perfagent.executors.distributed import build_distributed_coordinator_plan, build_distributed_plan
 from perfagent.generators.trend_dashboard import render_trend_dashboard
 from perfagent.mcp_server import serve_stdio
 from perfagent.storage.vector_store import PgVectorStore, chunk_text
 from perfagent.storage.run_store import RunStore, compare_to_latest_baseline
 from perfagent.workflow import evaluate_service, generate_only, import_external_results
+from perfagent.ci.pr_comment import format_pr_comment
 
 
 app = typer.Typer(help="PerfAgent AI: from API contract to performance report.")
@@ -24,11 +27,17 @@ baseline_app = typer.Typer(help="Baseline management.")
 storage_app = typer.Typer(help="Run database management.")
 regression_app = typer.Typer(help="Regression comparison gates.")
 distributed_app = typer.Typer(help="Distributed/container execution planning.")
+profile_app = typer.Typer(help="Profiling and flamegraph helpers.")
+observability_app = typer.Typer(help="Observability provider helpers.")
+ci_app = typer.Typer(help="CI helper commands.")
 app.add_typer(prometheus_app, name="prometheus")
 app.add_typer(baseline_app, name="baseline")
 app.add_typer(storage_app, name="storage")
 app.add_typer(regression_app, name="regression")
 app.add_typer(distributed_app, name="distributed")
+app.add_typer(profile_app, name="profile")
+app.add_typer(observability_app, name="observability")
+app.add_typer(ci_app, name="ci")
 
 
 @app.command()
@@ -335,6 +344,110 @@ def distributed_merge(
     typer.echo(f"Merged {result['workers']} worker summaries.")
     typer.echo(f"Summary: {result['summary_path']}")
     typer.echo(f"Aligned time-series: {result['aligned_path']}")
+
+
+@distributed_app.command("coordinate")
+def distributed_coordinate(
+    service_name: str = typer.Option(..., "--service-name"),
+    engine: str = typer.Option("k6", "--engine"),
+    workers: int = typer.Option(2, "--workers"),
+    output: Path = typer.Option(Path("./outputs/distributed-coordinator-plan.json"), "--output"),
+    base_config: str = typer.Option("./examples/sample-config.yaml", "--config"),
+    compose_service: str = typer.Option("perfagent", "--compose-service"),
+) -> None:
+    plan = build_distributed_coordinator_plan(
+        engine=engine,
+        service_name=service_name,
+        workers=workers,
+        output_dir=output.parent,
+        base_config=base_config,
+        compose_service=compose_service,
+    )
+    write_json(output, plan)
+    typer.echo(f"Distributed coordinator plan: {output}")
+    for worker in plan["worker_specs"]:
+        typer.echo(worker["command"])
+    typer.echo(plan["merge_command"])
+
+
+@profile_app.command("plan")
+def profile_plan(
+    runtime: str = typer.Option(..., "--runtime"),
+    output_dir: Path = typer.Option(Path("./outputs/profiles"), "--output-dir"),
+    duration_seconds: int = typer.Option(60, "--duration-seconds"),
+    pid: str | None = typer.Option(None, "--pid"),
+    profile_endpoint: str | None = typer.Option(None, "--profile-endpoint"),
+    container: str | None = typer.Option(None, "--container"),
+    output_json: Path | None = typer.Option(None, "--output-json"),
+) -> None:
+    plan = build_profile_capture_plan(
+        runtime=runtime,
+        output_dir=output_dir,
+        duration_seconds=duration_seconds,
+        pid=pid,
+        profile_endpoint=profile_endpoint,
+        container=container,
+    )
+    if output_json:
+        write_json(output_json, plan)
+    typer.echo(f"Profiling plan for {runtime}")
+    for command in plan["commands"]:
+        status = "available" if command["available"] else "missing"
+        typer.echo(f"- [{status}] {command['command']}")
+    for warning in plan["warnings"]:
+        typer.echo(f"WARNING: {warning}")
+
+
+@observability_app.command("query-pack")
+def observability_query_pack(
+    provider: str = typer.Option(..., "--provider"),
+    service_name: str = typer.Option(..., "--service-name"),
+    output_json: Path | None = typer.Option(None, "--output-json"),
+    api_key: str | None = typer.Option(None, "--api-key"),
+    app_key: str | None = typer.Option(None, "--app-key"),
+    account_id: str | None = typer.Option(None, "--account-id"),
+    site: str | None = typer.Option(None, "--site"),
+    base_url: str | None = typer.Option(None, "--base-url"),
+    index: str | None = typer.Option(None, "--index"),
+) -> None:
+    result = validate_provider_query_pack(
+        provider,
+        service_name,
+        {
+            "api_key": api_key,
+            "app_key": app_key,
+            "account_id": account_id,
+            "site": site,
+            "base_url": base_url,
+            "index": index,
+        },
+    )
+    if output_json:
+        write_json(output_json, result)
+    typer.echo(f"Observability query pack: {result['provider']}")
+    typer.echo(f"Valid: {result['valid']}")
+    for name, query in result.get("queries", {}).items():
+        typer.echo(f"{name}: {query}")
+    for warning in result.get("warnings", []):
+        typer.echo(f"WARNING: {warning}")
+
+
+@ci_app.command("comment")
+def ci_comment(
+    summary: Path = typer.Option(..., "--summary", exists=True, readable=True),
+    regression: Path | None = typer.Option(None, "--regression", exists=True, readable=True),
+    output: Path | None = typer.Option(None, "--output"),
+) -> None:
+    markdown = format_pr_comment(
+        read_json(summary),
+        read_json(regression) if regression else None,
+    )
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(markdown)
+        typer.echo(f"PR comment markdown: {output}")
+    else:
+        typer.echo(markdown)
 
 
 @regression_app.command("compare")

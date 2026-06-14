@@ -7,6 +7,20 @@ PerfAgent uses observability data for two jobs:
 
 The executable clients include Prometheus-compatible `/api/v1/query_range`, Datadog `/api/v1/query`, New Relic GraphQL NRQL, and Elasticsearch `_search` traffic-profile adapters.
 
+You can render and validate provider query packs without running a load test:
+
+```bash
+perfagent observability query-pack \
+  --provider datadog \
+  --service-name payments-api \
+  --site datadoghq.com \
+  --api-key "$DATADOG_API_KEY" \
+  --app-key "$DATADOG_APP_KEY" \
+  --output-json ./outputs/datadog-query-pack.json
+```
+
+The command reports missing provider configuration and writes the exact rendered query strings or Elasticsearch query templates. Use it as the first CI/onboarding check before relying on production traffic replay or dependency evidence.
+
 ## Common Mapping
 
 Every provider should normalize data into this shape:
@@ -219,7 +233,10 @@ collect_dependency_metrics(provider_config, dependencies, start, end) -> dict
 Current provider adapter module:
 
 ```python
-from perfagent.collectors.observability_adapters import collect_observability_traffic_profile
+from perfagent.collectors.observability_adapters import (
+    collect_observability_traffic_profile,
+    validate_provider_query_pack,
+)
 ```
 
 Then PerfAgent can keep the same deterministic analysis path:

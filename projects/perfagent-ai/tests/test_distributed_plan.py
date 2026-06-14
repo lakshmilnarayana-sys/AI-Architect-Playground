@@ -4,7 +4,7 @@ from typer.testing import CliRunner
 
 from perfagent.cli import app
 from perfagent.core.artifacts import read_json
-from perfagent.executors.distributed import build_distributed_plan
+from perfagent.executors.distributed import build_distributed_coordinator_plan, build_distributed_plan
 
 
 runner = CliRunner()
@@ -44,3 +44,17 @@ def test_distributed_merge_command_writes_merged_artifacts(tmp_path):
     assert result.exit_code == 0, result.output
     assert (output_dir / "raw" / "merged_summary.json").exists()
     assert (output_dir / "processed" / "aligned_timeseries.csv").exists()
+
+
+def test_build_distributed_coordinator_plan_has_worker_commands(tmp_path):
+    plan = build_distributed_coordinator_plan(
+        engine="k6",
+        service_name="payments-api",
+        workers=2,
+        output_dir=tmp_path,
+    )
+
+    assert plan["mode"] == "distributed-coordinator"
+    assert len(plan["worker_specs"]) == 2
+    assert "PERFAGENT_WORKER_ID=worker-1" in plan["worker_specs"][0]["command"]
+    assert "distributed merge" in plan["merge_command"]
