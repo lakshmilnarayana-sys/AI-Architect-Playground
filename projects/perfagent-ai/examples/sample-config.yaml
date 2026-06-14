@@ -14,6 +14,11 @@ service:
   memory_allocation: 512Mi
   disk_allocation: 2Gi
   image_tag: sample-payments-api:local
+llm:
+  enabled: false
+  provider: ollama
+  model: llama3.2
+  base_url: http://localhost:11434
 prometheus:
   enabled: false
   url: http://localhost:9090

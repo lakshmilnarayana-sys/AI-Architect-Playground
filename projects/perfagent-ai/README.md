@@ -297,6 +297,26 @@ Validate Prometheus query coverage:
   --prometheus-query-config ./examples/prometheus-queries.yaml
 ```
 
+Enable local AI analysis with Ollama:
+
+```bash
+ollama pull llama3.2
+ollama serve
+
+.venv/bin/python -m perfagent evaluate \
+  --service-name payments-api \
+  --openapi ./openapi.yaml \
+  --target-url http://localhost:8080 \
+  --runtime go \
+  --slo-p95-ms 500 \
+  --slo-error-rate 1 \
+  --llm-provider ollama \
+  --llm-model llama3.2 \
+  --output ./outputs/payments-api
+```
+
+The LLM receives only structured evidence from `features.json`, `bottleneck_analysis.json`, `dependency_analysis.json`, the metric contract, and warnings. It does not calculate metrics or release decisions.
+
 Save and compare baselines:
 
 ```bash

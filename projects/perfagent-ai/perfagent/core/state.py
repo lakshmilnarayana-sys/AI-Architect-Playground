@@ -30,6 +30,7 @@ class EvaluationState(TypedDict, total=False):
     service_resources: dict[str, Any]
     dependencies: list[dict[str, Any]]
     dependency_analysis: dict[str, Any]
+    ai_analysis: dict[str, Any]
     aligned_timeseries_path: str
     features: dict[str, Any]
     bottleneck_analysis: dict[str, Any]
@@ -63,6 +64,7 @@ def initial_state(
     prometheus_query_config_path: str | None = None,
     service_resources: dict[str, Any] | None = None,
     dependencies: list[dict[str, Any]] | None = None,
+    llm: dict[str, Any] | None = None,
 ) -> EvaluationState:
     return {
         "run_id": new_run_id(service_name),
@@ -90,6 +92,8 @@ def initial_state(
         "service_resources": service_resources or {},
         "dependencies": dependencies or [],
         "dependency_analysis": {},
+        "ai_analysis": {},
+        "llm": llm or {"enabled": False},
         "aligned_timeseries_path": "",
         "features": {},
         "bottleneck_analysis": {},

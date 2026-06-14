@@ -21,6 +21,7 @@ def render_reports(
     profiling_artifacts: dict[str, Any] | None = None,
     service_resources: dict[str, Any] | None = None,
     dependency_analysis: dict[str, Any] | None = None,
+    ai_analysis: dict[str, Any] | None = None,
     aligned_timeseries: list[dict[str, Any]] | None = None,
 ) -> dict[str, Path]:
     reports_dir = output_dir / "reports"
@@ -36,6 +37,7 @@ def render_reports(
         profiling_artifacts or {},
         service_resources or {},
         dependency_analysis or {"dependencies": [], "findings": []},
+        ai_analysis or {},
     )
     md_path = reports_dir / "report.md"
     html_path = reports_dir / "report.html"
@@ -53,6 +55,7 @@ def render_reports(
             profiling_artifacts=profiling_artifacts or {},
             service_resources=service_resources or {},
             dependency_analysis=dependency_analysis or {"dependencies": [], "findings": []},
+            ai_analysis=ai_analysis or {},
             aligned_timeseries=aligned_timeseries or [],
         )
     )
@@ -66,6 +69,7 @@ def render_reports(
             "profiling_artifacts": profiling_artifacts or {},
             "service_resources": service_resources or {},
             "dependency_analysis": dependency_analysis or {"dependencies": [], "findings": []},
+            "ai_analysis": ai_analysis or {},
             "aligned_timeseries": aligned_timeseries or [],
         },
     )
@@ -83,6 +87,7 @@ def _markdown(
     profiling: dict[str, Any],
     service_resources: dict[str, Any],
     dependency_analysis: dict[str, Any],
+    ai_analysis: dict[str, Any],
 ) -> str:
     endpoints = contract_analysis.get("endpoints", [])
     evidence = "\n".join(f"- {item}" for item in bottleneck.get("evidence", [])) or "- No evidence available."
@@ -92,6 +97,7 @@ def _markdown(
     profiles = "\n".join(f"- {item}" for item in profiling.get("artifacts", [])) or "- No profiling artifacts attached."
     resources = _resource_lines(service_resources)
     dependencies = _dependency_lines(dependency_analysis)
+    ai = _ai_lines(ai_analysis)
     return f"""# PerfAgent AI Report: {service_name}
 
 ## Executive Summary
@@ -136,6 +142,10 @@ Max p95 latency was {features.get("max_p95_latency_ms", 0)} ms against an SLO of
 ## Dependency Analysis
 
 {dependencies}
+
+## AI Analysis
+
+{ai}
 
 ## Evidence
 
@@ -184,6 +194,24 @@ def _dependency_lines(dependency_analysis: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _ai_lines(ai_analysis: dict[str, Any]) -> str:
+    if not ai_analysis or not ai_analysis.get("enabled"):
+        return f"- {ai_analysis.get('summary', 'AI analysis was not run.') if ai_analysis else 'AI analysis was not run.'}"
+    recommendations = ai_analysis.get("recommendations", [])
+    rec_lines = "\n".join(f"  {index}. {item}" for index, item in enumerate(recommendations, start=1))
+    return "\n".join(
+        [
+            f"- Provider: {ai_analysis.get('provider', 'unknown')}",
+            f"- Model: {ai_analysis.get('model', 'unknown')}",
+            f"- Summary: {ai_analysis.get('summary', '')}",
+            f"- Bottleneck: {ai_analysis.get('bottleneck', 'unknown')}",
+            f"- Confidence: {ai_analysis.get('confidence', 'unknown')}",
+            "Recommendations:",
+            rec_lines or "  1. No AI recommendations returned.",
+        ]
+    )
+
+
 def _interactive_html(
     *,
     service_name: str,
@@ -196,6 +224,7 @@ def _interactive_html(
     profiling_artifacts: dict[str, Any],
     service_resources: dict[str, Any],
     dependency_analysis: dict[str, Any],
+    ai_analysis: dict[str, Any],
     aligned_timeseries: list[dict[str, Any]],
 ) -> str:
     payload = {
@@ -209,6 +238,7 @@ def _interactive_html(
         "profiling": profiling_artifacts,
         "serviceResources": service_resources,
         "dependencyAnalysis": dependency_analysis,
+        "aiAnalysis": ai_analysis,
         "timeseries": aligned_timeseries,
     }
     data = html.escape(json.dumps(payload, sort_keys=True), quote=False)
@@ -305,6 +335,10 @@ def _interactive_html(
     <section class="panel" style="margin-bottom:16px">
       <h2>Dependency Analysis</h2>
       <div id="dependency-analysis"></div>
+    </section>
+    <section class="panel" style="margin-bottom:16px">
+      <h2>AI Analysis</h2>
+      <div id="ai-analysis"></div>
     </section>
     <section class="two-col">
       <div class="panel chart-wrap">
@@ -423,6 +457,15 @@ def _interactive_html(
       const findingRows = findings.map(item => `<tr><td>${{fmt(item.dependency)}}</td><td>${{fmt(item.metric)}}</td><td>${{fmt(item.value)}}</td><td>${{fmt(item.threshold)}}</td></tr>`).join('');
       const findingsTable = findings.length ? `<h3>Findings</h3><table><thead><tr><th>Dependency</th><th>Metric</th><th>Observed</th><th>Threshold</th></tr></thead><tbody>${{findingRows}}</tbody></table>` : '<p>No dependency thresholds breached.</p>';
       document.getElementById('dependency-analysis').innerHTML = `<table><thead><tr><th>Name</th><th>Type</th><th>Role</th><th>Criticality</th></tr></thead><tbody>${{dependencyRows}}</tbody></table>${{findingsTable}}`;
+    }}
+
+    function renderAiAnalysis() {{
+      const ai = data.aiAnalysis || {{}};
+      const recommendations = (ai.recommendations || []).map(item => `<li>${{item}}</li>`).join('');
+      const evidence = (ai.evidence || []).map(item => `<li>${{item}}</li>`).join('');
+      document.getElementById('ai-analysis').innerHTML = ai.enabled
+        ? `<p><strong>${{fmt(ai.provider)}} / ${{fmt(ai.model)}}</strong></p><p>${{fmt(ai.summary)}}</p><table><tbody><tr><th>Bottleneck</th><td>${{fmt(ai.bottleneck)}}</td></tr><tr><th>Confidence</th><td>${{fmt(ai.confidence)}}</td></tr></tbody></table><h3>AI Evidence</h3><ul>${{evidence || '<li>No AI evidence returned.</li>'}}</ul><h3>AI Recommendations</h3><ul>${{recommendations || '<li>No AI recommendations returned.</li>'}}</ul>`
+        : `<p>${{fmt(ai.summary || 'AI analysis was not run.')}}</p>`;
     }}
 
     function filteredRows() {{
@@ -545,6 +588,7 @@ def _interactive_html(
     renderKpis();
     renderServiceResources();
     renderDependencyAnalysis();
+    renderAiAnalysis();
     renderBottleneck();
     renderPhaseFilter();
     initTheme();

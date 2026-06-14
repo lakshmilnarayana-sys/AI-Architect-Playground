@@ -257,6 +257,30 @@ make dependencies-down
 
 These services are scaffolding only. Real capacity evidence still depends on representative schemas, topics, indexes, data volume, and dependency behavior.
 
+## What makes PerfAgent AI?
+
+PerfAgent now supports an optional local Ollama integration. The deterministic engine calculates metrics, capacity, SLO status, dependency findings, and bottleneck classifications. When enabled, Ollama receives only that structured evidence and writes a human-readable explanation and recommendations to:
+
+```text
+processed/ai_analysis.json
+reports/report.md
+reports/report.html
+```
+
+Enable it with:
+
+```bash
+ollama pull llama3.2
+ollama serve
+
+.venv/bin/python -m perfagent evaluate \
+  --config ./examples/sample-config.yaml \
+  --llm-provider ollama \
+  --llm-model llama3.2
+```
+
+The LLM does not calculate p95, p99, RPS, error rate, capacity, or release decisions.
+
 ## Where are golden signals stored?
 
 Current load-side signals are stored in:

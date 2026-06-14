@@ -28,6 +28,7 @@ from perfagent.generators.locust_generator import generate_locustfile
 from perfagent.generators.report_renderer import render_reports
 from perfagent.generators.synthetic_data import generate_test_data
 from perfagent.generators.websocket_generator import generate_websocket_load_test
+from perfagent.llm.client import disabled_ai_analysis, explain_with_ollama
 from perfagent.parsers.openapi_parser import parse_openapi
 
 
@@ -45,6 +46,7 @@ def evaluate_service(
     mode: str = "standard",
     service_resources: dict[str, Any] | None = None,
     dependencies: list[dict[str, Any]] | None = None,
+    llm: dict[str, Any] | None = None,
     prometheus_url: str | None = None,
     prometheus_service_label: str | None = None,
     prometheus_query_config_path: Path | None = None,
@@ -67,6 +69,7 @@ def evaluate_service(
         prometheus_query_config_path=str(prometheus_query_config_path) if prometheus_query_config_path else None,
         service_resources=service_resources,
         dependencies=dependencies,
+        llm=llm,
     )
     workspace = Workspace(output_dir)
     workspace.create()
@@ -172,6 +175,23 @@ def evaluate_service(
     state["bottleneck_analysis"] = bottleneck
     write_json(workspace.processed_dir / "bottleneck_analysis.json", bottleneck)
 
+    ai_analysis = _run_ai_analysis(
+        llm or {"enabled": False},
+        {
+            "service": service_name,
+            "runtime": runtime,
+            "target_url": target_url,
+            "slo": {"p95_latency_ms": slo_p95_ms, "error_rate_percent": slo_error_rate_percent},
+            "features": features,
+            "bottleneck_analysis": bottleneck,
+            "dependency_analysis": dependency_analysis,
+            "metric_contract": _metric_contract(state, strategy),
+            "warnings": state["warnings"],
+        },
+    )
+    state["ai_analysis"] = ai_analysis
+    write_json(workspace.processed_dir / "ai_analysis.json", ai_analysis)
+
     reports = render_reports(
         output_dir=output_dir,
         service_name=service_name,
@@ -184,6 +204,7 @@ def evaluate_service(
         profiling_artifacts=profiling,
         service_resources=service_resources or {},
         dependency_analysis=dependency_analysis,
+        ai_analysis=ai_analysis,
         aligned_timeseries=aligned,
     )
     state["report_md_path"] = str(reports["report_md_path"])
@@ -237,6 +258,7 @@ def import_external_results(
     slo_error_rate_percent: float,
     service_resources: dict[str, Any] | None = None,
     dependency_analysis: dict[str, Any] | None = None,
+    ai_analysis: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     raw_summary, aligned = load_external_results(tool, result_path)
     workspace = Workspace(run_dir)
@@ -269,6 +291,7 @@ def import_external_results(
         profiling_artifacts={},
         service_resources=service_resources or {},
         dependency_analysis=dependency_analysis or {"dependencies": [], "findings": []},
+        ai_analysis=ai_analysis or disabled_ai_analysis("AI analysis was not run for imported results."),
         aligned_timeseries=aligned,
     )
     return {
@@ -288,6 +311,25 @@ def _read_json_or_empty(path: Path) -> dict[str, Any]:
 
         return yaml.safe_load(path.read_text()) or {}
     return read_json(path)
+
+
+def _run_ai_analysis(llm: dict[str, Any], evidence: dict[str, Any]) -> dict[str, Any]:
+    if not llm.get("enabled"):
+        return disabled_ai_analysis("AI analysis is disabled. Enable Ollama with --llm-provider ollama.")
+    provider = llm.get("provider", "ollama")
+    if provider != "ollama":
+        return disabled_ai_analysis(f"Unsupported LLM provider: {provider}")
+    try:
+        return explain_with_ollama(
+            evidence,
+            model=llm.get("model", "llama3.2"),
+            base_url=llm.get("base_url", "http://localhost:11434"),
+        )
+    except Exception as exc:  # pragma: no cover - exact urllib failures vary
+        result = disabled_ai_analysis(f"Ollama analysis failed: {exc}")
+        result["provider"] = "ollama"
+        result["model"] = llm.get("model", "llama3.2")
+        return result
 
 
 def _metric_contract(state: EvaluationState, strategy: dict[str, Any]) -> dict[str, Any]:
