@@ -15,6 +15,7 @@ import os
 from pyvis.network import Network
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))  # project root for `src.incident` imports
 
 
 def hydrate_streamlit_secrets() -> None:
@@ -51,6 +52,11 @@ hydrate_streamlit_secrets()
 
 import chromadb
 from software_catalog import build_software_catalog
+from src.incident.slack import filter_messages, channel_name
+from src.incident.scenarios import load_scenarios
+from src.incident.state import new_incident
+from src.incident.graph_lookup import GraphContext
+from src.incident.supervisor import stream_incident
 from ui_trace import evidence_counts, format_stage_elapsed
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -425,6 +431,75 @@ def render_incident_command_center() -> None:
         """,
         height=315,
     )
+
+
+def render_slack_channel(incident: dict, messages: list[dict]) -> None:
+    import base64
+    logo_path = ROOT / "app" / "assets" / "slack-logo.svg"
+    logo_tag = ""
+    if logo_path.exists():
+        b64 = base64.b64encode(logo_path.read_bytes()).decode("ascii")
+        logo_tag = f'<img src="data:image/svg+xml;base64,{b64}" width="22" style="vertical-align:middle"/>'
+
+    header_cols = st.columns([3, 2])
+    with header_cols[0]:
+        st.markdown(f"{logo_tag} **{channel_name(incident)}**", unsafe_allow_html=True)
+    with header_cols[1]:
+        search = st.text_input("Search messages", key="slack_search",
+                               placeholder="Search messages (text, author, phase)")
+
+    visible = filter_messages(messages, search)
+    with st.container(height=420):  # fixed-height scrollable feed
+        for m in visible:
+            st.markdown(
+                f"{m.get('avatar','💬')} **{m.get('author','')}** "
+                f"`{m.get('phase','')}` · {m.get('ts','')}  \n{m.get('text','')}"
+            )
+    st.caption(f"{len(visible)} / {len(messages)} messages")
+
+
+def render_incident_response_simulation() -> None:
+    st.caption("Hierarchical multi-agent incident simulation grounded in the knowledge graph.")
+    scenarios = load_scenarios()
+    mode = st.radio("Input mode", ["Scripted scenario", "Operator (copilot)"], horizontal=True,
+                    key="inc_mode")
+
+    if mode == "Scripted scenario":
+        labels = [f"{s['title']} ({s['severity']})" for s in scenarios]
+        idx = st.selectbox("Scenario", range(len(scenarios)), format_func=lambda i: labels[i],
+                           key="inc_scenario")
+        chosen = scenarios[idx]
+        state = new_incident(chosen["incident_id"], chosen["title"], chosen["severity"],
+                             chosen["affected_services"], chosen["signal"])
+        state["incident"]["recovered"] = chosen.get("recovered", True)
+    else:
+        signal = st.text_area("Describe the incident", key="inc_signal",
+                              placeholder="e.g. Billing service returning 500s after deploy")
+        severity = st.selectbox("Severity", ["SEV1", "SEV2", "SEV3"], key="inc_sev")
+        service = st.text_input("Primary affected service", key="inc_service",
+                                placeholder="Billing Service")
+        state = new_incident("incident:adhoc", signal[:60] or "Ad-hoc Incident",
+                             severity, [service] if service else [], signal)
+        state["incident"]["recovered"] = True
+
+    if st.button("Run incident simulation", key="inc_run"):
+        use_real_llm = env_flag("INCIDENT_USE_LLM", False)
+        llm = None
+        if use_real_llm:
+            from src.hybrid_rag import get_llm
+            llm = get_llm()
+        ctx = GraphContext(use_neo4j=env_flag("INCIDENT_USE_NEO4J", False))
+        feed = st.empty()
+        collected: list[dict] = []
+        for phase, messages in stream_incident(state, llm=llm, ctx=ctx,
+                                                use_vector=env_flag("INCIDENT_USE_VECTOR", False),
+                                                approve=lambda phase: True,
+                                                thread_id=f"ui-{state['incident']['id']}"):
+            collected.extend(messages)
+            with feed.container():
+                render_slack_channel(state["incident"], collected)
+            time.sleep(0.6)  # timed streaming playback pacing
+        st.success("Incident resolved — postmortem generated.")
 
 
 def render_rag_mode_explainer() -> None:
@@ -1008,6 +1083,9 @@ with st.expander("GraphRAG Demo Queries", expanded=True):
                 if st.button("Use query", key=f"graph_query_{i}", width='stretch'):
                     st.session_state.pending_query = item['query']
                     st.rerun()
+
+with st.expander("Incident Response Simulation", expanded=True):
+    render_incident_response_simulation()
 
 render_project_story(nodes, edges)
 
