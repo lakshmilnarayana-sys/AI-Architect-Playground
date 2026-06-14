@@ -56,5 +56,9 @@ def test_postgres_store_records_run_and_lists_rows():
 
     statements = "\n".join(statement for cursor in cursors for statement, _ in cursor.statements)
     assert "CREATE TABLE IF NOT EXISTS perf_runs" in statements
+    assert "CREATE TABLE IF NOT EXISTS perf_features" in statements
+    assert "CREATE TABLE IF NOT EXISTS perf_artifacts" in statements
+    assert "CREATE TABLE IF NOT EXISTS perf_timeseries" in statements
+    assert "CREATE TABLE IF NOT EXISTS perf_dependencies" in statements
     assert "ON CONFLICT (run_id) DO UPDATE" in statements
     assert rows == [{"run_id": "run-1", "service_name": "payments-api"}]

@@ -24,6 +24,8 @@ def render_reports(
     ai_analysis: dict[str, Any] | None = None,
     traffic_profile: dict[str, Any] | None = None,
     aligned_timeseries: list[dict[str, Any]] | None = None,
+    timeseries_analysis: dict[str, Any] | None = None,
+    react_reasoning: dict[str, Any] | None = None,
 ) -> dict[str, Path]:
     reports_dir = output_dir / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
@@ -40,6 +42,8 @@ def render_reports(
         dependency_analysis or {"dependencies": [], "findings": []},
         ai_analysis or {},
         traffic_profile or {},
+        timeseries_analysis or {},
+        react_reasoning or {},
     )
     md_path = reports_dir / "report.md"
     html_path = reports_dir / "report.html"
@@ -60,6 +64,8 @@ def render_reports(
             ai_analysis=ai_analysis or {},
             traffic_profile=traffic_profile or {},
             aligned_timeseries=aligned_timeseries or [],
+            timeseries_analysis=timeseries_analysis or {},
+            react_reasoning=react_reasoning or {},
         )
     )
     write_json(
@@ -75,6 +81,8 @@ def render_reports(
             "ai_analysis": ai_analysis or {},
             "traffic_profile": traffic_profile or {},
             "aligned_timeseries": aligned_timeseries or [],
+            "timeseries_analysis": timeseries_analysis or {},
+            "react_reasoning": react_reasoning or {},
         },
     )
     return {"report_md_path": md_path, "report_html_path": html_path, "summary_path": summary_path}
@@ -93,6 +101,8 @@ def _markdown(
     dependency_analysis: dict[str, Any],
     ai_analysis: dict[str, Any],
     traffic_profile: dict[str, Any],
+    timeseries_analysis: dict[str, Any],
+    react_reasoning: dict[str, Any],
 ) -> str:
     endpoints = contract_analysis.get("endpoints", [])
     evidence = "\n".join(f"- {item}" for item in bottleneck.get("evidence", [])) or "- No evidence available."
@@ -104,6 +114,8 @@ def _markdown(
     dependencies = _dependency_lines(dependency_analysis)
     ai = _ai_lines(ai_analysis)
     traffic = _traffic_profile_lines(traffic_profile)
+    react = _react_lines(react_reasoning)
+    timeseries = _timeseries_lines(timeseries_analysis)
     return f"""# PerfAgent AI Report: {service_name}
 
 ## Executive Summary
@@ -152,6 +164,14 @@ Max p95 latency was {features.get("max_p95_latency_ms", 0)} ms against an SLO of
 ## Dependency Analysis
 
 {dependencies}
+
+## Autonomous Time-Series Reasoning
+
+{react}
+
+## Time-Series Signal Analysis
+
+{timeseries}
 
 ## AI Analysis
 
@@ -240,6 +260,45 @@ def _traffic_profile_lines(traffic_profile: dict[str, Any]) -> str:
     )
 
 
+def _react_lines(react_reasoning: dict[str, Any]) -> str:
+    conclusion = react_reasoning.get("conclusion", {})
+    trace = react_reasoning.get("trace", [])
+    lines = [
+        f"- Mode: {react_reasoning.get('mode', 'n/a')}",
+        f"- Classification: {conclusion.get('classification', 'unknown')}",
+        f"- Confidence: {conclusion.get('confidence', 'unknown')}",
+        f"- Summary: {conclusion.get('summary', 'No autonomous reasoning summary available.')}",
+    ]
+    if trace:
+        lines.append("Trace:")
+        lines.extend(
+            f"- Step {item.get('step')}: {item.get('action')} -> {', '.join(item.get('observation', {}).get('evidence', [])[:2])}"
+            for item in trace
+        )
+    return "\n".join(lines)
+
+
+def _timeseries_lines(timeseries_analysis: dict[str, Any]) -> str:
+    if not timeseries_analysis:
+        return "- No time-series analysis available."
+    correlations = timeseries_analysis.get("correlations", [])
+    breaches = timeseries_analysis.get("slo_breaches", [])
+    missing = timeseries_analysis.get("missing_core_metrics", [])
+    lines = [
+        f"- Rows analyzed: {timeseries_analysis.get('row_count', 0)}",
+        f"- Metrics available: {', '.join(timeseries_analysis.get('metrics_available', [])) or 'none'}",
+        f"- SLO breach windows: {len(breaches)}",
+        f"- Missing core metrics: {', '.join(missing) if missing else 'none'}",
+    ]
+    if correlations:
+        lines.append("Strong correlations:")
+        lines.extend(
+            f"- {item.get('metric')} vs {item.get('target')}: {item.get('correlation')} ({item.get('strength')})"
+            for item in correlations[:5]
+        )
+    return "\n".join(lines)
+
+
 def _interactive_html(
     *,
     service_name: str,
@@ -255,6 +314,8 @@ def _interactive_html(
     ai_analysis: dict[str, Any],
     traffic_profile: dict[str, Any],
     aligned_timeseries: list[dict[str, Any]],
+    timeseries_analysis: dict[str, Any],
+    react_reasoning: dict[str, Any],
 ) -> str:
     payload = {
         "serviceName": service_name,
@@ -270,6 +331,8 @@ def _interactive_html(
         "aiAnalysis": ai_analysis,
         "trafficProfile": traffic_profile,
         "timeseries": aligned_timeseries,
+        "timeseriesAnalysis": timeseries_analysis,
+        "reactReasoning": react_reasoning,
     }
     data = html.escape(json.dumps(payload, sort_keys=True), quote=False)
     title = html.escape(f"PerfAgent Report: {service_name}")
@@ -365,6 +428,14 @@ def _interactive_html(
     <section class="panel" style="margin-bottom:16px">
       <h2>Dependency Analysis</h2>
       <div id="dependency-analysis"></div>
+    </section>
+    <section class="panel" style="margin-bottom:16px">
+      <h2>Autonomous Time-Series Reasoning</h2>
+      <div id="react-reasoning"></div>
+    </section>
+    <section class="panel" style="margin-bottom:16px">
+      <h2>Time-Series Signal Analysis</h2>
+      <div id="timeseries-analysis"></div>
     </section>
     <section class="panel" style="margin-bottom:16px">
       <h2>AI Analysis</h2>
@@ -491,6 +562,48 @@ def _interactive_html(
       const findingRows = findings.map(item => `<tr><td>${{fmt(item.dependency)}}</td><td>${{fmt(item.metric)}}</td><td>${{fmt(item.value)}}</td><td>${{fmt(item.threshold)}}</td></tr>`).join('');
       const findingsTable = findings.length ? `<h3>Findings</h3><table><thead><tr><th>Dependency</th><th>Metric</th><th>Observed</th><th>Threshold</th></tr></thead><tbody>${{findingRows}}</tbody></table>` : '<p>No dependency thresholds breached.</p>';
       document.getElementById('dependency-analysis').innerHTML = `<table><thead><tr><th>Name</th><th>Type</th><th>Role</th><th>Criticality</th></tr></thead><tbody>${{dependencyRows}}</tbody></table>${{findingsTable}}`;
+    }}
+
+    function renderReactReasoning() {{
+      const reasoning = data.reactReasoning || {{}};
+      const conclusion = reasoning.conclusion || {{}};
+      const evidence = (conclusion.evidence || []).map(item => `<li>${{fmt(item)}}</li>`).join('');
+      const traceRows = (reasoning.trace || []).map(item => {{
+        const observed = ((item.observation || {{}}).evidence || []).slice(0, 3).map(value => `<li>${{fmt(value)}}</li>`).join('');
+        return `<tr><td>${{fmt(item.step)}}</td><td>${{fmt(item.thought)}}</td><td>${{fmt(item.action)}}</td><td><ul>${{observed || '<li>n/a</li>'}}</ul></td></tr>`;
+      }}).join('');
+      document.getElementById('react-reasoning').innerHTML = `
+        <table><tbody>
+          <tr><th>Mode</th><td>${{fmt(reasoning.mode)}}</td></tr>
+          <tr><th>Classification</th><td>${{fmt(conclusion.classification)}}</td></tr>
+          <tr><th>Confidence</th><td>${{fmt(conclusion.confidence)}}</td></tr>
+          <tr><th>Summary</th><td>${{fmt(conclusion.summary)}}</td></tr>
+          <tr><th>Estimated capacity</th><td>${{fmt(conclusion.estimated_capacity_rps, ' RPS')}}</td></tr>
+          <tr><th>Breakpoint</th><td>${{fmt(conclusion.breaking_point_rps, ' RPS')}}</td></tr>
+        </tbody></table>
+        <h3>Conclusion Evidence</h3><ul>${{evidence || '<li>No reasoning evidence available.</li>'}}</ul>
+        <h3>Reasoning Trace</h3>
+        <table><thead><tr><th>Step</th><th>Thought</th><th>Action</th><th>Observation</th></tr></thead><tbody>${{traceRows || '<tr><td colspan="4">No trace available.</td></tr>'}}</tbody></table>
+      `;
+    }}
+
+    function renderTimeseriesAnalysis() {{
+      const analysis = data.timeseriesAnalysis || {{}};
+      const correlations = (analysis.correlations || []).slice(0, 8).map(item => `<tr><td>${{fmt(item.metric)}}</td><td>${{fmt(item.target)}}</td><td>${{fmt(item.correlation)}}</td><td>${{fmt(item.strength)}}</td></tr>`).join('');
+      const breaches = (analysis.slo_breaches || []).slice(0, 8).map(item => `<tr><td>${{fmt(item.timestamp)}}</td><td>${{fmt(item.phase)}}</td><td>${{fmt(item.rps)}}</td><td>${{fmt(item.p95_latency_ms, ' ms')}}</td><td>${{fmt(item.error_rate_percent, '%')}}</td><td>${{fmt((item.reasons || []).join(', '))}}</td></tr>`).join('');
+      const missing = (analysis.missing_core_metrics || []).join(', ') || 'none';
+      document.getElementById('timeseries-analysis').innerHTML = `
+        <table><tbody>
+          <tr><th>Rows analyzed</th><td>${{fmt(analysis.row_count)}}</td></tr>
+          <tr><th>Metrics available</th><td>${{fmt((analysis.metrics_available || []).join(', '))}}</td></tr>
+          <tr><th>Missing core metrics</th><td>${{fmt(missing)}}</td></tr>
+          <tr><th>Recovery</th><td>${{fmt((analysis.recovery || {{}}).status)}}</td></tr>
+        </tbody></table>
+        <h3>SLO Breach Windows</h3>
+        <table><thead><tr><th>Timestamp</th><th>Phase</th><th>RPS</th><th>p95</th><th>Error</th><th>Reasons</th></tr></thead><tbody>${{breaches || '<tr><td colspan="6">No SLO breach windows detected.</td></tr>'}}</tbody></table>
+        <h3>Strong Correlations</h3>
+        <table><thead><tr><th>Metric</th><th>Target</th><th>Correlation</th><th>Strength</th></tr></thead><tbody>${{correlations || '<tr><td colspan="4">No strong correlations detected.</td></tr>'}}</tbody></table>
+      `;
     }}
 
     function renderAiAnalysis() {{
@@ -632,6 +745,8 @@ def _interactive_html(
     renderKpis();
     renderServiceResources();
     renderDependencyAnalysis();
+    renderReactReasoning();
+    renderTimeseriesAnalysis();
     renderAiAnalysis();
     renderTrafficProfile();
     renderBottleneck();

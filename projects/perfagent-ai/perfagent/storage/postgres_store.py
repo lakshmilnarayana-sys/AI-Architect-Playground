@@ -47,6 +47,46 @@ class PostgresRunStore:
                         json.dumps(run, sort_keys=True, default=str),
                     ),
                 )
+                cursor.execute(
+                    """
+                    INSERT INTO perf_features (
+                      run_id, stable_rps, peak_rps, max_p95_latency_ms, max_p99_latency_ms,
+                      max_error_rate_percent, estimated_capacity_rps, breaking_point_rps,
+                      first_slo_breach_phase, features_json
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                    ON CONFLICT (run_id) DO UPDATE SET
+                      stable_rps = EXCLUDED.stable_rps,
+                      peak_rps = EXCLUDED.peak_rps,
+                      max_p95_latency_ms = EXCLUDED.max_p95_latency_ms,
+                      max_p99_latency_ms = EXCLUDED.max_p99_latency_ms,
+                      max_error_rate_percent = EXCLUDED.max_error_rate_percent,
+                      estimated_capacity_rps = EXCLUDED.estimated_capacity_rps,
+                      breaking_point_rps = EXCLUDED.breaking_point_rps,
+                      first_slo_breach_phase = EXCLUDED.first_slo_breach_phase,
+                      features_json = EXCLUDED.features_json
+                    """,
+                    (
+                        run["run_id"],
+                        float(features.get("stable_rps", 0) or 0),
+                        float(features.get("peak_rps", 0) or 0),
+                        float(features.get("max_p95_latency_ms", 0) or 0),
+                        float(features.get("max_p99_latency_ms", 0) or 0),
+                        float(features.get("max_error_rate_percent", 0) or 0),
+                        float(features.get("estimated_capacity_rps", 0) or 0),
+                        float(features.get("breaking_point_rps", 0) or 0),
+                        features.get("first_slo_breach_phase"),
+                        json.dumps(features, sort_keys=True),
+                    ),
+                )
+                for artifact_type, path in (run.get("artifacts") or {}).items():
+                    cursor.execute(
+                        """
+                        INSERT INTO perf_artifacts (run_id, artifact_type, artifact_path)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (run_id, artifact_type, artifact_path) DO NOTHING
+                        """,
+                        (run["run_id"], artifact_type, str(path)),
+                    )
 
     def list_runs(self, service_name: str | None = None) -> list[dict[str, Any]]:
         query = "SELECT * FROM perf_runs"
@@ -90,6 +130,88 @@ class PostgresRunStore:
                 )
                 cursor.execute(
                     "CREATE INDEX IF NOT EXISTS idx_perf_runs_service_created ON perf_runs(service_name, created_at)"
+                )
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS perf_features (
+                      run_id TEXT PRIMARY KEY REFERENCES perf_runs(run_id) ON DELETE CASCADE,
+                      stable_rps DOUBLE PRECISION NOT NULL,
+                      peak_rps DOUBLE PRECISION NOT NULL,
+                      max_p95_latency_ms DOUBLE PRECISION NOT NULL,
+                      max_p99_latency_ms DOUBLE PRECISION NOT NULL,
+                      max_error_rate_percent DOUBLE PRECISION NOT NULL,
+                      estimated_capacity_rps DOUBLE PRECISION NOT NULL,
+                      breaking_point_rps DOUBLE PRECISION NOT NULL,
+                      first_slo_breach_phase TEXT,
+                      features_json JSONB NOT NULL
+                    )
+                    """
+                )
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS perf_artifacts (
+                      artifact_id BIGSERIAL PRIMARY KEY,
+                      run_id TEXT NOT NULL REFERENCES perf_runs(run_id) ON DELETE CASCADE,
+                      artifact_type TEXT NOT NULL,
+                      artifact_path TEXT NOT NULL,
+                      created_at TIMESTAMPTZ DEFAULT now(),
+                      UNIQUE(run_id, artifact_type, artifact_path)
+                    )
+                    """
+                )
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS perf_regression_results (
+                      result_id BIGSERIAL PRIMARY KEY,
+                      current_run_id TEXT NOT NULL,
+                      baseline_run_id TEXT,
+                      regression_detected BOOLEAN NOT NULL,
+                      findings_json JSONB NOT NULL,
+                      created_at TIMESTAMPTZ DEFAULT now()
+                    )
+                    """
+                )
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS perf_findings (
+                      finding_id BIGSERIAL PRIMARY KEY,
+                      run_id TEXT NOT NULL,
+                      finding_type TEXT NOT NULL,
+                      severity TEXT NOT NULL,
+                      evidence TEXT NOT NULL,
+                      recommendation TEXT,
+                      created_at TIMESTAMPTZ DEFAULT now()
+                    )
+                    """
+                )
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS perf_timeseries (
+                      run_id TEXT NOT NULL,
+                      timestamp TIMESTAMPTZ NOT NULL,
+                      phase TEXT,
+                      rps DOUBLE PRECISION,
+                      p95_latency_ms DOUBLE PRECISION,
+                      p99_latency_ms DOUBLE PRECISION,
+                      error_rate_percent DOUBLE PRECISION,
+                      payload_json JSONB,
+                      PRIMARY KEY (run_id, timestamp, phase)
+                    )
+                    """
+                )
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS perf_dependencies (
+                      dependency_id BIGSERIAL PRIMARY KEY,
+                      run_id TEXT NOT NULL,
+                      dependency_name TEXT NOT NULL,
+                      dependency_type TEXT,
+                      metric_name TEXT,
+                      metric_value DOUBLE PRECISION,
+                      payload_json JSONB,
+                      created_at TIMESTAMPTZ DEFAULT now()
+                    )
+                    """
                 )
 
 

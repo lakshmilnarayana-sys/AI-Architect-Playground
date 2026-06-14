@@ -8,6 +8,7 @@ from perfagent.analyzers.alignment import align_k6_jsonl, fallback_aligned_times
 from perfagent.analyzers.bottlenecks import classify_bottleneck
 from perfagent.analyzers.dependencies import analyze_dependencies
 from perfagent.analyzers.features import extract_features
+from perfagent.analyzers.timeseries_reasoning import analyze_timeseries, reason_over_timeseries
 from perfagent.collectors.external_results import load_external_results
 from perfagent.collectors.k6_collector import read_k6_summary, run_k6
 from perfagent.collectors.observability_adapters import collect_observability_traffic_profile
@@ -223,6 +224,22 @@ def evaluate_service(
     features["dependency_findings"] = dependency_analysis["findings"]
     state["dependency_analysis"] = dependency_analysis
     write_json(workspace.processed_dir / "dependency_analysis.json", dependency_analysis)
+    timeseries_analysis = analyze_timeseries(
+        aligned,
+        slo_p95_ms=slo_p95_ms,
+        slo_error_rate_percent=slo_error_rate_percent,
+    )
+    react_reasoning = reason_over_timeseries(
+        timeseries_analysis=timeseries_analysis,
+        features=features,
+        dependency_analysis=dependency_analysis,
+    )
+    features["timeseries_reasoning_classification"] = react_reasoning["conclusion"]["classification"]
+    features["timeseries_reasoning_confidence"] = react_reasoning["conclusion"]["confidence"]
+    state["timeseries_analysis"] = timeseries_analysis
+    state["react_reasoning"] = react_reasoning
+    write_json(workspace.processed_dir / "timeseries_analysis.json", timeseries_analysis)
+    write_json(workspace.processed_dir / "react_reasoning.json", react_reasoning)
     state["features"] = features
     state["release_decision"] = features["release_decision"]
     write_json(workspace.processed_dir / "features.json", features)
@@ -239,6 +256,8 @@ def evaluate_service(
             "target_url": target_url,
             "slo": {"p95_latency_ms": slo_p95_ms, "error_rate_percent": slo_error_rate_percent},
             "features": features,
+            "timeseries_analysis": timeseries_analysis,
+            "react_reasoning": react_reasoning,
             "bottleneck_analysis": bottleneck,
             "dependency_analysis": dependency_analysis,
             "metric_contract": _metric_contract(state, strategy),
@@ -263,6 +282,8 @@ def evaluate_service(
         ai_analysis=ai_analysis,
         traffic_profile=traffic_profile,
         aligned_timeseries=aligned,
+        timeseries_analysis=timeseries_analysis,
+        react_reasoning=react_reasoning,
     )
     state["report_md_path"] = str(reports["report_md_path"])
     state["report_html_path"] = str(reports["report_html_path"])
@@ -322,6 +343,15 @@ def _persist_run(storage: dict[str, Any], state: EvaluationState, features: dict
             "release_decision": state["release_decision"],
             "features": features,
             "report_html_path": state["report_html_path"],
+            "artifacts": [
+                {"type": "report_html", "path": state["report_html_path"]},
+                {"type": "report_md", "path": state["report_md_path"]},
+                {"type": "k6_script", "path": state["generated_k6_script_path"]},
+                {"type": "aligned_timeseries", "path": state["aligned_timeseries_path"]},
+                {"type": "features", "path": str(Path(state["output_dir"]) / "processed" / "features.json")},
+                {"type": "timeseries_analysis", "path": str(Path(state["output_dir"]) / "processed" / "timeseries_analysis.json")},
+                {"type": "react_reasoning", "path": str(Path(state["output_dir"]) / "processed" / "react_reasoning.json")},
+            ],
         }
     )
     store.apply_retention(retention_days=retention_days)
@@ -366,6 +396,18 @@ def import_external_results(
     write_json(workspace.processed_dir / "features.json", features)
     bottleneck = classify_bottleneck(features)
     write_json(workspace.processed_dir / "bottleneck_analysis.json", bottleneck)
+    timeseries_analysis = analyze_timeseries(
+        aligned,
+        slo_p95_ms=slo_p95_ms,
+        slo_error_rate_percent=slo_error_rate_percent,
+    )
+    react_reasoning = reason_over_timeseries(
+        timeseries_analysis=timeseries_analysis,
+        features=features,
+        dependency_analysis=dependency_analysis or {"dependencies": [], "findings": []},
+    )
+    write_json(workspace.processed_dir / "timeseries_analysis.json", timeseries_analysis)
+    write_json(workspace.processed_dir / "react_reasoning.json", react_reasoning)
     contract = _read_json_or_empty(workspace.processed_dir / "contract_analysis.json")
     strategy = _read_json_or_empty(workspace.processed_dir / "test_strategy.yaml")
     if not strategy:
@@ -385,6 +427,8 @@ def import_external_results(
         ai_analysis=ai_analysis or disabled_ai_analysis("AI analysis was not run for imported results."),
         traffic_profile={},
         aligned_timeseries=aligned,
+        timeseries_analysis=timeseries_analysis,
+        react_reasoning=react_reasoning,
     )
     return {
         "tool": tool.lower(),

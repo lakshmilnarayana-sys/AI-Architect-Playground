@@ -7,6 +7,7 @@ from typing import Any
 
 from perfagent.core.artifacts import read_json
 from perfagent.storage.run_store import RunStore, compare_to_latest_baseline
+from perfagent.workflow import evaluate_service
 
 
 TOOLS = [
@@ -21,6 +22,10 @@ TOOLS = [
     {
         "name": "compare_regression",
         "description": "Compare a run summary against the latest stored baseline for the same service.",
+    },
+    {
+        "name": "evaluate_service",
+        "description": "Run PerfAgent evaluation for a service and return report paths, features, and decision.",
     },
 ]
 
@@ -49,6 +54,32 @@ def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             exclude_run_id=summary.get("run_id"),
         )
         return result
+    if name == "evaluate_service":
+        state = evaluate_service(
+            service_name=arguments["service_name"],
+            openapi_path=Path(arguments["openapi_path"]),
+            target_url=arguments["target_url"],
+            runtime=arguments.get("runtime", "unknown"),
+            slo_p95_ms=int(arguments.get("slo_p95_ms", 500)),
+            slo_error_rate_percent=float(arguments.get("slo_error_rate_percent", 1)),
+            duration=arguments.get("duration", "10s"),
+            output_dir=Path(arguments.get("output_dir", "./outputs/mcp-evaluation")),
+            engine=arguments.get("engine", "k6"),
+            mode=arguments.get("mode", "standard"),
+            prometheus_url=arguments.get("prometheus_url"),
+            prometheus_service_label=arguments.get("prometheus_service_label"),
+            skip_run=bool(arguments.get("skip_run", False)),
+        )
+        return {
+            "run_id": state["run_id"],
+            "service_name": state["service_name"],
+            "release_decision": state["release_decision"],
+            "features": state["features"],
+            "bottleneck_analysis": state["bottleneck_analysis"],
+            "react_reasoning": state.get("react_reasoning", {}),
+            "report_html_path": state["report_html_path"],
+            "report_md_path": state["report_md_path"],
+        }
     raise ValueError(f"Unknown MCP tool: {name}")
 
 

@@ -16,6 +16,10 @@ def generate_grpc_load_test(
     service_full_name = config.get("service_full_name", "payments.Payments")
     method_name = config.get("method", "CreatePayment")
     request_json = config.get("request", {})
+    pb2_module = config.get("pb2_module")
+    pb2_grpc_module = config.get("pb2_grpc_module")
+    stub_class = config.get("stub_class")
+    request_class = config.get("request_class")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
         f'''"""Generated gRPC load harness for {service_name}.
@@ -36,7 +40,24 @@ PROTO_PATH = {proto_path!r}
 SERVICE_FULL_NAME = {service_full_name!r}
 METHOD_NAME = {method_name!r}
 REQUEST_JSON = {request_json!r}
+PB2_MODULE = {pb2_module!r}
+PB2_GRPC_MODULE = {pb2_grpc_module!r}
+STUB_CLASS = {stub_class!r}
+REQUEST_CLASS = {request_class!r}
 MAX_RETAINED_LATENCIES = 10000
+
+
+def _build_rpc_client(channel):
+    if not (PB2_MODULE and PB2_GRPC_MODULE and STUB_CLASS and REQUEST_CLASS):
+        return None
+    import importlib
+
+    pb2 = importlib.import_module(PB2_MODULE)
+    pb2_grpc = importlib.import_module(PB2_GRPC_MODULE)
+    stub = getattr(pb2_grpc, STUB_CLASS)(channel)
+    request_type = getattr(pb2, REQUEST_CLASS)
+    rpc = getattr(stub, METHOD_NAME)
+    return rpc, request_type
 
 
 def run(duration_seconds: int, concurrency: int) -> dict:
@@ -45,12 +66,16 @@ def run(duration_seconds: int, concurrency: int) -> dict:
     error_count = 0
     latencies_ms = []
     with grpc.insecure_channel(TARGET) as channel:
+        rpc_client = _build_rpc_client(channel)
         while time.time() < deadline:
             start = time.perf_counter()
             try:
-                # TODO: import generated *_pb2_grpc stubs and call SERVICE_FULL_NAME/METHOD_NAME with REQUEST_JSON.
                 remaining = max(deadline - time.time(), 0.001)
-                grpc.channel_ready_future(channel).result(timeout=min(2, remaining))
+                if rpc_client:
+                    rpc, request_type = rpc_client
+                    rpc(request_type(**REQUEST_JSON), timeout=min(2, remaining))
+                else:
+                    grpc.channel_ready_future(channel).result(timeout=min(2, remaining))
             except Exception:
                 error_count += 1
             finally:

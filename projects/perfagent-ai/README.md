@@ -2,7 +2,7 @@
 
 From API contract to performance report using deterministic analysis and agent-ready workflows.
 
-PerfAgent AI is a CLI-first performance evaluation framework for microservices. It accepts an API contract and SLOs, generates synthetic test data and a k6 script, runs the load test, extracts performance evidence, classifies likely bottlenecks, and writes Markdown/HTML reports.
+PerfAgent AI is a CLI-first performance evaluation framework for microservices. It accepts an API contract and SLOs, generates synthetic test data and load-test artifacts, runs the selected test engine, extracts performance evidence, reasons across aligned time-series metrics, classifies likely bottlenecks, and writes Markdown/HTML reports.
 
 The design principle is:
 
@@ -11,7 +11,7 @@ Code calculates the evidence.
 LLM explains the evidence.
 ```
 
-The current MVP supports HTTP/OpenAPI end to end. Containerized demo targets for HTTP, WebSocket, and gRPC are included so the framework can be extended protocol by protocol.
+The current MVP supports HTTP/OpenAPI end to end and includes first-class generated harnesses for gRPC, WebSocket, and UI/browser demo runs. k6 remains the primary HTTP engine; Locust and JMeter artifacts are generated for external execution/import.
 
 ## What Works Now
 
@@ -22,11 +22,14 @@ The current MVP supports HTTP/OpenAPI end to end. Containerized demo targets for
 - Run k6 natively, or fall back to `grafana/k6:latest` through Docker when native k6 is unavailable
 - Capture k6 summary output and execution logs
 - Generate aligned time-series CSV scaffold
+- Analyze each time-series metric independently and correlate load, latency, errors, infra, browser, and dependency metrics
+- Produce an auditable bounded ReAct-style reasoning trace from deterministic metric-tool observations
 - Extract p95, p99, RPS, error rate, request count, first SLO breach, and release decision
 - Classify bottlenecks using deterministic rules
 - Generate `report.md`, `report.html`, `summary.json`, `features.json`, and `metric_contract.yaml`
-- Generate a self-contained interactive `report.html` with KPI cards, capacity/breakpoint chart, phase filtering, and a sortable time-series table
+- Generate a self-contained interactive `report.html` with KPI cards, capacity/breakpoint chart, autonomous reasoning trace, phase filtering, and a sortable time-series table
 - Run the framework and demo services with Docker Compose
+- Optionally run the evaluation through a LangGraph wrapper with `--workflow langgraph`
 
 ## Repository Layout
 
@@ -189,9 +192,9 @@ Protocol demo targets:
 | Protocol | Compose service | Port | PerfAgent support |
 | --- | --- | ---: | --- |
 | HTTP/OpenAPI | `demo-http-payments` | `8080` | End-to-end now |
-| WebSocket | `demo-websocket-payments` | `8081` | Demo target included; generator support next |
-| gRPC | `demo-grpc-payments` | `8082` | Demo target included; generator support next |
-| UI/Browser | `demo-ui-checkout` | `8083` | Demo target included; browser test support next |
+| WebSocket | `demo-websocket-payments` | `8081` | Generated scenario sequence harness and direct execution |
+| gRPC | `demo-grpc-payments` | `8082` | Generated proto/stub invocation harness and direct execution |
+| UI/Browser | `demo-ui-checkout` | `8083` | Generated browser journey harness with Web Vitals-style metrics |
 
 More details: [docs/demo-applications.md](docs/demo-applications.md).
 
@@ -201,9 +204,11 @@ New extension surfaces:
 
 - `--engine ui` / `--engine browser` generates and executes a Playwright-style browser journey harness.
 - `distributed plan` writes a containerized distributed execution plan.
+- `distributed merge` combines worker summaries into a merged summary and aligned time-series.
 - `storage dashboard` renders a cross-run trend dashboard from the run store.
-- `regression index` and `regression similar` provide pgvector-compatible semantic retrieval scaffolding.
-- `mcp` exposes a minimal stdio MCP-style tool interface for agents.
+- `regression index` and `regression similar` combine deterministic SQL history with optional pgvector retrieval.
+- `mcp` exposes stdio MCP-style tools, including `evaluate_service`.
+- `--workflow langgraph` runs the evaluation through the optional LangGraph wrapper.
 
 Run the gRPC demo tests:
 
@@ -262,6 +267,10 @@ Capacity and profiling guide: [docs/capacity-and-profiling.md](docs/capacity-and
 Prometheus integration guide: [docs/prometheus-integration.md](docs/prometheus-integration.md).
 
 Dependency analysis guide: [docs/dependency-analysis.md](docs/dependency-analysis.md).
+
+Performance validation questionnaire: [docs/performance-validation-questionnaire.md](docs/performance-validation-questionnaire.md).
+
+Profiling and flame graph backlog: [docs/profiling-flamegraph-backlog.md](docs/profiling-flamegraph-backlog.md).
 
 Production traffic profile guide: [docs/production-traffic-profile.md](docs/production-traffic-profile.md).
 
@@ -433,9 +442,9 @@ Useful links:
 
 Near-term:
 
-- Add protocol-aware generators for WebSocket and gRPC
-- Add Prometheus query support and real time-series alignment
-- Add LangGraph workflow wrapper around the existing agent modules
+- Split the LangGraph wrapper into finer-grained nodes for each agent stage
+- Deepen Prometheus query support and real service/dependency time-series alignment
+- Add richer browser and protocol-specific metrics
 - Add OpenTelemetry Demo adapter
 
 Later:

@@ -70,13 +70,19 @@ def protocol_result_to_summary(result: Any, *, elapsed_seconds: float) -> dict[s
     requests = sum(int(row.get("requests", 0) or 0) for row in rows if isinstance(row, dict))
     errors = sum(int(row.get("errors", 0) or 0) for row in rows if isinstance(row, dict))
     latencies: list[float] = []
+    browser_metrics: list[dict[str, Any]] = []
     for row in rows:
         if isinstance(row, dict):
             latencies.extend(float(value) for value in row.get("latencies_ms", []) if _is_number(value))
+            raw_browser_metrics = row.get("browser_metrics", [])
+            if isinstance(raw_browser_metrics, dict):
+                browser_metrics.append(raw_browser_metrics)
+            else:
+                browser_metrics.extend(item for item in raw_browser_metrics if isinstance(item, dict))
     p95 = _percentile(latencies, 95)
     p99 = _percentile(latencies, 99)
     failed_rate = errors / requests if requests else 0.0
-    return {
+    summary = {
         "metrics": {
             "http_reqs": {"count": requests, "rate": requests / elapsed_seconds},
             "http_req_duration": {"avg": sum(latencies) / len(latencies) if latencies else 0, "p(95)": p95, "p(99)": p99},
@@ -85,21 +91,25 @@ def protocol_result_to_summary(result: Any, *, elapsed_seconds: float) -> dict[s
             "iterations": {"count": requests},
         }
     }
+    if browser_metrics:
+        summary["browser_metrics"] = _average_browser_metrics(browser_metrics)
+    return summary
 
 
 def protocol_summary_to_aligned(summary: dict[str, Any], *, timestamp: str) -> list[dict[str, Any]]:
     metrics = summary.get("metrics", {})
-    return [
-        {
-            "timestamp": timestamp,
-            "phase": "protocol",
-            "rps": float(metrics.get("http_reqs", {}).get("rate", 0) or 0),
-            "p95_latency_ms": float(metrics.get("http_req_duration", {}).get("p(95)", 0) or 0),
-            "p99_latency_ms": float(metrics.get("http_req_duration", {}).get("p(99)", 0) or 0),
-            "error_rate_percent": float(metrics.get("http_req_failed", {}).get("rate", 0) or 0) * 100,
-            "virtual_users": 0,
-        }
-    ]
+    row = {
+        "timestamp": timestamp,
+        "phase": "protocol",
+        "rps": float(metrics.get("http_reqs", {}).get("rate", 0) or 0),
+        "p95_latency_ms": float(metrics.get("http_req_duration", {}).get("p(95)", 0) or 0),
+        "p99_latency_ms": float(metrics.get("http_req_duration", {}).get("p(99)", 0) or 0),
+        "error_rate_percent": float(metrics.get("http_req_failed", {}).get("rate", 0) or 0) * 100,
+        "virtual_users": 0,
+    }
+    for key, value in summary.get("browser_metrics", {}).items():
+        row[f"browser_{key}"] = value
+    return [row]
 
 
 def duration_to_seconds(value: str) -> int:
@@ -145,3 +155,12 @@ def _truncate(value: str, limit: int = 20000) -> str:
     if len(value) <= limit:
         return value
     return value[:limit] + f"\n... truncated {len(value) - limit} characters ..."
+
+
+def _average_browser_metrics(items: list[dict[str, Any]]) -> dict[str, float]:
+    keys = sorted({key for item in items for key in item.keys() if _is_number(item.get(key))})
+    averaged: dict[str, float] = {}
+    for key in keys:
+        values = [float(item[key]) for item in items if _is_number(item.get(key))]
+        averaged[key] = round(sum(values) / len(values), 4) if values else 0.0
+    return averaged

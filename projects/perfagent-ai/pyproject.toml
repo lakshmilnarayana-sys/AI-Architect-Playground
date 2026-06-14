@@ -26,6 +26,9 @@ postgres = [
 browser = [
   "playwright>=1.45",
 ]
+graph = [
+  "langgraph>=0.2.0",
+]
 
 [project.scripts]
 perfagent = "perfagent.cli:main"

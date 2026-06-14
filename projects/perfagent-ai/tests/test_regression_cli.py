@@ -54,3 +54,38 @@ def test_regression_compare_command_detects_regression(tmp_path):
     assert result.exit_code == 2
     assert "Regression detected: True" in result.output
     assert output_json.exists()
+
+
+def test_regression_similar_command_uses_sql_history_without_pgvector(tmp_path):
+    db_path = tmp_path / "perfagent.db"
+    store = RunStore(db_path)
+    store.record_run(
+        {
+            "run_id": "warn-run",
+            "service_name": "payments-api",
+            "release_decision": "WARN",
+            "features": {"max_p95_latency_ms": 900, "max_error_rate_percent": 3.2, "breaking_point_rps": 500},
+            "report_html_path": "warn.html",
+        }
+    )
+    output_json = tmp_path / "similar.json"
+
+    result = runner.invoke(
+        app,
+        [
+            "regression",
+            "similar",
+            "--query",
+            "p95 latency regression during stress",
+            "--db-path",
+            str(db_path),
+            "--service-name",
+            "payments-api",
+            "--output-json",
+            str(output_json),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "warn-run" in result.output
+    assert output_json.exists()

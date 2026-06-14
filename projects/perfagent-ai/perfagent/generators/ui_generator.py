@@ -35,6 +35,7 @@ def run(duration_seconds: int, concurrency: int) -> list[dict]:
     requests = 0
     errors = 0
     latencies_ms = []
+    browser_metrics = []
     try:
         from playwright.sync_api import sync_playwright
     except Exception as exc:
@@ -53,6 +54,21 @@ def run(duration_seconds: int, concurrency: int) -> list[dict]:
                     matches = page.locator(ACTION_SELECTOR)
                     if matches.count() > 0:
                         matches.first.click(timeout=5000)
+                browser_metrics.append(page.evaluate("""() => {{
+                    const nav = performance.getEntriesByType('navigation')[0];
+                    const paint = performance.getEntriesByType('paint');
+                    const metric = name => {{
+                      const item = paint.find(entry => entry.name === name);
+                      return item ? item.startTime : 0;
+                    }};
+                    return {{
+                      dom_content_loaded_ms: nav ? nav.domContentLoadedEventEnd : 0,
+                      load_event_ms: nav ? nav.loadEventEnd : 0,
+                      first_paint_ms: metric('first-paint'),
+                      first_contentful_paint_ms: metric('first-contentful-paint'),
+                      transfer_size_bytes: nav ? nav.transferSize : 0
+                    }};
+                }}"""))
                 requests += 1
             except Exception:
                 errors += 1
@@ -61,7 +77,7 @@ def run(duration_seconds: int, concurrency: int) -> list[dict]:
                 if len(latencies_ms) < MAX_RETAINED_LATENCIES:
                     latencies_ms.append((time.perf_counter() - start) * 1000)
         browser.close()
-    return [{{"service": SERVICE_NAME, "requests": requests, "errors": errors, "latencies_ms": latencies_ms, "concurrency": concurrency}}]
+    return [{{"service": SERVICE_NAME, "requests": requests, "errors": errors, "latencies_ms": latencies_ms, "concurrency": concurrency, "browser_metrics": browser_metrics}}]
 
 
 if __name__ == "__main__":

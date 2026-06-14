@@ -7,7 +7,9 @@ import typer
 from perfagent.core.artifacts import read_json
 from perfagent.config import load_run_config, resolve_evaluate_options
 from perfagent.collectors.prometheus_collector import load_prometheus_query_config, validate_prometheus_queries
+from perfagent.collectors.distributed_results import write_merged_worker_results
 from perfagent.core.artifacts import write_json
+from perfagent.analyzers.similar_regressions import find_similar_regressions
 from perfagent.executors.distributed import build_distributed_plan
 from perfagent.generators.trend_dashboard import render_trend_dashboard
 from perfagent.mcp_server import serve_stdio
@@ -60,6 +62,7 @@ def evaluate(
         help="YAML/JSON file containing custom PromQL query templates.",
     ),
     profile: list[Path] | None = typer.Option(None, "--profile", help="Path to an existing profiling artifact to attach."),
+    workflow_engine: str = typer.Option("deterministic", "--workflow", help="Workflow engine: deterministic or langgraph."),
     skip_run: bool = typer.Option(False, "--skip-run"),
     fail_on: str = typer.Option("", "--fail-on", help="Comma-separated release decisions that should fail the command."),
 ) -> None:
@@ -94,30 +97,38 @@ def evaluate(
     if missing:
         raise typer.BadParameter(f"Missing required evaluate options: {', '.join(missing)}")
     typer.echo("Creating evaluation run...")
-    state = evaluate_service(
-        service_name=options["service_name"],
-        openapi_path=Path(options["openapi_path"]),
-        target_url=options["target_url"],
-        runtime=options["runtime"],
-        slo_p95_ms=int(options["slo_p95_ms"]),
-        slo_error_rate_percent=float(options["slo_error_rate_percent"]),
-        duration=options["duration"],
-        output_dir=Path(options["output_dir"]),
-        engine=options["engine"],
-        mode=options["mode"],
-        service_resources=options.get("service_resources"),
-        dependencies=options.get("dependencies", []),
-        llm=options.get("llm"),
-        traffic_profile_config=options.get("traffic_profile"),
-        observability_config=options.get("observability"),
-        protocol_config=options.get("protocols"),
-        storage=options.get("storage"),
-        prometheus_url=options.get("prometheus_url"),
-        prometheus_service_label=options.get("prometheus_service_label"),
-        prometheus_query_config_path=Path(options["prometheus_query_config_path"]) if options.get("prometheus_query_config_path") else None,
-        profile_paths=profile,
-        skip_run=skip_run,
-    )
+    evaluate_kwargs = {
+        "service_name": options["service_name"],
+        "openapi_path": Path(options["openapi_path"]),
+        "target_url": options["target_url"],
+        "runtime": options["runtime"],
+        "slo_p95_ms": int(options["slo_p95_ms"]),
+        "slo_error_rate_percent": float(options["slo_error_rate_percent"]),
+        "duration": options["duration"],
+        "output_dir": Path(options["output_dir"]),
+        "engine": options["engine"],
+        "mode": options["mode"],
+        "service_resources": options.get("service_resources"),
+        "dependencies": options.get("dependencies", []),
+        "llm": options.get("llm"),
+        "traffic_profile_config": options.get("traffic_profile"),
+        "observability_config": options.get("observability"),
+        "protocol_config": options.get("protocols"),
+        "storage": options.get("storage"),
+        "prometheus_url": options.get("prometheus_url"),
+        "prometheus_service_label": options.get("prometheus_service_label"),
+        "prometheus_query_config_path": Path(options["prometheus_query_config_path"]) if options.get("prometheus_query_config_path") else None,
+        "profile_paths": profile,
+        "skip_run": skip_run,
+    }
+    if workflow_engine.lower() == "langgraph":
+        from perfagent.workflow_graph import run_langgraph_evaluation
+
+        state = run_langgraph_evaluation(**evaluate_kwargs)
+    elif workflow_engine.lower() == "deterministic":
+        state = evaluate_service(**evaluate_kwargs)
+    else:
+        raise typer.BadParameter("--workflow must be deterministic or langgraph")
     typer.echo("Run completed.")
     typer.echo(f"Release decision: {state['release_decision']}")
     typer.echo(f"Stable RPS: {state['features'].get('stable_rps', 0)}")
@@ -308,6 +319,21 @@ def distributed_plan(
         typer.echo(command)
 
 
+@distributed_app.command("merge")
+def distributed_merge(
+    worker_summary: list[Path] = typer.Option(..., "--worker-summary", exists=True, readable=True),
+    output_dir: Path = typer.Option(Path("./outputs/distributed-merged"), "--output-dir"),
+) -> None:
+    result = write_merged_worker_results(
+        worker_summary,
+        summary_path=output_dir / "raw" / "merged_summary.json",
+        aligned_path=output_dir / "processed" / "aligned_timeseries.csv",
+    )
+    typer.echo(f"Merged {result['workers']} worker summaries.")
+    typer.echo(f"Summary: {result['summary_path']}")
+    typer.echo(f"Aligned time-series: {result['aligned_path']}")
+
+
 @regression_app.command("compare")
 def regression_compare(
     run_dir: Path = typer.Option(..., "--run-dir", exists=True, file_okay=False),
@@ -360,11 +386,30 @@ def regression_index(
 @regression_app.command("similar")
 def regression_similar(
     query: str = typer.Option(..., "--query"),
-    dsn: str = typer.Option(..., "--postgres-dsn"),
+    dsn: str | None = typer.Option(None, "--postgres-dsn"),
+    db_path: Path = typer.Option(Path("./outputs/perfagent.db"), "--db-path"),
+    service_name: str | None = typer.Option(None, "--service-name"),
     limit: int = typer.Option(5, "--limit"),
+    output_json: Path | None = typer.Option(None, "--output-json"),
 ) -> None:
-    for item in PgVectorStore(dsn).similar(query, limit=limit):
-        typer.echo(f"{item['run_id']} {item['chunk_type']}#{item['chunk_index']} distance={item['distance']}")
+    vector_matches = PgVectorStore(dsn).similar(query, limit=limit) if dsn else []
+    result = find_similar_regressions(
+        query=query,
+        runs=RunStore(db_path).list_runs(service_name),
+        vector_matches=vector_matches,
+        service_name=service_name,
+        limit=limit,
+    )
+    if output_json:
+        write_json(output_json, result)
+    typer.echo(result["summary"])
+    for item in result["sql_candidates"]:
+        typer.echo(
+            f"SQL {item['run_id']} {item['release_decision']} "
+            f"p95={item['max_p95_latency_ms']} error={item['max_error_rate_percent']} breakpoint={item['breaking_point_rps']}"
+        )
+    for item in result["vector_matches"]:
+        typer.echo(f"VECTOR {item['run_id']} {item['chunk_type']}#{item['chunk_index']} distance={item['distance']}")
 
 
 def main() -> None:

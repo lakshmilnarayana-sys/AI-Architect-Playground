@@ -4,8 +4,8 @@ from perfagent.collectors.protocol_collectors import duration_to_seconds, protoc
 def test_protocol_result_to_summary_normalizes_websocket_rows():
     summary = protocol_result_to_summary(
         [
-            {"requests": 2, "errors": 1, "latencies_ms": [10, 20]},
-            {"requests": 1, "errors": 0, "latencies_ms": [30]},
+            {"requests": 2, "errors": 1, "latencies_ms": [10, 20], "browser_metrics": {"first_contentful_paint_ms": 80}},
+            {"requests": 1, "errors": 0, "latencies_ms": [30], "browser_metrics": {"first_contentful_paint_ms": 100}},
         ],
         elapsed_seconds=3,
     )
@@ -14,6 +14,7 @@ def test_protocol_result_to_summary_normalizes_websocket_rows():
     assert summary["metrics"]["http_reqs"]["rate"] == 1
     assert summary["metrics"]["http_req_failed"]["rate"] == 1 / 3
     assert summary["metrics"]["http_req_duration"]["p(95)"] == 30
+    assert summary["browser_metrics"]["first_contentful_paint_ms"] == 90
 
 
 def test_run_protocol_script_executes_json_harness(tmp_path):

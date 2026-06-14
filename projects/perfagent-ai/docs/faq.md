@@ -18,6 +18,7 @@ LLM explains the evidence.
 - Tests: pytest
 - Load testing: k6
 - Generated test formats: k6, Locust, JMeter
+- Optional orchestration: LangGraph wrapper through `perfagent-ai[graph]`
 - API parsing: OpenAPI YAML/JSON with PyYAML
 - Reports: Markdown and self-contained interactive HTML
 - Containers: Docker and Docker Compose
@@ -26,6 +27,7 @@ LLM explains the evidence.
 - WebSocket demo: Python `websockets`
 - Storage: filesystem artifacts
 - Metrics: k6 summary JSON and k6 JSONL time-series
+- Analysis: deterministic feature extraction, solo time-series analysis, cross-metric correlation, bounded ReAct-style reasoning trace
 - CI examples: GitHub Actions, GitLab CI, Jenkins
 
 ## What is implemented today?
@@ -38,10 +40,14 @@ Implemented:
 - k6 script generation and execution
 - k6 JSONL time-series capture
 - 10-second aligned time buckets
+- solo metric analysis and cross-metric correlation
+- bounded ReAct-style reasoning over deterministic metric observations
 - Capacity and breakpoint extraction
 - Bottleneck classification rules
 - Interactive HTML report generation
 - Locust and JMeter artifact generation
+- gRPC/WebSocket/UI generated harness execution
+- optional LangGraph workflow wrapper
 - Docker Compose demo stack
 - HTTP, gRPC, WebSocket, and UI demo apps
 - CI examples and Make commands
@@ -49,11 +55,16 @@ Implemented:
 
 Scaffolded but not fully active:
 
-- LangGraph workflow wrapper
 - LLM narrative analysis
 - Prometheus saturation metrics
 - Profile parsing and correlation
-- gRPC/WebSocket/UI performance evaluators
+- distributed worker orchestration beyond merge
+
+## Can I see flame graphs?
+
+Not as built-in rendered flame graphs yet. PerfAgent can attach profiling files with `--profile`, copy them into `raw/profiles/`, and link them from the report. Built-in profiler capture, SVG flame graph generation, Speedscope rendering, and top-function parsing are tracked in [Profiling And Flame Graph Backlog](profiling-flamegraph-backlog.md).
+
+Today you can attach existing artifacts such as Go `.pprof`, Java `.jfr`, py-spy Speedscope JSON, Clinic.js output, or collapsed stacks. The release decision still comes from SLO/time-series math, not from profile files.
 
 ## How do I run the project?
 

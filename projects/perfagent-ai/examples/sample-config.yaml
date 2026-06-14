@@ -13,7 +13,11 @@ protocols:
   grpc:
     proto_path: ./examples/demo-apps/grpc-payments-api/protos/payments.proto
     service_full_name: payments.Payments
+    pb2_module: payments_pb2
+    pb2_grpc_module: payments_pb2_grpc
+    stub_class: PaymentsStub
     method: CreatePayment
+    request_class: CreatePaymentRequest
     request:
       customer_id: cust_grpc_1001
       amount: 49.99
@@ -24,6 +28,21 @@ protocols:
       customerId: cust_ws_1001
       amount: 49.99
       currency: GBP
+    sequence:
+      - message:
+          type: authorizePayment
+          customerId: cust_ws_1001
+          amount: 49.99
+          currency: GBP
+        expect_json_field: status
+        think_time_ms: 100
+      - message:
+          type: authorizePayment
+          customerId: cust_ws_1002
+          amount: 19.99
+          currency: USD
+        expect_json_field: paymentId
+        think_time_ms: 50
   ui:
     path: /
     wait_selector: body

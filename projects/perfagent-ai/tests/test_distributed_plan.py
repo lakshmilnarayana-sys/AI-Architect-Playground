@@ -27,3 +27,20 @@ def test_distributed_plan_command_writes_json(tmp_path):
 
     assert result.exit_code == 0, result.output
     assert read_json(output)["workers"] == 2
+
+
+def test_distributed_merge_command_writes_merged_artifacts(tmp_path):
+    worker = tmp_path / "worker.json"
+    output_dir = tmp_path / "merged"
+    worker.write_text(
+        """{"metrics":{"http_reqs":{"count":10,"rate":5},"http_req_duration":{"percentiles":{"p(95)":100,"p(99)":150}},"http_req_failed":{"rate":0}}}"""
+    )
+
+    result = runner.invoke(
+        app,
+        ["distributed", "merge", "--worker-summary", str(worker), "--output-dir", str(output_dir)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (output_dir / "raw" / "merged_summary.json").exists()
+    assert (output_dir / "processed" / "aligned_timeseries.csv").exists()

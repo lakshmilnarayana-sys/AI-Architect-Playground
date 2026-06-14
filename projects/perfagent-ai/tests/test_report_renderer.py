@@ -35,6 +35,19 @@ def test_report_renderer_includes_capacity_and_profiling_sections(tmp_path):
             {"timestamp": "2026-06-13T10:00:00Z", "phase": "baseline", "rps": 200, "p95_latency_ms": 260, "p99_latency_ms": 320, "error_rate_percent": 0.2, "virtual_users": 25},
             {"timestamp": "2026-06-13T10:00:10Z", "phase": "stress", "rps": 500, "p95_latency_ms": 780, "p99_latency_ms": 1100, "error_rate_percent": 2.5, "virtual_users": 100},
         ],
+        timeseries_analysis={
+            "row_count": 2,
+            "metrics_available": ["rps", "p95_latency_ms", "error_rate_percent"],
+            "missing_core_metrics": [],
+            "slo_breaches": [{"timestamp": "2026-06-13T10:00:10Z", "phase": "stress"}],
+            "correlations": [{"metric": "rps", "target": "p95_latency_ms", "correlation": 0.99, "strength": "strong"}],
+            "recovery": {"status": "unknown"},
+        },
+        react_reasoning={
+            "mode": "bounded_react",
+            "trace": [{"step": 1, "thought": "inspect breach", "action": "inspect_slo_breaches", "observation": {"evidence": ["first breach in stress"]}}],
+            "conclusion": {"classification": "load_induced_breakpoint", "confidence": "medium", "summary": "Load induced breakpoint.", "evidence": ["first breach in stress"]},
+        },
     )
 
     report = paths["report_md_path"].read_text()
@@ -44,6 +57,8 @@ def test_report_renderer_includes_capacity_and_profiling_sections(tmp_path):
     assert "raw/profiles/cpu.pprof" in report
     assert "CPU allocation: 500m" in report
     assert "Image tag: payments-api:v1.2.3" in report
+    assert "Autonomous Time-Series Reasoning" in report
+    assert "load_induced_breakpoint" in report
 
     html = paths["report_html_path"].read_text()
     assert 'id="perfagent-data"' in html
@@ -53,7 +68,10 @@ def test_report_renderer_includes_capacity_and_profiling_sections(tmp_path):
     assert 'id="service-resources"' in html
     assert 'id="chart-tooltip"' in html
     assert 'id="theme-toggle"' in html
+    assert 'id="react-reasoning"' in html
+    assert 'id="timeseries-analysis"' in html
     assert "function setTheme" in html
+    assert "function renderReactReasoning" in html
     assert "X-axis: time buckets" in html
     assert "Left Y-axis: p95 latency" in html
     assert "Right Y-axis: throughput" in html
