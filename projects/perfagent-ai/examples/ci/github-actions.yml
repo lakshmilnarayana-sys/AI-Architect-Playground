@@ -1,0 +1,41 @@
+name: performance-evaluation
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  perfagent:
+    runs-on: ubuntu-latest
+    services:
+      sample-payments-api:
+        image: ghcr.io/YOUR_ORG/sample-payments-api:latest
+        ports:
+          - 8080:8080
+        options: >-
+          --health-cmd "wget -qO- http://localhost:8080/health || exit 1"
+          --health-interval 5s
+          --health-timeout 2s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run PerfAgent evaluation
+        run: |
+          docker compose build perfagent
+          docker compose run --rm perfagent evaluate \
+            --service-name sample-payments-api \
+            --openapi ./examples/sample-payments-api/openapi.yaml \
+            --target-url http://host.docker.internal:8080 \
+            --runtime python \
+            --slo-p95-ms 500 \
+            --slo-error-rate 1 \
+            --duration 10s \
+            --output ./outputs/sample-payments-api
+
+      - name: Upload performance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: perfagent-report
+          path: outputs/sample-payments-api

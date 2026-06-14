@@ -1,0 +1,24 @@
+performance:evaluate:
+  image: docker:27
+  services:
+    - docker:27-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  stage: test
+  script:
+    - docker compose build perfagent demo-http-payments
+    - docker compose --profile demo up -d demo-http-payments
+    - docker compose run --rm perfagent evaluate
+      --service-name sample-payments-api
+      --openapi ./examples/sample-payments-api/openapi.yaml
+      --target-url http://demo-http-payments:8080
+      --runtime python
+      --slo-p95-ms 500
+      --slo-error-rate 1
+      --duration 10s
+      --output ./outputs/sample-payments-api
+  artifacts:
+    when: always
+    paths:
+      - outputs/sample-payments-api

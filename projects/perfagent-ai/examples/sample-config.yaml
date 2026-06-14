@@ -1,0 +1,44 @@
+service_name: sample-payments-api
+runtime: python
+target_url: http://localhost:8080
+openapi_path: ./examples/sample-payments-api/openapi.yaml
+slo:
+  p95_latency_ms: 500
+  error_rate_percent: 1
+test:
+  duration: 10s
+  engine: k6
+  mode: standard
+service:
+  cpu_allocation: 500m
+  memory_allocation: 512Mi
+  disk_allocation: 2Gi
+  image_tag: sample-payments-api:local
+prometheus:
+  enabled: false
+  url: http://localhost:9090
+  service_label: sample-payments-api
+  query_config: ./examples/prometheus-queries.yaml
+dependencies:
+  postgres:
+    type: postgres
+    role: downstream
+    criticality: high
+    metrics:
+      p95_latency_ms: 'pg_query_p95_latency_ms{service="{service}"}'
+      connection_pool_utilization_percent: 'pg_connection_pool_utilization_percent{service="{service}"}'
+  redis:
+    type: redis
+    role: downstream
+    criticality: medium
+    metrics:
+      p95_latency_ms: 'redis_command_p95_latency_ms{service="{service}"}'
+      memory_utilization_percent: 'redis_memory_utilization_percent{service="{service}"}'
+  kafka:
+    type: kafka
+    role: downstream
+    criticality: high
+    metrics:
+      consumer_lag: 'kafka_consumergroup_lag{service="{service}"}'
+output:
+  directory: ./outputs/sample-payments-api

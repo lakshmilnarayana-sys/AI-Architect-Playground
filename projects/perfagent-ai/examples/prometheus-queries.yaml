@@ -1,0 +1,7 @@
+queries:
+  cpu_percent: 'sum(rate(container_cpu_usage_seconds_total{namespace="payments", pod=~".*{service}.*", container!="POD", container!=""}[1m])) * 100'
+  memory_mb: 'sum(container_memory_working_set_bytes{namespace="payments", pod=~".*{service}.*", container!="POD", container!=""}) / 1024 / 1024'
+  cpu_throttling_percent: 'sum(rate(container_cpu_cfs_throttled_periods_total{namespace="payments", pod=~".*{service}.*"}[1m])) / sum(rate(container_cpu_cfs_periods_total{namespace="payments", pod=~".*{service}.*"}[1m])) * 100'
+  pod_restarts: 'sum(kube_pod_container_status_restarts_total{namespace="payments", pod=~".*{service}.*"})'
+  service_request_rate: 'sum(rate(http_server_requests_seconds_count{service="{service}"}[1m]))'
+  service_error_rate_percent: 'sum(rate(http_server_requests_seconds_count{service="{service}", status=~"5.."}[1m])) / sum(rate(http_server_requests_seconds_count{service="{service}"}[1m])) * 100'

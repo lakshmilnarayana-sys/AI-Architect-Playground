@@ -1,0 +1,53 @@
+openapi: 3.0.3
+info:
+  title: Sample Payments API
+  version: 1.0.0
+paths:
+  /health:
+    get:
+      operationId: health
+      responses:
+        "200":
+          description: OK
+  /v1/payments:
+    post:
+      operationId: createPayment
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - customerId
+                - amount
+                - currency
+              properties:
+                customerId:
+                  type: string
+                amount:
+                  type: number
+                currency:
+                  type: string
+                  enum: [GBP, USD, EUR]
+      responses:
+        "201":
+          description: Created
+  /v1/payments/{paymentId}:
+    get:
+      operationId: getPayment
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK

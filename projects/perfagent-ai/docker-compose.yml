@@ -1,0 +1,139 @@
+services:
+  perfagent:
+    build:
+      context: .
+    image: perfagent-ai:local
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    entrypoint: ["perfagent"]
+    command: ["--help"]
+
+  demo-http-payments:
+    profiles: ["demo"]
+    build:
+      context: ./examples/sample-payments-api
+    image: perfagent-demo-http-payments:local
+    environment:
+      DEMO_BASE_LATENCY_MS: "20"
+      DEMO_JITTER_MS: "15"
+      DEMO_ERROR_RATE: "0"
+    ports:
+      - "8080:8080"
+
+  demo-websocket-payments:
+    profiles: ["demo"]
+    build:
+      context: ./examples/demo-apps/websocket-payments-api
+    image: perfagent-demo-websocket-payments:local
+    environment:
+      DEMO_BASE_LATENCY_MS: "10"
+      DEMO_JITTER_MS: "10"
+    ports:
+      - "8081:8081"
+
+  demo-grpc-payments:
+    profiles: ["demo"]
+    build:
+      context: ./examples/demo-apps/grpc-payments-api
+    image: perfagent-demo-grpc-payments:local
+    environment:
+      DEMO_BASE_LATENCY_MS: "15"
+      DEMO_JITTER_MS: "10"
+    ports:
+      - "8082:8082"
+
+  demo-ui-checkout:
+    profiles: ["demo"]
+    build:
+      context: ./examples/demo-apps/ui-checkout-app
+    image: perfagent-demo-ui-checkout:local
+    environment:
+      DEMO_BASE_LATENCY_MS: "30"
+      DEMO_JITTER_MS: "20"
+    ports:
+      - "8083:8083"
+
+  locust:
+    profiles: ["tools"]
+    image: locustio/locust:latest
+    working_dir: /mnt/locust
+    volumes:
+      - .:/mnt/locust
+    command:
+      - -f
+      - outputs/${SERVICE_NAME:-sample-payments-api}/generated/locustfile.py
+      - --host
+      - http://demo-http-payments:8080
+      - --headless
+      - -u
+      - "25"
+      - -r
+      - "5"
+      - --run-time
+      - 1m
+      - --csv
+      - outputs/${SERVICE_NAME:-sample-payments-api}/raw/locust
+      - --html
+      - outputs/${SERVICE_NAME:-sample-payments-api}/reports/locust-native-report.html
+
+  jmeter:
+    profiles: ["tools"]
+    image: justb4/jmeter:latest
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    command:
+      - -n
+      - -t
+      - outputs/${SERVICE_NAME:-sample-payments-api}/generated/jmeter_test_plan.jmx
+      - -l
+      - outputs/${SERVICE_NAME:-sample-payments-api}/raw/jmeter_results.jtl
+
+  demo-postgres:
+    profiles: ["dependencies"]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: perfagent
+      POSTGRES_USER: perfagent
+      POSTGRES_PASSWORD: perfagent
+    ports:
+      - "5432:5432"
+
+  demo-redis:
+    profiles: ["dependencies"]
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  demo-kafka:
+    profiles: ["dependencies"]
+    image: apache/kafka:3.9.0
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@demo-kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+    ports:
+      - "9092:9092"
+
+  demo-cassandra:
+    profiles: ["dependencies"]
+    image: cassandra:5
+    environment:
+      CASSANDRA_CLUSTER_NAME: perfagent
+    ports:
+      - "9042:9042"
+
+  demo-elasticsearch:
+    profiles: ["dependencies"]
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "9200:9200"

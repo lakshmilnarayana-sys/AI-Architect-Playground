@@ -1,0 +1,56 @@
+openapi: 3.0.3
+info:
+  title: Payments API
+  version: 1.0.0
+paths:
+  /v1/payments:
+    post:
+      operationId: createPayment
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - customerId
+                - amount
+                - currency
+              properties:
+                customerId:
+                  type: string
+                amount:
+                  type: number
+                currency:
+                  type: string
+                  enum:
+                    - GBP
+                    - USD
+                savePaymentMethod:
+                  type: boolean
+      responses:
+        "201":
+          description: Created
+  /v1/payments/{paymentId}:
+    get:
+      operationId: getPayment
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: includeEvents
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: OK

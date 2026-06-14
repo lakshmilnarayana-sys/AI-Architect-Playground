@@ -1,0 +1,40 @@
+pipeline {
+  agent any
+
+  stages {
+    stage('Build PerfAgent') {
+      steps {
+        sh 'docker compose build perfagent demo-http-payments'
+      }
+    }
+
+    stage('Start service under test') {
+      steps {
+        sh 'docker compose --profile demo up -d demo-http-payments'
+      }
+    }
+
+    stage('Evaluate performance') {
+      steps {
+        sh '''
+          docker compose run --rm perfagent evaluate \
+            --service-name sample-payments-api \
+            --openapi ./examples/sample-payments-api/openapi.yaml \
+            --target-url http://demo-http-payments:8080 \
+            --runtime python \
+            --slo-p95-ms 500 \
+            --slo-error-rate 1 \
+            --duration 10s \
+            --output ./outputs/sample-payments-api
+        '''
+      }
+    }
+  }
+
+  post {
+    always {
+      archiveArtifacts artifacts: 'outputs/sample-payments-api/**', allowEmptyArchive: true
+      sh 'docker compose --profile demo down || true'
+    }
+  }
+}
