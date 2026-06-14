@@ -21,6 +21,7 @@ def render_reports(
     profiling_artifacts: dict[str, Any] | None = None,
     service_resources: dict[str, Any] | None = None,
     dependency_analysis: dict[str, Any] | None = None,
+    protocol_analysis: dict[str, Any] | None = None,
     ai_analysis: dict[str, Any] | None = None,
     traffic_profile: dict[str, Any] | None = None,
     aligned_timeseries: list[dict[str, Any]] | None = None,
@@ -40,6 +41,7 @@ def render_reports(
         profiling_artifacts or {},
         service_resources or {},
         dependency_analysis or {"dependencies": [], "findings": []},
+        protocol_analysis or {"protocol_metrics": {}, "findings": [], "warnings": []},
         ai_analysis or {},
         traffic_profile or {},
         timeseries_analysis or {},
@@ -61,6 +63,7 @@ def render_reports(
             profiling_artifacts=profiling_artifacts or {},
             service_resources=service_resources or {},
             dependency_analysis=dependency_analysis or {"dependencies": [], "findings": []},
+            protocol_analysis=protocol_analysis or {"protocol_metrics": {}, "findings": [], "warnings": []},
             ai_analysis=ai_analysis or {},
             traffic_profile=traffic_profile or {},
             aligned_timeseries=aligned_timeseries or [],
@@ -78,6 +81,7 @@ def render_reports(
             "profiling_artifacts": profiling_artifacts or {},
             "service_resources": service_resources or {},
             "dependency_analysis": dependency_analysis or {"dependencies": [], "findings": []},
+            "protocol_analysis": protocol_analysis or {"protocol_metrics": {}, "findings": [], "warnings": []},
             "ai_analysis": ai_analysis or {},
             "traffic_profile": traffic_profile or {},
             "aligned_timeseries": aligned_timeseries or [],
@@ -99,6 +103,7 @@ def _markdown(
     profiling: dict[str, Any],
     service_resources: dict[str, Any],
     dependency_analysis: dict[str, Any],
+    protocol_analysis: dict[str, Any],
     ai_analysis: dict[str, Any],
     traffic_profile: dict[str, Any],
     timeseries_analysis: dict[str, Any],
@@ -112,6 +117,7 @@ def _markdown(
     profiles = _profile_lines(profiling)
     resources = _resource_lines(service_resources)
     dependencies = _dependency_lines(dependency_analysis)
+    protocols = _protocol_lines(protocol_analysis)
     ai = _ai_lines(ai_analysis)
     traffic = _traffic_profile_lines(traffic_profile)
     react = _react_lines(react_reasoning)
@@ -164,6 +170,10 @@ Max p95 latency was {features.get("max_p95_latency_ms", 0)} ms against an SLO of
 ## Dependency Analysis
 
 {dependencies}
+
+## Protocol Analysis
+
+{protocols}
 
 ## Autonomous Time-Series Reasoning
 
@@ -235,6 +245,22 @@ def _dependency_lines(dependency_analysis: dict[str, Any]) -> str:
             f"- {item.get('dependency')} {item.get('metric')}={item.get('value')} exceeded {item.get('threshold', 'n/a')}"
             for item in findings
         )
+    return "\n".join(lines)
+
+
+def _protocol_lines(protocol_analysis: dict[str, Any]) -> str:
+    metrics = protocol_analysis.get("protocol_metrics", {})
+    browser_metrics = protocol_analysis.get("browser_metrics", {})
+    findings = protocol_analysis.get("findings", [])
+    warnings = protocol_analysis.get("warnings", [])
+    if not metrics and not browser_metrics and not findings:
+        return "\n".join(f"- Warning: {item}" for item in warnings) or "- No protocol-native metrics available."
+    lines = [f"- {key}: {value}" for key, value in sorted(metrics.items())]
+    lines.extend(f"- browser_{key}: {value}" for key, value in sorted(browser_metrics.items()))
+    if findings:
+        lines.append("")
+        lines.append("Findings:")
+        lines.extend(f"- {item.get('type')}: {item.get('evidence')}" for item in findings)
     return "\n".join(lines)
 
 
@@ -325,6 +351,7 @@ def _interactive_html(
     profiling_artifacts: dict[str, Any],
     service_resources: dict[str, Any],
     dependency_analysis: dict[str, Any],
+    protocol_analysis: dict[str, Any],
     ai_analysis: dict[str, Any],
     traffic_profile: dict[str, Any],
     aligned_timeseries: list[dict[str, Any]],
@@ -342,6 +369,7 @@ def _interactive_html(
         "profiling": profiling_artifacts,
         "serviceResources": service_resources,
         "dependencyAnalysis": dependency_analysis,
+        "protocolAnalysis": protocol_analysis,
         "aiAnalysis": ai_analysis,
         "trafficProfile": traffic_profile,
         "timeseries": aligned_timeseries,
@@ -442,6 +470,10 @@ def _interactive_html(
     <section class="panel" style="margin-bottom:16px">
       <h2>Dependency Analysis</h2>
       <div id="dependency-analysis"></div>
+    </section>
+    <section class="panel" style="margin-bottom:16px">
+      <h2>Protocol Analysis</h2>
+      <div id="protocol-analysis"></div>
     </section>
     <section class="panel" style="margin-bottom:16px">
       <h2>Autonomous Time-Series Reasoning</h2>
@@ -576,6 +608,25 @@ def _interactive_html(
       const findingRows = findings.map(item => `<tr><td>${{fmt(item.dependency)}}</td><td>${{fmt(item.metric)}}</td><td>${{fmt(item.value)}}</td><td>${{fmt(item.threshold)}}</td></tr>`).join('');
       const findingsTable = findings.length ? `<h3>Findings</h3><table><thead><tr><th>Dependency</th><th>Metric</th><th>Observed</th><th>Threshold</th></tr></thead><tbody>${{findingRows}}</tbody></table>` : '<p>No dependency thresholds breached.</p>';
       document.getElementById('dependency-analysis').innerHTML = `<table><thead><tr><th>Name</th><th>Type</th><th>Role</th><th>Criticality</th></tr></thead><tbody>${{dependencyRows}}</tbody></table>${{findingsTable}}`;
+    }}
+
+    function renderProtocolAnalysis() {{
+      const analysis = data.protocolAnalysis || {{}};
+      const metrics = analysis.protocol_metrics || {{}};
+      const browserMetrics = analysis.browser_metrics || {{}};
+      const findings = analysis.findings || [];
+      const warnings = analysis.warnings || [];
+      const allMetrics = {{...metrics, ...Object.fromEntries(Object.entries(browserMetrics).map(([key, value]) => [`browser_${{key}}`, value]))}};
+      const metricRows = Object.entries(allMetrics).map(([key, value]) => `<tr><td>${{fmt(key)}}</td><td>${{fmt(typeof value === 'object' ? JSON.stringify(value) : value)}}</td></tr>`).join('');
+      const findingRows = findings.map(item => `<tr><td>${{fmt(item.type)}}</td><td>${{fmt(item.severity)}}</td><td>${{fmt(item.evidence)}}</td></tr>`).join('');
+      const warningRows = warnings.map(item => `<li>${{fmt(item)}}</li>`).join('');
+      document.getElementById('protocol-analysis').innerHTML = `
+        <h3>Protocol Metrics</h3>
+        <table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>${{metricRows || '<tr><td colspan="2">No protocol-native metrics available.</td></tr>'}}</tbody></table>
+        <h3>Protocol Findings</h3>
+        <table><thead><tr><th>Type</th><th>Severity</th><th>Evidence</th></tr></thead><tbody>${{findingRows || '<tr><td colspan="3">No protocol findings detected.</td></tr>'}}</tbody></table>
+        ${{warningRows ? `<h3>Warnings</h3><ul>${{warningRows}}</ul>` : ''}}
+      `;
     }}
 
     function renderReactReasoning() {{
@@ -768,6 +819,7 @@ def _interactive_html(
     renderKpis();
     renderServiceResources();
     renderDependencyAnalysis();
+    renderProtocolAnalysis();
     renderReactReasoning();
     renderTimeseriesAnalysis();
     renderAiAnalysis();

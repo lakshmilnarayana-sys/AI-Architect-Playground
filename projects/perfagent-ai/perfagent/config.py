@@ -25,6 +25,7 @@ def resolve_evaluate_options(config: dict[str, Any], cli_values: dict[str, Any])
     storage = config.get("storage", {}) or {}
     protocols = config.get("protocols", {}) or {}
     distributed = config.get("distributed", {}) or {}
+    profiling = config.get("profiling", {}) or {}
     dependencies = _normalize_dependencies(config.get("dependencies", []))
     prometheus_enabled = prometheus.get("enabled", bool(prometheus.get("url")))
     resolved = {
@@ -37,6 +38,7 @@ def resolve_evaluate_options(config: dict[str, Any], cli_values: dict[str, Any])
         "duration": test.get("duration", "10m"),
         "engine": test.get("engine", "k6"),
         "mode": test.get("mode", "standard"),
+        "capacity_probe_rps": test.get("capacity_probe_rps"),
         "output_dir": output.get("directory"),
         "prometheus_url": prometheus.get("url") if prometheus_enabled else None,
         "prometheus_service_label": prometheus.get("service_label"),
@@ -72,12 +74,21 @@ def resolve_evaluate_options(config: dict[str, Any], cli_values: dict[str, Any])
             "workers": int(distributed.get("workers", 1)),
             "compose_service": distributed.get("compose_service", "perfagent"),
         },
+        "profiling": {
+            "auto_capture": bool(profiling.get("auto_capture", False)),
+            "duration_seconds": int(profiling.get("duration_seconds", 60)),
+            "pid": profiling.get("pid"),
+            "profile_endpoint": profiling.get("profile_endpoint"),
+            "container": profiling.get("container"),
+        },
         "storage": {
             "enabled": bool(storage.get("enabled", True)),
             "backend": storage.get("backend", "sqlite"),
             "path": storage.get("path", "./outputs/perfagent.db"),
             "dsn": storage.get("dsn"),
             "dsn_env": storage.get("dsn_env", "PERFAGENT_DATABASE_URL"),
+            "vector_dsn": storage.get("vector_dsn"),
+            "vector_dsn_env": storage.get("vector_dsn_env", "PERFAGENT_VECTOR_DSN"),
             "retention_days": int(storage.get("retention_days", 30)),
         },
     }
@@ -88,6 +99,11 @@ def resolve_evaluate_options(config: dict[str, Any], cli_values: dict[str, Any])
             elif key in {"llm_enabled", "llm_provider", "llm_model", "llm_base_url"}:
                 llm_key = key.replace("llm_", "")
                 resolved["llm"][llm_key] = value
+            elif key in {"profile_auto", "profile_pid", "profile_endpoint", "profile_container"}:
+                profile_key = key.replace("profile_", "")
+                if profile_key == "auto":
+                    profile_key = "auto_capture"
+                resolved["profiling"][profile_key] = value
             elif key == "traffic_profile_mode":
                 resolved["traffic_profile"]["enabled"] = value == "production"
             else:
@@ -139,8 +155,11 @@ def default_strategy(
     slo_error_rate_percent: float,
     *,
     mode: str = "standard",
+    capacity_probe_rps: int | None = None,
 ) -> dict[str, Any]:
     if mode == "capacity":
+        if capacity_probe_rps:
+            return capacity_probe_strategy(duration, slo_p95_ms, slo_error_rate_percent, int(capacity_probe_rps))
         return capacity_strategy(duration, slo_p95_ms, slo_error_rate_percent)
     edge_duration = _edge_phase_duration(duration)
     return {
@@ -186,6 +205,34 @@ def capacity_strategy(duration: str, slo_p95_ms: int, slo_error_rate_percent: fl
             {"duration": phase["duration"], "target": max(1, int(phase["target_rps"] / 10))}
             for phase in phases
         ],
+        "thresholds": {
+            "p95_latency_ms": slo_p95_ms,
+            "error_rate_percent": slo_error_rate_percent,
+        },
+    }
+
+
+def capacity_probe_strategy(
+    duration: str,
+    slo_p95_ms: int,
+    slo_error_rate_percent: float,
+    target_rps: int,
+) -> dict[str, Any]:
+    edge_duration = _edge_phase_duration(duration)
+    target_rps = max(1, int(target_rps))
+    warmup_rps = max(1, int(target_rps * 0.25))
+    phases = [
+        {"name": "warmup", "duration": edge_duration, "target_rps": warmup_rps},
+        {"name": f"capacity_probe_{target_rps}", "duration": duration, "target_rps": target_rps},
+        {"name": "recovery", "duration": edge_duration, "target_rps": warmup_rps},
+    ]
+    return {
+        "duration": duration,
+        "mode": "capacity",
+        "traffic_model": "capacity-probe",
+        "capacity_probe_rps": target_rps,
+        "phases": phases,
+        "stages": [{"duration": phase["duration"], "target": max(1, int(phase["target_rps"] / 10))} for phase in phases],
         "thresholds": {
             "p95_latency_ms": slo_p95_ms,
             "error_rate_percent": slo_error_rate_percent,

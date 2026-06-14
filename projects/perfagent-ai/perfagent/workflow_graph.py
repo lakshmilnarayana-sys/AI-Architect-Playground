@@ -11,7 +11,12 @@ from perfagent.analyzers.protocols import analyze_protocol_metrics
 from perfagent.analyzers.timeseries_reasoning import analyze_timeseries, reason_over_timeseries
 from perfagent.collectors.k6_collector import read_k6_summary, run_k6
 from perfagent.collectors.observability_adapters import collect_observability_traffic_profile
-from perfagent.collectors.profiling_collector import collect_profiling_artifacts
+from perfagent.collectors.profiling_collector import (
+    build_profile_capture_plan,
+    collect_profiling_artifacts,
+    finish_profile_capture_plan,
+    start_profile_capture_plan,
+)
 from perfagent.collectors.protocol_collectors import duration_to_seconds, run_protocol_script
 from perfagent.collectors.prometheus_collector import (
     collect_dependency_metrics,
@@ -49,12 +54,14 @@ class GraphInput(TypedDict, total=False):
     output_dir: Path
     engine: str
     mode: str
+    capacity_probe_rps: int | None
     service_resources: dict[str, Any] | None
     dependencies: list[dict[str, Any]] | None
     llm: dict[str, Any] | None
     traffic_profile_config: dict[str, Any] | None
     observability_config: dict[str, Any] | None
     protocol_config: dict[str, Any] | None
+    profiling_config: dict[str, Any] | None
     storage: dict[str, Any] | None
     prometheus_url: str | None
     prometheus_service_label: str | None
@@ -75,6 +82,9 @@ class GraphInput(TypedDict, total=False):
     aligned_timeseries: list[dict[str, Any]]
     dependency_metrics: dict[str, Any]
     profiling_artifacts: dict[str, Any]
+    profile_capture_plan: dict[str, Any]
+    profile_capture_context: dict[str, Any]
+    profile_capture_result: dict[str, Any]
     features: dict[str, Any]
     dependency_analysis: dict[str, Any]
     timeseries_analysis: dict[str, Any]
@@ -197,6 +207,7 @@ def _stage_plan_strategy(state: GraphInput) -> GraphInput:
             state["slo_p95_ms"],
             state["slo_error_rate_percent"],
             mode=state.get("mode", "standard"),
+            capacity_probe_rps=state.get("capacity_probe_rps"),
         )
 
     evaluation_state["test_strategy"] = strategy
@@ -267,6 +278,22 @@ def _stage_execute_load(state: GraphInput) -> GraphInput:
     engine_name = state.get("engine", "k6").lower()
 
     protocol_aligned: list[dict[str, Any]] | None = None
+    profiling_settings = state.get("profiling_config") or {}
+    if profiling_settings.get("auto_capture"):
+        profile_capture_plan = build_profile_capture_plan(
+            runtime=state["runtime"],
+            output_dir=workspace.raw_dir / "profiles" / "captured",
+            duration_seconds=int(profiling_settings.get("duration_seconds", 60)),
+            pid=profiling_settings.get("pid"),
+            profile_endpoint=profiling_settings.get("profile_endpoint"),
+            container=profiling_settings.get("container"),
+        )
+        write_json(workspace.raw_dir / "profile_capture_plan.json", profile_capture_plan)
+        state["profile_capture_plan"] = profile_capture_plan
+        state["profile_capture_context"] = start_profile_capture_plan(
+            profile_capture_plan,
+            log_dir=workspace.raw_dir / "profiles" / "logs",
+        )
     if state.get("skip_run", False) or engine_name not in {"k6", "grpc", "websocket", "ui", "browser"}:
         execution_result: dict[str, Any] = {
             "exit_code": 0,
@@ -305,6 +332,15 @@ def _stage_execute_load(state: GraphInput) -> GraphInput:
 
     evaluation_state["execution_result"] = execution_result
     evaluation_state["raw_k6_metrics"] = k6_summary
+    if state.get("profile_capture_plan") and state.get("profile_capture_context"):
+        profile_capture_result = finish_profile_capture_plan(
+            state["profile_capture_plan"],
+            state["profile_capture_context"],
+            log_dir=workspace.raw_dir / "profiles" / "logs",
+            timeout_seconds=max(15, int(profiling_settings.get("duration_seconds", 60)) + 30),
+        )
+        write_json(workspace.raw_dir / "profile_capture_result.json", profile_capture_result)
+        state["profile_capture_result"] = profile_capture_result
     state["k6_summary"] = k6_summary
     if protocol_aligned is not None:
         state["aligned_timeseries"] = protocol_aligned
@@ -336,6 +372,10 @@ def _stage_collect_signals(state: GraphInput) -> GraphInput:
     write_json(workspace.raw_dir / "dependency_metrics.json", dependency_metrics)
 
     profiling = collect_profiling_artifacts(state.get("profile_paths") or [], workspace.raw_dir / "profiles")
+    if state.get("profile_capture_result"):
+        profiling["auto_capture"] = state["profile_capture_result"]
+        profiling["enabled"] = True
+        profiling["warnings"].extend(state["profile_capture_result"].get("warnings", []))
     evaluation_state["profiling_artifacts"] = profiling
     evaluation_state["service_resources"] = state.get("service_resources") or {}
     evaluation_state["warnings"].extend(profiling.get("warnings", []))
@@ -443,6 +483,7 @@ def _stage_render_report(state: GraphInput) -> GraphInput:
         profiling_artifacts=state["profiling_artifacts"],
         service_resources=state.get("service_resources") or {},
         dependency_analysis=state["dependency_analysis"],
+        protocol_analysis=state.get("protocol_analysis") or {"protocol_metrics": {}, "findings": [], "warnings": []},
         ai_analysis=state["ai_analysis"],
         traffic_profile=state["traffic_profile"],
         aligned_timeseries=state["aligned_timeseries"],

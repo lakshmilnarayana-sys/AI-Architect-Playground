@@ -8,11 +8,12 @@ from perfagent.core.artifacts import read_json
 from perfagent.config import load_run_config, resolve_evaluate_options
 from perfagent.collectors.prometheus_collector import load_prometheus_query_config, validate_prometheus_queries
 from perfagent.collectors.distributed_results import write_merged_worker_results
-from perfagent.collectors.profiling_collector import build_profile_capture_plan
+from perfagent.collectors.profiling_collector import build_profile_capture_plan, execute_profile_capture_plan
 from perfagent.collectors.observability_adapters import validate_provider_query_pack
 from perfagent.core.artifacts import write_json
 from perfagent.analyzers.similar_regressions import find_similar_regressions
-from perfagent.executors.distributed import build_distributed_coordinator_plan, build_distributed_plan
+from perfagent.executors.capacity_search import run_capacity_search
+from perfagent.executors.distributed import build_distributed_coordinator_plan, build_distributed_plan, run_distributed_coordinator
 from perfagent.generators.trend_dashboard import render_trend_dashboard
 from perfagent.mcp_server import serve_stdio
 from perfagent.storage.vector_store import PgVectorStore, chunk_text
@@ -27,6 +28,7 @@ baseline_app = typer.Typer(help="Baseline management.")
 storage_app = typer.Typer(help="Run database management.")
 regression_app = typer.Typer(help="Regression comparison gates.")
 distributed_app = typer.Typer(help="Distributed/container execution planning.")
+capacity_app = typer.Typer(help="Capacity search execution.")
 profile_app = typer.Typer(help="Profiling and flamegraph helpers.")
 observability_app = typer.Typer(help="Observability provider helpers.")
 ci_app = typer.Typer(help="CI helper commands.")
@@ -35,6 +37,7 @@ app.add_typer(baseline_app, name="baseline")
 app.add_typer(storage_app, name="storage")
 app.add_typer(regression_app, name="regression")
 app.add_typer(distributed_app, name="distributed")
+app.add_typer(capacity_app, name="capacity")
 app.add_typer(profile_app, name="profile")
 app.add_typer(observability_app, name="observability")
 app.add_typer(ci_app, name="ci")
@@ -53,6 +56,7 @@ def evaluate(
     output: Path | None = typer.Option(None, "--output"),
     engine: str | None = typer.Option(None, "--engine", help="Execution engine: k6, locust, jmeter, grpc, websocket, ui, browser."),
     mode: str | None = typer.Option(None, "--mode", help="Evaluation mode: standard or capacity."),
+    capacity_probe_rps: int | None = typer.Option(None, "--capacity-probe-rps", help="Single target RPS for capacity probe mode."),
     cpu_allocation: str | None = typer.Option(None, "--service-cpu", help="Service CPU allocation, for example 500m or 2 cores."),
     memory_allocation: str | None = typer.Option(None, "--service-memory", help="Service memory allocation, for example 512Mi."),
     disk_allocation: str | None = typer.Option(None, "--service-disk", help="Service disk allocation, for example 2Gi."),
@@ -71,6 +75,10 @@ def evaluate(
         help="YAML/JSON file containing custom PromQL query templates.",
     ),
     profile: list[Path] | None = typer.Option(None, "--profile", help="Path to an existing profiling artifact to attach."),
+    profile_auto: bool | None = typer.Option(None, "--profile-auto/--no-profile-auto", help="Run supported profiler capture commands during execution."),
+    profile_pid: str | None = typer.Option(None, "--profile-pid"),
+    profile_endpoint: str | None = typer.Option(None, "--profile-endpoint"),
+    profile_container: str | None = typer.Option(None, "--profile-container"),
     workflow_engine: str = typer.Option("deterministic", "--workflow", help="Workflow engine: deterministic or langgraph."),
     store: bool = typer.Option(True, "--store/--no-store", help="Persist run metadata to the configured run store."),
     skip_run: bool = typer.Option(False, "--skip-run"),
@@ -89,6 +97,7 @@ def evaluate(
             "output_dir": str(output) if output else None,
             "engine": engine,
             "mode": mode,
+            "capacity_probe_rps": capacity_probe_rps,
             "cpu_allocation": cpu_allocation,
             "memory_allocation": memory_allocation,
             "disk_allocation": disk_allocation,
@@ -101,6 +110,10 @@ def evaluate(
             "prometheus_url": prometheus_url,
             "prometheus_service_label": prometheus_service_label,
             "prometheus_query_config_path": str(prometheus_query_config) if prometheus_query_config else None,
+            "profile_auto": profile_auto,
+            "profile_pid": profile_pid,
+            "profile_endpoint": profile_endpoint,
+            "profile_container": profile_container,
         },
     )
     missing = [key for key in ["service_name", "openapi_path", "target_url", "runtime", "slo_p95_ms", "slo_error_rate_percent", "output_dir"] if options.get(key) is None]
@@ -120,12 +133,14 @@ def evaluate(
         "output_dir": Path(options["output_dir"]),
         "engine": options["engine"],
         "mode": options["mode"],
+        "capacity_probe_rps": options.get("capacity_probe_rps"),
         "service_resources": options.get("service_resources"),
         "dependencies": options.get("dependencies", []),
         "llm": options.get("llm"),
         "traffic_profile_config": options.get("traffic_profile"),
         "observability_config": options.get("observability"),
         "protocol_config": options.get("protocols"),
+        "profiling_config": options.get("profiling"),
         "storage": options.get("storage"),
         "prometheus_url": options.get("prometheus_url"),
         "prometheus_service_label": options.get("prometheus_service_label"),
@@ -152,6 +167,45 @@ def evaluate(
     if state["release_decision"].upper() in fail_decisions:
         typer.echo(f"Performance gate failed: {state['release_decision']}", err=True)
         raise typer.Exit(2)
+
+
+@capacity_app.command("search")
+def capacity_search(
+    service_name: str = typer.Option(..., "--service-name"),
+    openapi: Path = typer.Option(..., "--openapi", exists=True, readable=True),
+    target_url: str = typer.Option(..., "--target-url"),
+    runtime: str = typer.Option(..., "--runtime"),
+    slo_p95_ms: int = typer.Option(..., "--slo-p95-ms"),
+    slo_error_rate: float = typer.Option(..., "--slo-error-rate"),
+    duration: str = typer.Option("1m", "--duration"),
+    output: Path = typer.Option(Path("./outputs/capacity-search"), "--output"),
+    engine: str = typer.Option("k6", "--engine"),
+    min_rps: int = typer.Option(50, "--min-rps"),
+    max_rps: int = typer.Option(800, "--max-rps"),
+    steps: int = typer.Option(6, "--steps"),
+    fail_fast: bool = typer.Option(True, "--fail-fast/--no-fail-fast"),
+    output_json: Path | None = typer.Option(None, "--output-json"),
+) -> None:
+    result = run_capacity_search(
+        service_name=service_name,
+        openapi_path=openapi,
+        target_url=target_url,
+        runtime=runtime,
+        slo_p95_ms=slo_p95_ms,
+        slo_error_rate_percent=slo_error_rate,
+        duration=duration,
+        output_dir=output,
+        engine=engine,
+        min_rps=min_rps,
+        max_rps=max_rps,
+        steps=steps,
+        fail_fast=fail_fast,
+    )
+    if output_json:
+        write_json(output_json, result)
+    typer.echo(f"Capacity search completed: {output / 'capacity_search.json'}")
+    typer.echo(f"Estimated capacity RPS: {result['estimated_capacity_rps']}")
+    typer.echo(f"Breaking point RPS: {result['breaking_point_rps']}")
 
 
 @app.command()
@@ -370,6 +424,31 @@ def distributed_coordinate(
     typer.echo(plan["merge_command"])
 
 
+@distributed_app.command("run")
+def distributed_run(
+    service_name: str = typer.Option(..., "--service-name"),
+    engine: str = typer.Option("k6", "--engine"),
+    workers: int = typer.Option(2, "--workers"),
+    output: Path = typer.Option(Path("./outputs/distributed-run.json"), "--output"),
+    base_config: str = typer.Option("./examples/sample-config.yaml", "--config"),
+    compose_service: str = typer.Option("perfagent", "--compose-service"),
+) -> None:
+    plan = build_distributed_coordinator_plan(
+        engine=engine,
+        service_name=service_name,
+        workers=workers,
+        output_dir=output.parent,
+        base_config=base_config,
+        compose_service=compose_service,
+    )
+    result = run_distributed_coordinator(plan, output_path=output)
+    typer.echo(f"Distributed run result: {output}")
+    typer.echo(f"Workers: {len(result['workers'])}")
+    typer.echo(f"Merged: {bool(result['merged'])}")
+    if not result["success"]:
+        raise typer.Exit(2)
+
+
 @profile_app.command("plan")
 def profile_plan(
     runtime: str = typer.Option(..., "--runtime"),
@@ -395,6 +474,33 @@ def profile_plan(
         status = "available" if command["available"] else "missing"
         typer.echo(f"- [{status}] {command['command']}")
     for warning in plan["warnings"]:
+        typer.echo(f"WARNING: {warning}")
+
+
+@profile_app.command("run")
+def profile_run(
+    runtime: str = typer.Option(..., "--runtime"),
+    output_dir: Path = typer.Option(Path("./outputs/profiles"), "--output-dir"),
+    duration_seconds: int = typer.Option(60, "--duration-seconds"),
+    pid: str | None = typer.Option(None, "--pid"),
+    profile_endpoint: str | None = typer.Option(None, "--profile-endpoint"),
+    container: str | None = typer.Option(None, "--container"),
+    output_json: Path | None = typer.Option(None, "--output-json"),
+) -> None:
+    plan = build_profile_capture_plan(
+        runtime=runtime,
+        output_dir=output_dir / "captured",
+        duration_seconds=duration_seconds,
+        pid=pid,
+        profile_endpoint=profile_endpoint,
+        container=container,
+    )
+    result = execute_profile_capture_plan(plan, log_dir=output_dir / "logs", timeout_seconds=duration_seconds + 30)
+    if output_json:
+        write_json(output_json, result)
+    typer.echo(f"Profiler capture completed: {output_json or output_dir}")
+    typer.echo(f"Started commands: {result['started_count']}")
+    for warning in result.get("warnings", []):
         typer.echo(f"WARNING: {warning}")
 
 

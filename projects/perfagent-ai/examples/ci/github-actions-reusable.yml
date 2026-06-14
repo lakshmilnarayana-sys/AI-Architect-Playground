@@ -1,0 +1,81 @@
+name: reusable-perfagent-evaluation
+
+on:
+  workflow_call:
+    inputs:
+      service-name:
+        required: true
+        type: string
+      openapi-path:
+        required: true
+        type: string
+      target-url:
+        required: true
+        type: string
+      runtime:
+        required: true
+        type: string
+      slo-p95-ms:
+        required: true
+        type: number
+      slo-error-rate:
+        required: true
+        type: number
+      duration:
+        required: false
+        type: string
+        default: 1m
+      engine:
+        required: false
+        type: string
+        default: k6
+
+jobs:
+  perfagent:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run PerfAgent
+        run: |
+          docker compose build perfagent
+          docker compose run --rm perfagent evaluate \
+            --service-name "${{ inputs.service-name }}" \
+            --openapi "${{ inputs.openapi-path }}" \
+            --target-url "${{ inputs.target-url }}" \
+            --runtime "${{ inputs.runtime }}" \
+            --slo-p95-ms "${{ inputs.slo-p95-ms }}" \
+            --slo-error-rate "${{ inputs.slo-error-rate }}" \
+            --duration "${{ inputs.duration }}" \
+            --engine "${{ inputs.engine }}" \
+            --output "./outputs/${{ inputs.service-name }}"
+
+      - name: Compare with latest baseline
+        continue-on-error: true
+        run: |
+          docker compose run --rm perfagent regression compare \
+            --run-dir "./outputs/${{ inputs.service-name }}" \
+            --db-path ./outputs/perfagent.db \
+            --output-json "./outputs/${{ inputs.service-name }}/processed/regression_comparison.json"
+
+      - name: Generate PR comment
+        if: github.event_name == 'pull_request'
+        run: |
+          docker compose run --rm perfagent ci comment \
+            --summary "./outputs/${{ inputs.service-name }}/reports/summary.json" \
+            --regression "./outputs/${{ inputs.service-name }}/processed/regression_comparison.json" \
+            --output "./outputs/${{ inputs.service-name }}/perfagent-pr-comment.md"
+          gh pr comment "$PR_NUMBER" --body-file "./outputs/${{ inputs.service-name }}/perfagent-pr-comment.md"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+
+      - name: Upload PerfAgent artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: perfagent-${{ inputs.service-name }}
+          path: outputs/${{ inputs.service-name }}

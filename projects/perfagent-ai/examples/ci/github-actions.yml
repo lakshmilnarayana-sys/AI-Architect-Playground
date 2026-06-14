@@ -51,34 +51,12 @@ jobs:
 
       - name: Comment performance summary
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const summary = JSON.parse(fs.readFileSync('outputs/sample-payments-api/reports/summary.json', 'utf8'));
-            const regressionPath = 'outputs/sample-payments-api/processed/regression_comparison.json';
-            const regression = fs.existsSync(regressionPath)
-              ? JSON.parse(fs.readFileSync(regressionPath, 'utf8'))
-              : { regression_detected: false, findings: ['no regression comparison artifact'] };
-            const f = summary.features || {};
-            const body = [
-              '## PerfAgent AI performance report',
-              '',
-              `Service: \`${summary.service_name}\``,
-              `Decision: \`${summary.release_decision}\``,
-              `Stable RPS: \`${f.stable_rps ?? 'unknown'}\``,
-              `Max p95 latency: \`${f.max_p95_latency_ms ?? 'unknown'} ms\``,
-              `Max error rate: \`${f.max_error_rate_percent ?? 'unknown'}%\``,
-              `Regression detected: \`${regression.regression_detected}\``,
-              '',
-              'Findings:',
-              ...(regression.findings || []).map(item => `- ${item}`),
-              '',
-              'Download the `perfagent-report` artifact for the interactive HTML report.'
-            ].join('\n');
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body
-            });
+        run: |
+          docker compose run --rm perfagent ci comment \
+            --summary ./outputs/sample-payments-api/reports/summary.json \
+            --regression ./outputs/sample-payments-api/processed/regression_comparison.json \
+            --output ./outputs/sample-payments-api/perfagent-pr-comment.md
+          gh pr comment "$PR_NUMBER" --body-file ./outputs/sample-payments-api/perfagent-pr-comment.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}

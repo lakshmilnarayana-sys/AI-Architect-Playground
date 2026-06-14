@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import subprocess
+import shlex
 from pathlib import Path
 from typing import Any
+
+from perfagent.collectors.distributed_results import write_merged_worker_results
+from perfagent.core.artifacts import write_json
 
 
 def build_distributed_plan(
@@ -82,3 +87,38 @@ def build_distributed_coordinator_plan(
             "Use distributed merge after worker summaries are available.",
         ],
     }
+
+
+def run_distributed_coordinator(plan: dict[str, Any], *, output_path: Path | None = None) -> dict[str, Any]:
+    worker_results: list[dict[str, Any]] = []
+    for worker in plan.get("worker_specs", []):
+        result = subprocess.run(shlex.split(worker["command"]), text=True, capture_output=True, check=False)
+        worker_results.append(
+            {
+                "worker_id": worker.get("worker_id"),
+                "command": worker.get("command"),
+                "exit_code": result.returncode,
+                "summary_path": worker.get("summary_path"),
+                "stdout": result.stdout[-4000:],
+                "stderr": result.stderr[-4000:],
+            }
+        )
+    summary_paths = [Path(worker["summary_path"]) for worker in plan.get("worker_specs", []) if Path(worker["summary_path"]).exists()]
+    merged: dict[str, Any] | None = None
+    if summary_paths:
+        merged = write_merged_worker_results(
+            summary_paths,
+            summary_path=Path(plan["output_dir"]) / "merged" / "raw" / "merged_summary.json",
+            aligned_path=Path(plan["output_dir"]) / "merged" / "processed" / "aligned_timeseries.csv",
+        )
+    result = {
+        "mode": "distributed-coordinator-execution",
+        "plan": plan,
+        "workers": worker_results,
+        "merged": merged,
+        "success": all(worker["exit_code"] == 0 for worker in worker_results) and bool(merged),
+        "warnings": [] if merged else ["No worker summaries were available to merge."],
+    }
+    if output_path:
+        write_json(output_path, result)
+    return result

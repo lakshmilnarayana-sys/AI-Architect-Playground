@@ -13,6 +13,8 @@ PerfAgent is designed to be imported into CI as a containerized release-readines
 
 Use [examples/ci/github-actions.yml](../examples/ci/github-actions.yml).
 
+For a reusable workflow template that can be called from service repositories, use [examples/ci/github-actions-reusable.yml](../examples/ci/github-actions-reusable.yml).
+
 Key command:
 
 ```bash

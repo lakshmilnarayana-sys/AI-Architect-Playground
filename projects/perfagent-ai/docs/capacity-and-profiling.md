@@ -24,6 +24,34 @@ PerfAgent answers three related questions:
 
 This is intentionally evidence-based. PerfAgent does not claim capacity beyond the tested range.
 
+## Iterative Capacity Search
+
+For a stronger breakpoint signal, run repeated probe evaluations:
+
+```bash
+.venv/bin/python -m perfagent capacity search \
+  --service-name payments-api \
+  --openapi ./openapi.yaml \
+  --target-url http://localhost:8080 \
+  --runtime go \
+  --slo-p95-ms 500 \
+  --slo-error-rate 1 \
+  --duration 1m \
+  --min-rps 50 \
+  --max-rps 800 \
+  --steps 6 \
+  --output ./outputs/payments-api-capacity
+```
+
+The command runs isolated probe directories such as `probe-50rps`, `probe-100rps`, and writes `capacity_search.json` with:
+
+- each probe command and exit code
+- each probe release decision
+- estimated capacity RPS from the highest passing probe
+- first breaking point RPS from the first failing probe
+
+Each probe uses `evaluate --mode capacity --capacity-probe-rps <rps> --no-store`, so the search summary remains deterministic and does not pollute the run-store baseline history with intermediate probes.
+
 ## Time-Series Source
 
 PerfAgent runs k6 with both:
@@ -92,6 +120,45 @@ raw/profiling_artifacts.json
 ```
 
 The report links the attached artifacts but does not infer root cause from profiles yet. That keeps the current MVP rule intact: code calculates evidence, and higher-level analysis explains only evidence that exists.
+
+## Automatic Profiler Capture
+
+Plan supported profiler commands:
+
+```bash
+.venv/bin/python -m perfagent profile plan \
+  --runtime go \
+  --profile-endpoint http://localhost:6060/debug/pprof \
+  --duration-seconds 60 \
+  --output-json ./outputs/profile-plan.json
+```
+
+Execute supported profiler commands explicitly:
+
+```bash
+.venv/bin/python -m perfagent profile run \
+  --runtime go \
+  --profile-endpoint http://localhost:6060/debug/pprof \
+  --duration-seconds 60 \
+  --output-json ./outputs/profile-result.json
+```
+
+Capture during an evaluation:
+
+```bash
+.venv/bin/python -m perfagent evaluate \
+  --service-name payments-api \
+  --openapi ./openapi.yaml \
+  --target-url http://localhost:8080 \
+  --runtime go \
+  --slo-p95-ms 500 \
+  --slo-error-rate 1 \
+  --profile-auto \
+  --profile-endpoint http://localhost:6060/debug/pprof \
+  --output ./outputs/payments-api
+```
+
+PerfAgent starts capture-phase commands before load execution and finalizes/render commands after the run. Captured stdout/stderr and `profile_capture_result.json` are stored under `raw/profiles/`.
 
 ## CI Gates
 

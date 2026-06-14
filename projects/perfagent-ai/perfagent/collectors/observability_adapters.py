@@ -31,6 +31,26 @@ def build_provider_query_pack(provider: str, service_name: str, config: dict[str
             "request_rate": "sum:trace.http.request.hits{service:{service}} by {resource_name}.as_rate()",
             "latency_p95": "p95:trace.http.request.duration{service:{service}} by {resource_name}",
             "error_rate": "sum:trace.http.request.errors{service:{service}} by {resource_name}.as_rate()",
+            "cpu_usage": "avg:container.cpu.usage{service:{service}}",
+            "memory_usage": "avg:container.memory.usage{service:{service}}",
+        }
+        dependency_queries = {
+            "postgres": {
+                "latency_p95": "p95:postgresql.query.time{service:{service}}",
+                "connections": "avg:postgresql.connections{service:{service}}",
+            },
+            "redis": {
+                "latency_p95": "p95:redis.command.duration{service:{service}}",
+                "memory_used": "avg:redis.mem.used{service:{service}}",
+            },
+            "kafka": {
+                "consumer_lag": "max:kafka.consumer_lag{service:{service}} by {topic}",
+                "broker_bytes_in": "sum:kafka.net.bytes_in.rate{service:{service}}",
+            },
+            "elasticsearch": {
+                "search_latency_p95": "p95:elasticsearch.search.query.time{service:{service}}",
+                "rejected_threads": "sum:elasticsearch.thread_pool.search.rejected{service:{service}}",
+            },
         }
         required = ["api_key", "app_key", "site"]
     elif provider_name in {"newrelic", "new_relic"}:
@@ -38,6 +58,22 @@ def build_provider_query_pack(provider: str, service_name: str, config: dict[str
             "request_rate": "SELECT rate(count(*), 1 second) FROM Transaction WHERE appName = '{service}' FACET request.uri",
             "latency_p95": "SELECT percentile(duration, 95) FROM Transaction WHERE appName = '{service}' FACET request.uri",
             "error_rate": "SELECT percentage(count(*), WHERE error IS true) FROM Transaction WHERE appName = '{service}' FACET request.uri",
+            "cpu_usage": "SELECT average(cpuPercent) FROM ProcessSample WHERE appName = '{service}'",
+            "memory_usage": "SELECT average(memoryResidentSizeBytes) FROM ProcessSample WHERE appName = '{service}'",
+        }
+        dependency_queries = {
+            "postgres": {
+                "latency_p95": "SELECT percentile(duration, 95) FROM DatastoreSample WHERE appName = '{service}' AND datastoreType = 'Postgres'",
+            },
+            "redis": {
+                "latency_p95": "SELECT percentile(duration, 95) FROM DatastoreSample WHERE appName = '{service}' AND datastoreType = 'Redis'",
+            },
+            "kafka": {
+                "consumer_lag": "SELECT max(consumerLag) FROM KafkaConsumerSample WHERE appName = '{service}' FACET topic",
+            },
+            "elasticsearch": {
+                "latency_p95": "SELECT percentile(duration, 95) FROM DatastoreSample WHERE appName = '{service}' AND datastoreType = 'Elasticsearch'",
+            },
         }
         required = ["account_id", "api_key"]
     elif provider_name in {"elasticsearch", "elk"}:
@@ -45,6 +81,15 @@ def build_provider_query_pack(provider: str, service_name: str, config: dict[str
             "request_rate": {"terms_field": config.get("endpoint_field", "url.path"), "service_field": config.get("service_field", "service.name")},
             "latency_p95": {"percentile_field": config.get("duration_field", "event.duration"), "percentile": 95},
             "error_rate": {"error_field": config.get("error_field", "event.outcome")},
+            "cpu_usage": {"metric_field": config.get("cpu_field", "system.cpu.total.norm.pct")},
+            "memory_usage": {"metric_field": config.get("memory_field", "process.memory.rss.bytes")},
+        }
+        dependency_queries = {
+            "postgres": {"metric_field": "postgresql.statement.duration.histogram"},
+            "redis": {"metric_field": "redis.command.duration"},
+            "kafka": {"metric_field": "kafka.consumer.lag"},
+            "cassandra": {"metric_field": "cassandra.client.request.latency"},
+            "elasticsearch": {"metric_field": "elasticsearch.thread_pool.search.rejected"},
         }
         required = ["base_url", "index"]
     else:
@@ -58,6 +103,8 @@ def build_provider_query_pack(provider: str, service_name: str, config: dict[str
         "supported": True,
         "service_name": service_name,
         "queries": rendered,
+        "dependency_queries": _render_query(dependency_queries, service_name),
+        "golden_signals": ["latency_p95", "request_rate", "error_rate", "cpu_usage", "memory_usage"],
         "required_config": required,
         "warnings": [],
     }

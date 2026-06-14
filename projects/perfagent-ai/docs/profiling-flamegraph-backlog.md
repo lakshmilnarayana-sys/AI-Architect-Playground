@@ -47,9 +47,19 @@ perfagent profile plan \
   --output-json ./outputs/profile-plan.json
 ```
 
-The plan includes runtime-specific commands for Go pprof, JVM/JFR, py-spy, and Node.js/Clinic.js when the required local tools and target details are available. It records command availability and warnings, but it does not automatically execute profilers during the load test yet.
+The plan includes runtime-specific commands for Go pprof, JVM/JFR, py-spy, and Node.js/Clinic.js when the required local tools and target details are available. It records command availability and warnings.
 
-Built-in profiler execution and rendered flame graphs are not complete yet.
+PerfAgent can execute those commands explicitly:
+
+```bash
+perfagent profile run \
+  --runtime go \
+  --profile-endpoint http://localhost:6060/debug/pprof \
+  --duration-seconds 60 \
+  --output-json ./outputs/profile-result.json
+```
+
+PerfAgent can also run capture-phase commands during an evaluation with `evaluate --profile-auto`. Remaining backlog work is embedded flamegraph rendering, top-function extraction, and phase-window correlation.
 
 ## What Users Can See Today
 

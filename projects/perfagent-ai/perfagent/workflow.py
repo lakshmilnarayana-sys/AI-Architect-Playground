@@ -13,7 +13,12 @@ from perfagent.analyzers.timeseries_reasoning import analyze_timeseries, reason_
 from perfagent.collectors.external_results import load_external_results
 from perfagent.collectors.k6_collector import read_k6_summary, run_k6
 from perfagent.collectors.observability_adapters import collect_observability_traffic_profile
-from perfagent.collectors.profiling_collector import collect_profiling_artifacts
+from perfagent.collectors.profiling_collector import (
+    build_profile_capture_plan,
+    collect_profiling_artifacts,
+    finish_profile_capture_plan,
+    start_profile_capture_plan,
+)
 from perfagent.collectors.protocol_collectors import duration_to_seconds, run_protocol_script
 from perfagent.collectors.traffic_replay import apply_replay_plan_to_strategy, build_traffic_replay_plan
 from perfagent.collectors.prometheus_collector import (
@@ -55,12 +60,14 @@ def evaluate_service(
     output_dir: Path,
     engine: str = "k6",
     mode: str = "standard",
+    capacity_probe_rps: int | None = None,
     service_resources: dict[str, Any] | None = None,
     dependencies: list[dict[str, Any]] | None = None,
     llm: dict[str, Any] | None = None,
     traffic_profile_config: dict[str, Any] | None = None,
     observability_config: dict[str, Any] | None = None,
     protocol_config: dict[str, Any] | None = None,
+    profiling_config: dict[str, Any] | None = None,
     storage: dict[str, Any] | None = None,
     prometheus_url: str | None = None,
     prometheus_service_label: str | None = None,
@@ -120,7 +127,13 @@ def evaluate_service(
         )
         strategy = apply_replay_plan_to_strategy(strategy, replay_plan)
     else:
-        strategy = default_strategy(duration, slo_p95_ms, slo_error_rate_percent, mode=mode)
+        strategy = default_strategy(
+            duration,
+            slo_p95_ms,
+            slo_error_rate_percent,
+            mode=mode,
+            capacity_probe_rps=capacity_probe_rps,
+        )
     state["test_strategy"] = strategy
     write_yaml(workspace.processed_dir / "test_strategy.yaml", strategy)
     write_yaml(workspace.processed_dir / "metric_contract.yaml", _metric_contract(state, strategy))
@@ -163,6 +176,20 @@ def evaluate_service(
     timeseries_path = workspace.raw_dir / "k6_timeseries.jsonl"
     engine_name = engine.lower()
     protocol_aligned: list[dict[str, Any]] | None = None
+    profile_capture_context: dict[str, Any] | None = None
+    profile_capture_plan: dict[str, Any] | None = None
+    profiling_settings = profiling_config or {}
+    if profiling_settings.get("auto_capture"):
+        profile_capture_plan = build_profile_capture_plan(
+            runtime=runtime,
+            output_dir=workspace.raw_dir / "profiles" / "captured",
+            duration_seconds=int(profiling_settings.get("duration_seconds", 60)),
+            pid=profiling_settings.get("pid"),
+            profile_endpoint=profiling_settings.get("profile_endpoint"),
+            container=profiling_settings.get("container"),
+        )
+        write_json(workspace.raw_dir / "profile_capture_plan.json", profile_capture_plan)
+        profile_capture_context = start_profile_capture_plan(profile_capture_plan, log_dir=workspace.raw_dir / "profiles" / "logs")
     if skip_run or engine_name not in {"k6", "grpc", "websocket", "ui", "browser"}:
         execution_result: dict[str, Any] = {
             "exit_code": 0,
@@ -191,6 +218,15 @@ def evaluate_service(
     state["raw_k6_metrics"] = k6_summary
     write_json(summary_path, k6_summary)
     write_json(workspace.raw_dir / "execution_result.json", execution_result)
+    profile_capture_result = None
+    if profile_capture_plan and profile_capture_context:
+        profile_capture_result = finish_profile_capture_plan(
+            profile_capture_plan,
+            profile_capture_context,
+            log_dir=workspace.raw_dir / "profiles" / "logs",
+            timeout_seconds=max(15, int(profiling_settings.get("duration_seconds", 60)) + 30),
+        )
+        write_json(workspace.raw_dir / "profile_capture_result.json", profile_capture_result)
 
     aligned = protocol_aligned or align_k6_jsonl(timeseries_path, strategy) or fallback_aligned_timeseries(k6_summary)
 
@@ -206,6 +242,10 @@ def evaluate_service(
     write_json(workspace.raw_dir / "dependency_metrics.json", dependency_metrics)
 
     profiling = collect_profiling_artifacts(profile_paths or [], workspace.raw_dir / "profiles")
+    if profile_capture_result:
+        profiling["auto_capture"] = profile_capture_result
+        profiling["enabled"] = True
+        profiling["warnings"].extend(profile_capture_result.get("warnings", []))
     state["profiling_artifacts"] = profiling
     state["service_resources"] = service_resources or {}
     write_json(workspace.raw_dir / "profiling_artifacts.json", profiling)
@@ -288,6 +328,7 @@ def evaluate_service(
         profiling_artifacts=profiling,
         service_resources=service_resources or {},
         dependency_analysis=dependency_analysis,
+        protocol_analysis=protocol_analysis,
         ai_analysis=ai_analysis,
         traffic_profile=traffic_profile,
         aligned_timeseries=aligned,
@@ -503,6 +544,7 @@ def import_external_results(
         profiling_artifacts={},
         service_resources=service_resources or {},
         dependency_analysis=dependency_analysis or {"dependencies": [], "findings": []},
+        protocol_analysis={},
         ai_analysis=ai_analysis or disabled_ai_analysis("AI analysis was not run for imported results."),
         traffic_profile={},
         aligned_timeseries=aligned,

@@ -110,6 +110,8 @@ def test_build_provider_query_pack_renders_queries():
     assert pack["supported"] is True
     assert "payments-api" in pack["queries"]["request_rate"]
     assert "api_key" in pack["required_config"]
+    assert "cpu_usage" in pack["golden_signals"]
+    assert "postgres" in pack["dependency_queries"]
 
 
 def test_validate_provider_query_pack_reports_missing_config():

@@ -1,6 +1,8 @@
 from pathlib import Path
 
-from perfagent.collectors.profiling_collector import build_profile_capture_plan, collect_profiling_artifacts
+import sys
+
+from perfagent.collectors.profiling_collector import build_profile_capture_plan, collect_profiling_artifacts, execute_profile_capture_plan
 
 
 def test_collect_profiling_artifacts_copies_existing_profiles(tmp_path):
@@ -100,4 +102,37 @@ def test_build_profile_capture_plan_for_go_pprof(tmp_path):
     assert plan["runtime"] == "go"
     assert plan["commands"][0]["binary"] == "go"
     assert "profile?seconds=30" in plan["commands"][0]["command"]
-    assert plan["execute_supported"] is False
+    assert plan["execute_supported"] is True
+
+
+def test_execute_profile_capture_plan_runs_available_commands(tmp_path):
+    plan = {
+        "runtime": "python",
+        "duration_seconds": 1,
+        "output_dir": str(tmp_path / "captured"),
+        "warnings": [],
+        "commands": [
+            {
+                "binary": sys.executable,
+                "available": True,
+                "argv": [sys.executable, "-c", "print('captured')"],
+                "command": "capture",
+                "description": "test capture",
+                "phase": "capture",
+            },
+            {
+                "binary": sys.executable,
+                "available": True,
+                "argv": [sys.executable, "-c", "print('rendered')"],
+                "command": "render",
+                "description": "test render",
+                "phase": "render",
+            },
+        ],
+    }
+
+    result = execute_profile_capture_plan(plan, log_dir=tmp_path / "logs", timeout_seconds=5)
+
+    assert result["started_count"] == 1
+    assert result["completed"][0]["exit_code"] == 0
+    assert result["rendered"][0]["exit_code"] == 0

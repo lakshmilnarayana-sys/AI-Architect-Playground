@@ -217,8 +217,12 @@ New extension surfaces:
 - `--engine ui` / `--engine browser` generates and executes a Playwright-style browser journey harness.
 - `distributed plan` writes a containerized distributed execution plan.
 - `distributed coordinate` writes worker commands plus the deterministic merge command for distributed load runs.
+- `distributed run` executes the worker commands and merges worker summaries when they are available.
 - `distributed merge` combines worker summaries into a merged summary and aligned time-series.
 - `profile plan` writes runtime-specific profiler capture/render command plans for Go, JVM, Python, and Node.js.
+- `profile run` executes available profiler capture/render commands explicitly.
+- `evaluate --profile-auto` runs supported profiler capture commands during the load window.
+- `capacity search` runs iterative capacity probes and records the first breaking point.
 - `observability query-pack` renders and validates provider query packs for Datadog, New Relic, and Elasticsearch.
 - `ci comment` renders reusable Markdown for PR comments from `reports/summary.json`.
 - `storage dashboard` renders a cross-run trend dashboard from the run store.
@@ -400,6 +404,47 @@ Plan profiler capture and flamegraph rendering commands:
   --output-json ./outputs/profile-plan.json
 ```
 
+Run profiler capture explicitly:
+
+```bash
+.venv/bin/python -m perfagent profile run \
+  --runtime go \
+  --profile-endpoint http://localhost:6060/debug/pprof \
+  --duration-seconds 60 \
+  --output-json ./outputs/profile-result.json
+```
+
+Run profiler capture during an evaluation:
+
+```bash
+.venv/bin/python -m perfagent evaluate \
+  --service-name payments-api \
+  --openapi ./openapi.yaml \
+  --target-url http://localhost:8080 \
+  --runtime go \
+  --slo-p95-ms 500 \
+  --slo-error-rate 1 \
+  --profile-auto \
+  --profile-endpoint http://localhost:6060/debug/pprof \
+  --output ./outputs/payments-api
+```
+
+Run iterative capacity search:
+
+```bash
+.venv/bin/python -m perfagent capacity search \
+  --service-name payments-api \
+  --openapi ./openapi.yaml \
+  --target-url http://localhost:8080 \
+  --runtime go \
+  --slo-p95-ms 500 \
+  --slo-error-rate 1 \
+  --min-rps 50 \
+  --max-rps 800 \
+  --steps 6 \
+  --output ./outputs/payments-api-capacity
+```
+
 Plan distributed worker execution:
 
 ```bash
@@ -409,6 +454,17 @@ Plan distributed worker execution:
   --workers 4 \
   --config ./examples/sample-config.yaml \
   --output ./outputs/distributed-coordinate.json
+```
+
+Run distributed workers and merge results:
+
+```bash
+.venv/bin/python -m perfagent distributed run \
+  --service-name payments-api \
+  --engine k6 \
+  --workers 4 \
+  --config ./examples/sample-config.yaml \
+  --output ./outputs/distributed-run.json
 ```
 
 Generate a PR comment body from a completed run:

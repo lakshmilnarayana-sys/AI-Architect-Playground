@@ -50,3 +50,56 @@ def test_distributed_coordinate_command_writes_plan(tmp_path):
 
     assert result.exit_code == 0, result.output
     assert read_json(output)["mode"] == "distributed-coordinator"
+
+
+def test_capacity_search_command_writes_summary(tmp_path, monkeypatch):
+    output = tmp_path / "capacity"
+    openapi = tmp_path / "openapi.yaml"
+    openapi.write_text("openapi: 3.0.0\ninfo: {title: t, version: v}\npaths: {}\n")
+
+    def fake_search(**kwargs):
+        return {"estimated_capacity_rps": 100, "breaking_point_rps": 200, "probes": []}
+
+    monkeypatch.setattr("perfagent.cli.run_capacity_search", fake_search)
+
+    result = runner.invoke(
+        app,
+        [
+            "capacity",
+            "search",
+            "--service-name",
+            "payments-api",
+            "--openapi",
+            str(openapi),
+            "--target-url",
+            "http://localhost:8080",
+            "--runtime",
+            "python",
+            "--slo-p95-ms",
+            "500",
+            "--slo-error-rate",
+            "1",
+            "--output",
+            str(output),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Estimated capacity RPS: 100" in result.output
+
+
+def test_profile_run_command_writes_json(tmp_path, monkeypatch):
+    output = tmp_path / "profile-result.json"
+
+    monkeypatch.setattr(
+        "perfagent.cli.execute_profile_capture_plan",
+        lambda plan, log_dir, timeout_seconds: {"started_count": 0, "warnings": [], "completed": [], "rendered": []},
+    )
+
+    result = runner.invoke(
+        app,
+        ["profile", "run", "--runtime", "python", "--output-json", str(output), "--output-dir", str(tmp_path)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert read_json(output)["started_count"] == 0
