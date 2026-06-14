@@ -86,3 +86,35 @@ def test_run_distributed_coordinator_executes_and_merges(tmp_path, monkeypatch):
     assert result["success"] is True
     assert result["workers"][0]["exit_code"] == 0
     assert (tmp_path / "merged" / "raw" / "merged_summary.json").exists()
+
+
+def test_distributed_coordinate_command_can_execute_workers(tmp_path, monkeypatch):
+    output = tmp_path / "coordinator-result.json"
+
+    def fake_run(plan, output_path=None):
+        result = {"mode": "distributed-coordinator-execution", "success": True, "workers": [{"worker_id": "worker-1", "exit_code": 0}], "merged": {"workers": 1}}
+        if output_path:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text('{"success": true}')
+        return result
+
+    monkeypatch.setattr("perfagent.cli.run_distributed_coordinator", fake_run)
+
+    result = runner.invoke(
+        app,
+        [
+            "distributed",
+            "coordinate",
+            "--service-name",
+            "payments-api",
+            "--workers",
+            "1",
+            "--output",
+            str(output),
+            "--execute",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Distributed coordinator executed" in result.output
+    assert output.exists()

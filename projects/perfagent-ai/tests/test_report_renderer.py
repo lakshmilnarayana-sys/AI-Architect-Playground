@@ -33,6 +33,13 @@ def test_report_renderer_includes_capacity_and_profiling_sections(tmp_path):
                     "type": "pprof",
                     "render_status": "not_rendered",
                     "warnings": ["Rendering is not implemented for pprof profiles yet."],
+                },
+                {
+                    "artifact_path": "raw/profiles/perf-flamegraph.svg",
+                    "source_path": "./perf-flamegraph.svg",
+                    "type": "flamegraph",
+                    "render_status": "provided",
+                    "summary": {"top_functions": []},
                 }
             ],
         },
@@ -122,10 +129,13 @@ def test_report_renderer_includes_capacity_and_profiling_sections(tmp_path):
     assert 'id="theme-toggle"' in html
     assert 'id="react-reasoning"' in html
     assert 'id="profile-phase-correlation"' in html
+    assert 'id="flamegraph-viewer"' in html
+    assert 'id="flamegraph-search"' in html
     assert 'id="timeseries-analysis"' in html
     assert "function setTheme" in html
     assert "function renderReactReasoning" in html
     assert "function renderProfilePhaseCorrelation" in html
+    assert "function renderFlamegraphViewer" in html
     assert "Render status" in html
     assert "X-axis: time buckets" in html
     assert "Left Y-axis: p95 latency" in html

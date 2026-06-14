@@ -21,7 +21,7 @@ perfagent observability query-pack \
 
 The command reports missing provider configuration and writes the exact rendered query strings or Elasticsearch query templates. Use it as the first CI/onboarding check before relying on production traffic replay or dependency evidence.
 
-Query packs include golden-signal templates for request rate, p95 latency, error rate, CPU, and memory, plus dependency templates for common systems such as Postgres, Redis, Kafka, Cassandra, and Elasticsearch. Treat them as starting packs: real environments still need label, facet, index, and service-name mapping validation.
+Query packs include golden-signal templates for request rate, p95 latency, error rate, CPU, and memory; Kubernetes workload query groups for CPU, memory, restarts, and throttling; and dependency templates for common systems such as Postgres, Redis, Kafka, Cassandra, and Elasticsearch. The generated JSON includes a `coverage` section so onboarding and CI can see which signal groups are present. Treat them as starting packs: real environments still need label, facet, index, and service-name mapping validation.
 
 ## Common Mapping
 

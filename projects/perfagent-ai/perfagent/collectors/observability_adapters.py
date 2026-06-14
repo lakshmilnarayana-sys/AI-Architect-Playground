@@ -47,6 +47,10 @@ def build_provider_query_pack(provider: str, service_name: str, config: dict[str
                 "consumer_lag": "max:kafka.consumer_lag{service:{service}} by {topic}",
                 "broker_bytes_in": "sum:kafka.net.bytes_in.rate{service:{service}}",
             },
+            "cassandra": {
+                "read_latency_p95": "p95:cassandra.client.request.latency{service:{service},scope:read}",
+                "write_latency_p95": "p95:cassandra.client.request.latency{service:{service},scope:write}",
+            },
             "elasticsearch": {
                 "search_latency_p95": "p95:elasticsearch.search.query.time{service:{service}}",
                 "rejected_threads": "sum:elasticsearch.thread_pool.search.rejected{service:{service}}",
@@ -71,6 +75,9 @@ def build_provider_query_pack(provider: str, service_name: str, config: dict[str
             "kafka": {
                 "consumer_lag": "SELECT max(consumerLag) FROM KafkaConsumerSample WHERE appName = '{service}' FACET topic",
             },
+            "cassandra": {
+                "read_latency_p95": "SELECT percentile(duration, 95) FROM DatastoreSample WHERE appName = '{service}' AND datastoreType = 'Cassandra'",
+            },
             "elasticsearch": {
                 "latency_p95": "SELECT percentile(duration, 95) FROM DatastoreSample WHERE appName = '{service}' AND datastoreType = 'Elasticsearch'",
             },
@@ -93,18 +100,36 @@ def build_provider_query_pack(provider: str, service_name: str, config: dict[str
         }
         required = ["base_url", "index"]
     else:
-        return {"provider": provider_name or "unknown", "supported": False, "queries": {}, "required_config": [], "warnings": ["unsupported provider"]}
+        return {
+            "provider": provider_name or "unknown",
+            "supported": False,
+            "queries": {},
+            "query_groups": {},
+            "dependency_queries": {},
+            "required_config": [],
+            "coverage": {"golden_signals": [], "dependencies": [], "query_groups": []},
+            "warnings": ["unsupported provider"],
+        }
     rendered = {
         name: _render_query(query, service_name)
         for name, query in queries.items()
     }
+    rendered_dependencies = _render_query(dependency_queries, service_name)
+    query_groups = _provider_query_groups(provider_name, service_name, config)
+    golden_signals = ["latency_p95", "request_rate", "error_rate", "cpu_usage", "memory_usage"]
     return {
         "provider": provider_name,
         "supported": True,
         "service_name": service_name,
         "queries": rendered,
-        "dependency_queries": _render_query(dependency_queries, service_name),
-        "golden_signals": ["latency_p95", "request_rate", "error_rate", "cpu_usage", "memory_usage"],
+        "query_groups": query_groups,
+        "dependency_queries": rendered_dependencies,
+        "golden_signals": golden_signals,
+        "coverage": {
+            "golden_signals": golden_signals,
+            "dependencies": sorted(rendered_dependencies.keys()),
+            "query_groups": sorted(query_groups.keys()),
+        },
         "required_config": required,
         "warnings": [],
     }
@@ -119,6 +144,54 @@ def validate_provider_query_pack(provider: str, service_name: str, config: dict[
     if missing:
         pack["warnings"] = [*pack.get("warnings", []), "missing provider config: " + ", ".join(missing)]
     return pack
+
+
+def _provider_query_groups(provider: str, service_name: str, config: dict[str, Any]) -> dict[str, Any]:
+    if provider == "datadog":
+        groups = {
+            "kubernetes": {
+                "workload_cpu": "avg:kubernetes.cpu.usage.total{service:{service}} by {kube_deployment}",
+                "workload_memory": "avg:kubernetes.memory.usage{service:{service}} by {kube_deployment}",
+                "pod_restarts": "sum:kubernetes.containers.restarts{service:{service}} by {pod_name}.as_count()",
+                "cpu_throttling": "avg:kubernetes.cpu.cfs.throttled.seconds{service:{service}} by {pod_name}.as_rate()",
+            },
+            "http": {
+                "request_rate": "sum:trace.http.request.hits{service:{service}} by {resource_name}.as_rate()",
+                "latency_p95": "p95:trace.http.request.duration{service:{service}} by {resource_name}",
+                "error_rate": "sum:trace.http.request.errors{service:{service}} by {resource_name}.as_rate()",
+            },
+        }
+    elif provider in {"newrelic", "new_relic"}:
+        groups = {
+            "kubernetes": {
+                "workload_cpu": "SELECT average(cpuUsedCores) FROM K8sContainerSample WHERE labels.app = '{service}' FACET deploymentName",
+                "workload_memory": "SELECT average(memoryWorkingSetBytes) FROM K8sContainerSample WHERE labels.app = '{service}' FACET deploymentName",
+                "pod_restarts": "SELECT sum(restartCount) FROM K8sContainerSample WHERE labels.app = '{service}' FACET podName",
+                "cpu_throttling": "SELECT average(cpuCfsThrottledPeriodsDelta) FROM K8sContainerSample WHERE labels.app = '{service}' FACET podName",
+            },
+            "http": {
+                "request_rate": "SELECT rate(count(*), 1 second) FROM Transaction WHERE appName = '{service}' FACET request.uri",
+                "latency_p95": "SELECT percentile(duration, 95) FROM Transaction WHERE appName = '{service}' FACET request.uri",
+                "error_rate": "SELECT percentage(count(*), WHERE error IS true) FROM Transaction WHERE appName = '{service}' FACET request.uri",
+            },
+        }
+    elif provider in {"elasticsearch", "elk"}:
+        groups = {
+            "kubernetes": {
+                "workload_cpu": {"metric_field": config.get("cpu_field", "kubernetes.container.cpu.usage.node.pct")},
+                "workload_memory": {"metric_field": config.get("memory_field", "kubernetes.container.memory.working_set.bytes")},
+                "pod_restarts": {"metric_field": "kubernetes.container.restart_count"},
+                "cpu_throttling": {"metric_field": "kubernetes.container.cpu.cfs.throttled.periods"},
+            },
+            "http": {
+                "request_rate": {"terms_field": config.get("endpoint_field", "url.path")},
+                "latency_p95": {"percentile_field": config.get("duration_field", "event.duration"), "percentile": 95},
+                "error_rate": {"error_field": config.get("error_field", "event.outcome")},
+            },
+        }
+    else:
+        groups = {}
+    return _render_query(groups, service_name)
 
 
 def collect_datadog_traffic_profile(
