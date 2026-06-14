@@ -19,6 +19,8 @@ def resolve_evaluate_options(config: dict[str, Any], cli_values: dict[str, Any])
     slo = config.get("slo", {}) or {}
     test = config.get("test", {}) or {}
     llm = config.get("llm", {}) or {}
+    traffic_profile = config.get("traffic_profile", {}) or {}
+    storage = config.get("storage", {}) or {}
     dependencies = _normalize_dependencies(config.get("dependencies", []))
     prometheus_enabled = prometheus.get("enabled", bool(prometheus.get("url")))
     resolved = {
@@ -48,6 +50,23 @@ def resolve_evaluate_options(config: dict[str, Any], cli_values: dict[str, Any])
             "model": llm.get("model", "llama3.2"),
             "base_url": llm.get("base_url", "http://localhost:11434"),
         },
+        "traffic_profile": {
+            "enabled": bool(traffic_profile.get("enabled", False)),
+            "source": traffic_profile.get("source", "prometheus"),
+            "lookback": traffic_profile.get("lookback", "6h"),
+            "peak_multiplier": float(traffic_profile.get("peak_multiplier", 1.5)),
+            "endpoint_label": traffic_profile.get("endpoint_label", "route"),
+            "request_rate_query": traffic_profile.get(
+                "request_rate_query",
+                'sum by (route) (rate(http_requests_total{service="{service}"}[5m]))',
+            ),
+        },
+        "storage": {
+            "enabled": bool(storage.get("enabled", True)),
+            "backend": storage.get("backend", "sqlite"),
+            "path": storage.get("path", "./outputs/perfagent.db"),
+            "retention_days": int(storage.get("retention_days", 30)),
+        },
     }
     for key, value in cli_values.items():
         if value is not None:
@@ -56,6 +75,8 @@ def resolve_evaluate_options(config: dict[str, Any], cli_values: dict[str, Any])
             elif key in {"llm_enabled", "llm_provider", "llm_model", "llm_base_url"}:
                 llm_key = key.replace("llm_", "")
                 resolved["llm"][llm_key] = value
+            elif key == "traffic_profile_mode":
+                resolved["traffic_profile"]["enabled"] = value == "production"
             else:
                 resolved[key] = value
     return resolved
@@ -135,6 +156,40 @@ def capacity_strategy(duration: str, slo_p95_ms: int, slo_error_rate_percent: fl
             {"duration": phase["duration"], "target": max(1, int(phase["target_rps"] / 10))}
             for phase in phases
         ],
+        "thresholds": {
+            "p95_latency_ms": slo_p95_ms,
+            "error_rate_percent": slo_error_rate_percent,
+        },
+    }
+
+
+def derive_strategy_from_traffic_profile(
+    traffic_profile: dict[str, Any],
+    *,
+    duration: str,
+    slo_p95_ms: int,
+    slo_error_rate_percent: float,
+) -> dict[str, Any]:
+    production_rps = float(traffic_profile.get("production_like_rps", 0) or 0)
+    peak_rps = float(traffic_profile.get("peak_rps", production_rps) or production_rps)
+    warmup_rps = max(1, int(production_rps * 0.25)) if production_rps else 1
+    return {
+        "duration": duration,
+        "mode": "production-traffic",
+        "traffic_model": "observed-production",
+        "phases": [
+            {"name": "warmup", "duration": _edge_phase_duration(duration), "target_rps": warmup_rps},
+            {"name": "production_like", "duration": duration, "target_rps": production_rps},
+            {"name": "observed_peak", "duration": duration, "target_rps": peak_rps},
+            {"name": "recovery", "duration": _edge_phase_duration(duration), "target_rps": warmup_rps},
+        ],
+        "stages": [
+            {"duration": _edge_phase_duration(duration), "target": max(1, int(warmup_rps / 10))},
+            {"duration": duration, "target": max(1, int(production_rps / 10))},
+            {"duration": duration, "target": max(1, int(peak_rps / 10))},
+            {"duration": _edge_phase_duration(duration), "target": max(1, int(warmup_rps / 10))},
+        ],
+        "endpoint_mix": traffic_profile.get("endpoint_mix", []),
         "thresholds": {
             "p95_latency_ms": slo_p95_ms,
             "error_rate_percent": slo_error_rate_percent,

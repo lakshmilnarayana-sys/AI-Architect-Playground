@@ -8,14 +8,17 @@ from perfagent.core.artifacts import read_json
 from perfagent.config import load_run_config, resolve_evaluate_options
 from perfagent.collectors.prometheus_collector import load_prometheus_query_config, validate_prometheus_queries
 from perfagent.core.artifacts import write_json
+from perfagent.storage.run_store import RunStore
 from perfagent.workflow import evaluate_service, generate_only, import_external_results
 
 
 app = typer.Typer(help="PerfAgent AI: from API contract to performance report.")
 prometheus_app = typer.Typer(help="Prometheus helpers.")
 baseline_app = typer.Typer(help="Baseline management.")
+storage_app = typer.Typer(help="Run database management.")
 app.add_typer(prometheus_app, name="prometheus")
 app.add_typer(baseline_app, name="baseline")
+app.add_typer(storage_app, name="storage")
 
 
 @app.command()
@@ -38,6 +41,7 @@ def evaluate(
     llm_provider: str | None = typer.Option(None, "--llm-provider", help="LLM provider. Supported: ollama."),
     llm_model: str | None = typer.Option(None, "--llm-model", help="LLM model name, for example llama3.2."),
     llm_base_url: str | None = typer.Option(None, "--llm-base-url", help="Ollama base URL."),
+    traffic_profile: str | None = typer.Option(None, "--traffic-profile", help="Traffic profile mode. Use 'production' to derive load from observability."),
     prometheus_url: str | None = typer.Option(None, "--prometheus-url"),
     prometheus_service_label: str | None = typer.Option(None, "--prometheus-service-label"),
     prometheus_query_config: Path | None = typer.Option(
@@ -72,6 +76,7 @@ def evaluate(
             "llm_provider": llm_provider,
             "llm_model": llm_model,
             "llm_base_url": llm_base_url,
+            "traffic_profile_mode": traffic_profile,
             "prometheus_url": prometheus_url,
             "prometheus_service_label": prometheus_service_label,
             "prometheus_query_config_path": str(prometheus_query_config) if prometheus_query_config else None,
@@ -95,6 +100,8 @@ def evaluate(
         service_resources=options.get("service_resources"),
         dependencies=options.get("dependencies", []),
         llm=options.get("llm"),
+        traffic_profile_config=options.get("traffic_profile"),
+        storage=options.get("storage"),
         prometheus_url=options.get("prometheus_url"),
         prometheus_service_label=options.get("prometheus_service_label"),
         prometheus_query_config_path=Path(options["prometheus_query_config_path"]) if options.get("prometheus_query_config_path") else None,
@@ -231,6 +238,28 @@ def baseline_compare(
     typer.echo(f"p95 latency delta: {p95_delta}")
     typer.echo(f"stable RPS delta: {rps_delta}")
     typer.echo(f"error rate delta: {error_delta}")
+
+
+@storage_app.command("list")
+def storage_list(
+    db_path: Path = typer.Option(Path("./outputs/perfagent.db"), "--db-path"),
+    service_name: str | None = typer.Option(None, "--service-name"),
+) -> None:
+    store = RunStore(db_path)
+    for run in store.list_runs(service_name):
+        typer.echo(
+            f"{run['created_at']} {run['service_name']} {run['run_id']} "
+            f"{run['release_decision']} p95={run['max_p95_latency_ms']} rps={run['stable_rps']}"
+        )
+
+
+@storage_app.command("retention")
+def storage_retention(
+    db_path: Path = typer.Option(Path("./outputs/perfagent.db"), "--db-path"),
+    retention_days: int = typer.Option(30, "--retention-days"),
+) -> None:
+    deleted = RunStore(db_path).apply_retention(retention_days=retention_days)
+    typer.echo(f"Deleted {deleted} runs older than {retention_days} days")
 
 
 def main() -> None:

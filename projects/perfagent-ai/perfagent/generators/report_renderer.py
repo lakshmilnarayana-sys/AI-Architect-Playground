@@ -22,6 +22,7 @@ def render_reports(
     service_resources: dict[str, Any] | None = None,
     dependency_analysis: dict[str, Any] | None = None,
     ai_analysis: dict[str, Any] | None = None,
+    traffic_profile: dict[str, Any] | None = None,
     aligned_timeseries: list[dict[str, Any]] | None = None,
 ) -> dict[str, Path]:
     reports_dir = output_dir / "reports"
@@ -38,6 +39,7 @@ def render_reports(
         service_resources or {},
         dependency_analysis or {"dependencies": [], "findings": []},
         ai_analysis or {},
+        traffic_profile or {},
     )
     md_path = reports_dir / "report.md"
     html_path = reports_dir / "report.html"
@@ -56,6 +58,7 @@ def render_reports(
             service_resources=service_resources or {},
             dependency_analysis=dependency_analysis or {"dependencies": [], "findings": []},
             ai_analysis=ai_analysis or {},
+            traffic_profile=traffic_profile or {},
             aligned_timeseries=aligned_timeseries or [],
         )
     )
@@ -70,6 +73,7 @@ def render_reports(
             "service_resources": service_resources or {},
             "dependency_analysis": dependency_analysis or {"dependencies": [], "findings": []},
             "ai_analysis": ai_analysis or {},
+            "traffic_profile": traffic_profile or {},
             "aligned_timeseries": aligned_timeseries or [],
         },
     )
@@ -88,6 +92,7 @@ def _markdown(
     service_resources: dict[str, Any],
     dependency_analysis: dict[str, Any],
     ai_analysis: dict[str, Any],
+    traffic_profile: dict[str, Any],
 ) -> str:
     endpoints = contract_analysis.get("endpoints", [])
     evidence = "\n".join(f"- {item}" for item in bottleneck.get("evidence", [])) or "- No evidence available."
@@ -98,6 +103,7 @@ def _markdown(
     resources = _resource_lines(service_resources)
     dependencies = _dependency_lines(dependency_analysis)
     ai = _ai_lines(ai_analysis)
+    traffic = _traffic_profile_lines(traffic_profile)
     return f"""# PerfAgent AI Report: {service_name}
 
 ## Executive Summary
@@ -119,6 +125,10 @@ Max p95 latency was {features.get("max_p95_latency_ms", 0)} ms against an SLO of
 
 - Duration: {strategy.get("duration", "unknown")}
 - Stages: {strategy.get("stages", [])}
+
+## Production Traffic Profile
+
+{traffic}
 
 ## API Coverage
 
@@ -212,6 +222,24 @@ def _ai_lines(ai_analysis: dict[str, Any]) -> str:
     )
 
 
+def _traffic_profile_lines(traffic_profile: dict[str, Any]) -> str:
+    if not traffic_profile or not traffic_profile.get("enabled"):
+        return "- No production traffic profile was used."
+    endpoint_lines = "\n".join(
+        f"- {item.get('path')}: weight={item.get('weight')}, observed_rps={item.get('observed_rps')}"
+        for item in traffic_profile.get("endpoint_mix", [])
+    )
+    return "\n".join(
+        [
+            f"- Source: {traffic_profile.get('source')}",
+            f"- Production-like RPS: {traffic_profile.get('production_like_rps')}",
+            f"- Peak RPS: {traffic_profile.get('peak_rps')}",
+            "Endpoint mix:",
+            endpoint_lines or "- No endpoint mix available.",
+        ]
+    )
+
+
 def _interactive_html(
     *,
     service_name: str,
@@ -225,6 +253,7 @@ def _interactive_html(
     service_resources: dict[str, Any],
     dependency_analysis: dict[str, Any],
     ai_analysis: dict[str, Any],
+    traffic_profile: dict[str, Any],
     aligned_timeseries: list[dict[str, Any]],
 ) -> str:
     payload = {
@@ -239,6 +268,7 @@ def _interactive_html(
         "serviceResources": service_resources,
         "dependencyAnalysis": dependency_analysis,
         "aiAnalysis": ai_analysis,
+        "trafficProfile": traffic_profile,
         "timeseries": aligned_timeseries,
     }
     data = html.escape(json.dumps(payload, sort_keys=True), quote=False)
@@ -339,6 +369,10 @@ def _interactive_html(
     <section class="panel" style="margin-bottom:16px">
       <h2>AI Analysis</h2>
       <div id="ai-analysis"></div>
+    </section>
+    <section class="panel" style="margin-bottom:16px">
+      <h2>Production Traffic Profile</h2>
+      <div id="traffic-profile"></div>
     </section>
     <section class="two-col">
       <div class="panel chart-wrap">
@@ -468,6 +502,16 @@ def _interactive_html(
         : `<p>${{fmt(ai.summary || 'AI analysis was not run.')}}</p>`;
     }}
 
+    function renderTrafficProfile() {{
+      const profile = data.trafficProfile || {{}};
+      if (!profile.enabled) {{
+        document.getElementById('traffic-profile').innerHTML = '<p>No production traffic profile was used.</p>';
+        return;
+      }}
+      const rows = (profile.endpoint_mix || []).map(item => `<tr><td>${{fmt(item.path)}}</td><td>${{fmt(item.weight)}}</td><td>${{fmt(item.observed_rps)}}</td></tr>`).join('');
+      document.getElementById('traffic-profile').innerHTML = `<table><tbody><tr><th>Source</th><td>${{fmt(profile.source)}}</td></tr><tr><th>Production-like RPS</th><td>${{fmt(profile.production_like_rps)}}</td></tr><tr><th>Peak RPS</th><td>${{fmt(profile.peak_rps)}}</td></tr></tbody></table><h3>Endpoint Mix</h3><table><thead><tr><th>Path</th><th>Weight</th><th>Observed RPS</th></tr></thead><tbody>${{rows}}</tbody></table>`;
+    }}
+
     function filteredRows() {{
       const phase = document.getElementById('phase-filter').value;
       const rows = phase === 'all' ? data.timeseries : data.timeseries.filter(row => row.phase === phase);
@@ -589,6 +633,7 @@ def _interactive_html(
     renderServiceResources();
     renderDependencyAnalysis();
     renderAiAnalysis();
+    renderTrafficProfile();
     renderBottleneck();
     renderPhaseFilter();
     initTheme();

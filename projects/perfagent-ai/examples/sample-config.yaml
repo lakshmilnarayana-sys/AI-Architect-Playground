@@ -19,11 +19,37 @@ llm:
   provider: ollama
   model: llama3.2
   base_url: http://localhost:11434
+traffic_profile:
+  enabled: false
+  source: prometheus
+  lookback: 6h
+  peak_multiplier: 1.5
+  endpoint_label: route
+  request_rate_query: 'sum by (route) (rate(http_requests_total{service="{service}"}[5m]))'
 prometheus:
   enabled: false
   url: http://localhost:9090
   service_label: sample-payments-api
   query_config: ./examples/prometheus-queries.yaml
+# Future provider adapters can use this shape. See docs/observability-integrations.md.
+observability:
+  provider: prometheus
+  datadog:
+    site: datadoghq.com
+    api_key_env: DATADOG_API_KEY
+    app_key_env: DATADOG_APP_KEY
+  newrelic:
+    account_id_env: NEW_RELIC_ACCOUNT_ID
+    api_key_env: NEW_RELIC_API_KEY
+  elasticsearch:
+    url: http://localhost:9200
+    api_key_env: ELASTICSEARCH_API_KEY
+    index: traces-apm-*
+storage:
+  enabled: true
+  backend: sqlite
+  path: ./outputs/perfagent.db
+  retention_days: 30
 dependencies:
   postgres:
     type: postgres

@@ -281,6 +281,24 @@ ollama serve
 
 The LLM does not calculate p95, p99, RPS, error rate, capacity, or release decisions.
 
+## Can PerfAgent match production traffic patterns?
+
+Yes, for HTTP services with Prometheus route/path metrics. Use `--traffic-profile production` with `--prometheus-url` and `--prometheus-service-label`.
+
+PerfAgent queries observed request-rate data, derives endpoint weights and production-like/peak RPS, writes `processed/traffic_profile.json`, updates `processed/test_strategy.yaml`, and generates a weighted k6 script.
+
+Current limits:
+
+- request payload distributions are still synthetic unless seed data is supplied
+- endpoint labels must map cleanly to OpenAPI paths
+- gRPC/WebSocket production profile derivation is not first-class yet
+
+## What about Datadog, New Relic, and ELK?
+
+The executable client today is Prometheus-compatible. Datadog, New Relic, and ELK mappings are captured in `docs/observability-integrations.md` with example queries and the adapter contract.
+
+Those providers should normalize traffic and dependency data into the same PerfAgent traffic profile shape, so the downstream strategy generation, analysis, bottleneck rules, and AI report narrative stay the same.
+
 ## Where are golden signals stored?
 
 Current load-side signals are stored in:

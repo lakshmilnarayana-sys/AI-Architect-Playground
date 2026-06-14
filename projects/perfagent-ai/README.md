@@ -253,6 +253,12 @@ Prometheus integration guide: [docs/prometheus-integration.md](docs/prometheus-i
 
 Dependency analysis guide: [docs/dependency-analysis.md](docs/dependency-analysis.md).
 
+Production traffic profile guide: [docs/production-traffic-profile.md](docs/production-traffic-profile.md).
+
+Observability integrations guide: [docs/observability-integrations.md](docs/observability-integrations.md).
+
+Continuous performance guide: [docs/continuous-performance.md](docs/continuous-performance.md).
+
 FAQ: [docs/faq.md](docs/faq.md).
 
 ## CLI Reference
@@ -295,6 +301,22 @@ Validate Prometheus query coverage:
   --prometheus-url https://prometheus.example.com \
   --prometheus-service-label payments-api \
   --prometheus-query-config ./examples/prometheus-queries.yaml
+```
+
+Derive test load from observed production traffic:
+
+```bash
+.venv/bin/python -m perfagent evaluate \
+  --service-name payments-api \
+  --openapi ./openapi.yaml \
+  --target-url http://localhost:8080 \
+  --runtime go \
+  --slo-p95-ms 500 \
+  --slo-error-rate 1 \
+  --prometheus-url https://prometheus.example.com \
+  --prometheus-service-label payments-api \
+  --traffic-profile production \
+  --output ./outputs/payments-api
 ```
 
 Enable local AI analysis with Ollama:

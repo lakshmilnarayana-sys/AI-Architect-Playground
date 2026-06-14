@@ -17,7 +17,8 @@ from perfagent.collectors.prometheus_collector import (
     merge_dependency_metrics,
     merge_prometheus_metrics,
 )
-from perfagent.config import default_strategy
+from perfagent.collectors.traffic_profile import collect_prometheus_traffic_profile
+from perfagent.config import default_strategy, derive_strategy_from_traffic_profile
 from perfagent.core.artifacts import read_json, write_json, write_yaml
 from perfagent.core.state import EvaluationState, initial_state
 from perfagent.core.workspace import Workspace
@@ -30,6 +31,7 @@ from perfagent.generators.synthetic_data import generate_test_data
 from perfagent.generators.websocket_generator import generate_websocket_load_test
 from perfagent.llm.client import disabled_ai_analysis, explain_with_ollama
 from perfagent.parsers.openapi_parser import parse_openapi
+from perfagent.storage.run_store import RunStore
 
 
 def evaluate_service(
@@ -47,6 +49,8 @@ def evaluate_service(
     service_resources: dict[str, Any] | None = None,
     dependencies: list[dict[str, Any]] | None = None,
     llm: dict[str, Any] | None = None,
+    traffic_profile_config: dict[str, Any] | None = None,
+    storage: dict[str, Any] | None = None,
     prometheus_url: str | None = None,
     prometheus_service_label: str | None = None,
     prometheus_query_config_path: Path | None = None,
@@ -80,7 +84,22 @@ def evaluate_service(
     state["contract_analysis"] = contract
     write_json(workspace.processed_dir / "contract_analysis.json", contract)
 
-    strategy = default_strategy(duration, slo_p95_ms, slo_error_rate_percent, mode=mode)
+    traffic_profile = collect_prometheus_traffic_profile(
+        prometheus_url,
+        prometheus_service_label,
+        traffic_profile_config or {"enabled": False},
+    )
+    write_json(workspace.processed_dir / "traffic_profile.json", traffic_profile)
+
+    if traffic_profile.get("enabled") and traffic_profile.get("endpoint_mix"):
+        strategy = derive_strategy_from_traffic_profile(
+            traffic_profile,
+            duration=duration,
+            slo_p95_ms=slo_p95_ms,
+            slo_error_rate_percent=slo_error_rate_percent,
+        )
+    else:
+        strategy = default_strategy(duration, slo_p95_ms, slo_error_rate_percent, mode=mode)
     state["test_strategy"] = strategy
     write_yaml(workspace.processed_dir / "test_strategy.yaml", strategy)
     write_yaml(workspace.processed_dir / "metric_contract.yaml", _metric_contract(state, strategy))
@@ -205,10 +224,12 @@ def evaluate_service(
         service_resources=service_resources or {},
         dependency_analysis=dependency_analysis,
         ai_analysis=ai_analysis,
+        traffic_profile=traffic_profile,
         aligned_timeseries=aligned,
     )
     state["report_md_path"] = str(reports["report_md_path"])
     state["report_html_path"] = str(reports["report_html_path"])
+    _persist_run(storage or {}, state, features)
     workspace.write_state(state)
     return state
 
@@ -244,6 +265,24 @@ def generate_only(*, service_name: str, openapi_path: Path, target_url: str, out
         "grpc_load": grpc_path,
         "websocket_load": websocket_path,
     }
+
+
+def _persist_run(storage: dict[str, Any], state: EvaluationState, features: dict[str, Any]) -> None:
+    if storage and not storage.get("enabled", True):
+        return
+    db_path = Path(storage.get("path", "./outputs/perfagent.db") if storage else "./outputs/perfagent.db")
+    retention_days = int(storage.get("retention_days", 30) if storage else 30)
+    store = RunStore(db_path)
+    store.record_run(
+        {
+            "run_id": state["run_id"],
+            "service_name": state["service_name"],
+            "release_decision": state["release_decision"],
+            "features": features,
+            "report_html_path": state["report_html_path"],
+        }
+    )
+    store.apply_retention(retention_days=retention_days)
 
 
 def import_external_results(
@@ -292,6 +331,7 @@ def import_external_results(
         service_resources=service_resources or {},
         dependency_analysis=dependency_analysis or {"dependencies": [], "findings": []},
         ai_analysis=ai_analysis or disabled_ai_analysis("AI analysis was not run for imported results."),
+        traffic_profile={},
         aligned_timeseries=aligned,
     )
     return {
