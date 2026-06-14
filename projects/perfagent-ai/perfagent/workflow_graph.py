@@ -287,6 +287,7 @@ def _stage_execute_load(state: GraphInput) -> GraphInput:
             pid=profiling_settings.get("pid"),
             profile_endpoint=profiling_settings.get("profile_endpoint"),
             container=profiling_settings.get("container"),
+            mode=str(profiling_settings.get("mode", "ebpf")),
         )
         write_json(workspace.raw_dir / "profile_capture_plan.json", profile_capture_plan)
         state["profile_capture_plan"] = profile_capture_plan

@@ -76,6 +76,7 @@ def evaluate(
     ),
     profile: list[Path] | None = typer.Option(None, "--profile", help="Path to an existing profiling artifact to attach."),
     profile_auto: bool | None = typer.Option(None, "--profile-auto/--no-profile-auto", help="Run supported profiler capture commands during execution."),
+    profile_mode: str | None = typer.Option(None, "--profile-mode", help="Profiling mode: ebpf, runtime, or auto."),
     profile_pid: str | None = typer.Option(None, "--profile-pid"),
     profile_endpoint: str | None = typer.Option(None, "--profile-endpoint"),
     profile_container: str | None = typer.Option(None, "--profile-container"),
@@ -111,6 +112,7 @@ def evaluate(
             "prometheus_service_label": prometheus_service_label,
             "prometheus_query_config_path": str(prometheus_query_config) if prometheus_query_config else None,
             "profile_auto": profile_auto,
+            "profile_mode": profile_mode,
             "profile_pid": profile_pid,
             "profile_endpoint": profile_endpoint,
             "profile_container": profile_container,
@@ -183,6 +185,8 @@ def capacity_search(
     min_rps: int = typer.Option(50, "--min-rps"),
     max_rps: int = typer.Option(800, "--max-rps"),
     steps: int = typer.Option(6, "--steps"),
+    repeats: int = typer.Option(1, "--repeats"),
+    refinement_steps: int = typer.Option(0, "--refinement-steps"),
     fail_fast: bool = typer.Option(True, "--fail-fast/--no-fail-fast"),
     output_json: Path | None = typer.Option(None, "--output-json"),
 ) -> None:
@@ -199,6 +203,8 @@ def capacity_search(
         min_rps=min_rps,
         max_rps=max_rps,
         steps=steps,
+        repeats=repeats,
+        refinement_steps=refinement_steps,
         fail_fast=fail_fast,
     )
     if output_json:
@@ -452,6 +458,7 @@ def distributed_run(
 @profile_app.command("plan")
 def profile_plan(
     runtime: str = typer.Option(..., "--runtime"),
+    mode: str = typer.Option("ebpf", "--mode", help="Profiling mode: ebpf, runtime, or auto."),
     output_dir: Path = typer.Option(Path("./outputs/profiles"), "--output-dir"),
     duration_seconds: int = typer.Option(60, "--duration-seconds"),
     pid: str | None = typer.Option(None, "--pid"),
@@ -466,6 +473,7 @@ def profile_plan(
         pid=pid,
         profile_endpoint=profile_endpoint,
         container=container,
+        mode=mode,
     )
     if output_json:
         write_json(output_json, plan)
@@ -480,6 +488,7 @@ def profile_plan(
 @profile_app.command("run")
 def profile_run(
     runtime: str = typer.Option(..., "--runtime"),
+    mode: str = typer.Option("ebpf", "--mode", help="Profiling mode: ebpf, runtime, or auto."),
     output_dir: Path = typer.Option(Path("./outputs/profiles"), "--output-dir"),
     duration_seconds: int = typer.Option(60, "--duration-seconds"),
     pid: str | None = typer.Option(None, "--pid"),
@@ -494,6 +503,7 @@ def profile_run(
         pid=pid,
         profile_endpoint=profile_endpoint,
         container=container,
+        mode=mode,
     )
     result = execute_profile_capture_plan(plan, log_dir=output_dir / "logs", timeout_seconds=duration_seconds + 30)
     if output_json:

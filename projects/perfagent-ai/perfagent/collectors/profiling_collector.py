@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import re
 import shutil
 import subprocess
 import time
@@ -91,6 +93,7 @@ def collect_profiling_artifacts(profile_paths: list[Path], output_dir: Path) -> 
                 "type": profile_type,
                 "render_status": _render_status(profile_type, exists=True),
                 "warnings": _profile_warnings(profile_type, profile_path, exists=True),
+                "summary": summarize_profile_artifact(destination, profile_type),
             }
         )
     return {
@@ -110,13 +113,21 @@ def build_profile_capture_plan(
     pid: str | None = None,
     profile_endpoint: str | None = None,
     container: str | None = None,
+    mode: str = "runtime",
 ) -> dict[str, Any]:
     runtime_name = runtime.lower()
     output_dir = Path(output_dir)
     commands: list[dict[str, Any]] = []
     warnings: list[str] = []
 
-    if runtime_name == "go":
+    if mode.lower() in {"ebpf", "system", "auto"}:
+        commands.extend(_ebpf_commands(output_dir=output_dir, duration_seconds=duration_seconds, pid=pid, container=container))
+        if mode.lower() == "ebpf":
+            runtime_name = "ebpf"
+
+    if commands and mode.lower() in {"ebpf", "system"}:
+        pass
+    elif runtime_name == "go":
         target = profile_endpoint or "http://localhost:6060/debug/pprof"
         cpu = output_dir / "cpu.pprof"
         commands.append(
@@ -194,7 +205,7 @@ def build_profile_capture_plan(
                 phase="capture",
             )
         )
-    else:
+    elif not commands:
         warnings.append(f"Unsupported runtime for automatic profiling plan: {runtime}")
 
     for command in commands:
@@ -203,6 +214,7 @@ def build_profile_capture_plan(
 
     return {
         "runtime": runtime,
+        "mode": mode,
         "duration_seconds": duration_seconds,
         "output_dir": str(output_dir),
         "commands": commands,
@@ -210,6 +222,43 @@ def build_profile_capture_plan(
         "execute_supported": True,
         "execution_note": "PerfAgent can execute available capture commands when explicitly enabled.",
     }
+
+
+def _ebpf_commands(*, output_dir: Path, duration_seconds: int, pid: str | None, container: str | None) -> list[dict[str, Any]]:
+    target_pid = pid or "<pid>"
+    commands = [
+        _command(
+            "perf",
+            ["perf", "record", "-F", "99", "-g", "-p", target_pid, "--", "sleep", str(duration_seconds)],
+            "Capture language-independent CPU stacks with Linux perf/eBPF without application instrumentation.",
+            phase="capture",
+        ),
+        _command(
+            "perf",
+            ["perf", "script", "-i", str(output_dir / "perf.data")],
+            "Convert perf.data into folded stack input for flamegraph tooling.",
+            phase="render",
+        ),
+        _command(
+            "bpftrace",
+            ["bpftrace", "-e", f"profile:hz:99 /pid == {target_pid}/ {{ @[ustack] = count(); }}", "-d"],
+            "Validate bpftrace user-stack profile program for the target PID.",
+            phase="capture",
+        ),
+        _command(
+            "pyroscope",
+            ["pyroscope", "ebpf", "--pid", target_pid, "--duration", f"{duration_seconds}s", "--output", str(output_dir / "pyroscope.pb.gz")],
+            "Capture eBPF profile with Pyroscope without code instrumentation.",
+            phase="capture",
+        ),
+        _command(
+            "parca-agent",
+            ["parca-agent", "--remote-store-address", "127.0.0.1:7070", "--node", container or "local"],
+            "Run Parca Agent eBPF profiler for language-independent continuous profiling.",
+            phase="capture",
+        ),
+    ]
+    return commands
 
 
 def start_profile_capture_plan(plan: dict[str, Any], *, log_dir: Path) -> dict[str, Any]:
@@ -291,6 +340,7 @@ def finish_profile_capture_plan(
 
     render_results = _run_render_commands(plan, log_dir=log_dir)
     warnings.extend(render_results["warnings"])
+    captured_artifacts = _captured_artifacts(Path(plan.get("output_dir", log_dir)))
     return {
         "enabled": capture.get("enabled", False),
         "plan": _public_plan(plan),
@@ -298,8 +348,24 @@ def finish_profile_capture_plan(
         "skipped": capture.get("skipped", []),
         "completed": completed,
         "rendered": render_results["completed"],
+        "artifacts": captured_artifacts,
         "warnings": warnings,
     }
+
+
+def summarize_profile_artifact(profile_path: Path, profile_type: str | None = None) -> dict[str, Any]:
+    profile_type = profile_type or _classify_profile(profile_path)
+    if not profile_path.exists():
+        return {"available": False, "top_functions": [], "warnings": ["profile artifact missing"]}
+    if profile_type == "collapsed-stacks":
+        return _summarize_collapsed_stacks(profile_path)
+    if profile_type == "speedscope":
+        return _summarize_speedscope(profile_path)
+    if profile_type in {"pprof", "py-spy", "clinic", "v8-cpuprofile", "jfr"}:
+        return _summarize_text_profile(profile_path)
+    if profile_type == "flamegraph":
+        return {"available": True, "type": "flamegraph", "top_functions": [], "warnings": []}
+    return {"available": True, "type": profile_type, "top_functions": [], "warnings": ["profile summary parser unavailable"]}
 
 
 def execute_profile_capture_plan(plan: dict[str, Any], *, log_dir: Path, timeout_seconds: int | None = None) -> dict[str, Any]:
@@ -331,6 +397,106 @@ def _run_render_commands(plan: dict[str, Any], *, log_dir: Path) -> dict[str, An
             }
         )
     return {"completed": completed, "warnings": warnings}
+
+
+def _captured_artifacts(output_dir: Path) -> list[dict[str, Any]]:
+    if not output_dir.exists():
+        return []
+    artifacts: list[dict[str, Any]] = []
+    for path in sorted(item for item in output_dir.iterdir() if item.is_file()):
+        profile_type = _classify_profile(path)
+        artifacts.append(
+            {
+                "artifact_path": str(path),
+                "type": profile_type,
+                "render_status": _render_status(profile_type, exists=True),
+                "summary": summarize_profile_artifact(path, profile_type),
+            }
+        )
+    return artifacts
+
+
+def _summarize_collapsed_stacks(path: Path) -> dict[str, Any]:
+    totals: dict[str, float] = {}
+    total_samples = 0.0
+    for line in path.read_text(errors="ignore").splitlines():
+        if not line.strip() or " " not in line:
+            continue
+        stack, raw_count = line.rsplit(" ", 1)
+        try:
+            count = float(raw_count)
+        except ValueError:
+            continue
+        function = stack.split(";")[-1].strip() or "unknown"
+        totals[function] = totals.get(function, 0.0) + count
+        total_samples += count
+    return _top_function_summary("collapsed-stacks", totals, total_samples)
+
+
+def _summarize_text_profile(path: Path) -> dict[str, Any]:
+    totals: dict[str, float] = {}
+    total_samples = 0.0
+    pattern = re.compile(r"(?P<percent>\d+(?:\.\d+)?)%\s+(?P<name>[A-Za-z_][\w./:$<>-]+)")
+    for line in path.read_text(errors="ignore").splitlines():
+        match = pattern.search(line)
+        if not match:
+            continue
+        value = float(match.group("percent"))
+        name = match.group("name")
+        totals[name] = max(totals.get(name, 0.0), value)
+        total_samples = max(total_samples, 100.0)
+    return _top_function_summary("text-profile", totals, total_samples)
+
+
+def _summarize_speedscope(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return {"available": True, "type": "speedscope", "top_functions": [], "warnings": ["invalid speedscope JSON"]}
+    frames = payload.get("shared", {}).get("frames", [])
+    frame_names = [frame.get("name", f"frame_{index}") for index, frame in enumerate(frames) if isinstance(frame, dict)]
+    totals: dict[str, float] = {}
+    total_samples = 0.0
+    for profile in payload.get("profiles", []):
+        if not isinstance(profile, dict):
+            continue
+        weights = profile.get("weights") or []
+        samples = profile.get("samples") or []
+        for sample_index, sample in enumerate(samples):
+            weight = float(weights[sample_index]) if sample_index < len(weights) and _is_number(weights[sample_index]) else 1.0
+            if isinstance(sample, list) and sample:
+                frame_index = sample[-1]
+                if isinstance(frame_index, int) and 0 <= frame_index < len(frame_names):
+                    totals[frame_names[frame_index]] = totals.get(frame_names[frame_index], 0.0) + weight
+                    total_samples += weight
+    return _top_function_summary("speedscope", totals, total_samples)
+
+
+def _top_function_summary(profile_type: str, totals: dict[str, float], total_samples: float) -> dict[str, Any]:
+    top_functions = []
+    for name, value in sorted(totals.items(), key=lambda item: item[1], reverse=True)[:10]:
+        top_functions.append(
+            {
+                "name": name,
+                "samples": round(value, 4),
+                "percent": round((value / total_samples) * 100, 4) if total_samples else 0,
+            }
+        )
+    return {
+        "available": True,
+        "type": profile_type,
+        "sample_count": round(total_samples, 4),
+        "top_functions": top_functions,
+        "warnings": [] if top_functions else ["no top functions parsed"],
+    }
+
+
+def _is_number(value: Any) -> bool:
+    try:
+        float(value)
+        return True
+    except (TypeError, ValueError):
+        return False
 
 
 def _public_plan(plan: dict[str, Any]) -> dict[str, Any]:

@@ -40,6 +40,8 @@ For a stronger breakpoint signal, run repeated probe evaluations:
   --min-rps 50 \
   --max-rps 800 \
   --steps 6 \
+  --repeats 3 \
+  --refinement-steps 3 \
   --output ./outputs/payments-api-capacity
 ```
 
@@ -49,6 +51,8 @@ The command runs isolated probe directories such as `probe-50rps`, `probe-100rps
 - each probe release decision
 - estimated capacity RPS from the highest passing probe
 - first breaking point RPS from the first failing probe
+- confidence interval between the highest passing probe and lowest failing probe
+- unstable probe detection when repeated runs disagree
 
 Each probe uses `evaluate --mode capacity --capacity-probe-rps <rps> --no-store`, so the search summary remains deterministic and does not pollute the run-store baseline history with intermediate probes.
 
@@ -121,24 +125,28 @@ raw/profiling_artifacts.json
 
 The report links the attached artifacts but does not infer root cause from profiles yet. That keeps the current MVP rule intact: code calculates evidence, and higher-level analysis explains only evidence that exists.
 
-## Automatic Profiler Capture
+## Automatic eBPF Profiler Capture
 
-Plan supported profiler commands:
+PerfAgent defaults to language-independent eBPF/system profiling. This does not require Go pprof, JVM agents, Python code hooks, or application instrumentation. It does require host privileges and Linux tooling such as `perf`, `bpftrace`, Pyroscope eBPF, or Parca Agent.
+
+Plan supported eBPF profiler commands:
 
 ```bash
 .venv/bin/python -m perfagent profile plan \
   --runtime go \
-  --profile-endpoint http://localhost:6060/debug/pprof \
+  --mode ebpf \
+  --pid 12345 \
   --duration-seconds 60 \
   --output-json ./outputs/profile-plan.json
 ```
 
-Execute supported profiler commands explicitly:
+Execute supported eBPF profiler commands explicitly:
 
 ```bash
 .venv/bin/python -m perfagent profile run \
   --runtime go \
-  --profile-endpoint http://localhost:6060/debug/pprof \
+  --mode ebpf \
+  --pid 12345 \
   --duration-seconds 60 \
   --output-json ./outputs/profile-result.json
 ```
@@ -154,11 +162,14 @@ Capture during an evaluation:
   --slo-p95-ms 500 \
   --slo-error-rate 1 \
   --profile-auto \
-  --profile-endpoint http://localhost:6060/debug/pprof \
+  --profile-mode ebpf \
+  --profile-pid 12345 \
   --output ./outputs/payments-api
 ```
 
 PerfAgent starts capture-phase commands before load execution and finalizes/render commands after the run. Captured stdout/stderr and `profile_capture_result.json` are stored under `raw/profiles/`.
+
+Runtime-specific profilers are still available with `--mode runtime` for cases where eBPF is not available or a runtime-native profile is required.
 
 ## CI Gates
 

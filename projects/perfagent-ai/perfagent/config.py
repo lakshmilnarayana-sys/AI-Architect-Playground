@@ -76,6 +76,7 @@ def resolve_evaluate_options(config: dict[str, Any], cli_values: dict[str, Any])
         },
         "profiling": {
             "auto_capture": bool(profiling.get("auto_capture", False)),
+            "mode": profiling.get("mode", "ebpf"),
             "duration_seconds": int(profiling.get("duration_seconds", 60)),
             "pid": profiling.get("pid"),
             "profile_endpoint": profiling.get("profile_endpoint"),
@@ -99,7 +100,7 @@ def resolve_evaluate_options(config: dict[str, Any], cli_values: dict[str, Any])
             elif key in {"llm_enabled", "llm_provider", "llm_model", "llm_base_url"}:
                 llm_key = key.replace("llm_", "")
                 resolved["llm"][llm_key] = value
-            elif key in {"profile_auto", "profile_pid", "profile_endpoint", "profile_container"}:
+            elif key in {"profile_auto", "profile_mode", "profile_pid", "profile_endpoint", "profile_container"}:
                 profile_key = key.replace("profile_", "")
                 if profile_key == "auto":
                     profile_key = "auto_capture"

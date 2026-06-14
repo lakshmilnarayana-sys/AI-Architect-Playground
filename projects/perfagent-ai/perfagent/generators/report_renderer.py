@@ -216,7 +216,7 @@ def _resource_lines(service_resources: dict[str, Any]) -> str:
 
 
 def _profile_lines(profiling: dict[str, Any]) -> str:
-    profiles = profiling.get("profiles", [])
+    profiles = [*profiling.get("profiles", []), *profiling.get("auto_capture", {}).get("artifacts", [])]
     if profiles:
         lines = []
         for profile in profiles:
@@ -224,6 +224,11 @@ def _profile_lines(profiling: dict[str, Any]) -> str:
             lines.append(
                 f"- {profile.get('artifact_path') or profile.get('source_path')}: "
                 f"type={profile.get('type', 'unknown')}, render_status={profile.get('render_status', 'unknown')}{warning_text}"
+            )
+            top_functions = profile.get("summary", {}).get("top_functions", [])
+            lines.extend(
+                f"  - top: {item.get('name')} ({item.get('percent')}%, samples={item.get('samples')})"
+                for item in top_functions[:5]
             )
         return "\n".join(lines)
     return "\n".join(f"- {item}" for item in profiling.get("artifacts", [])) or "- No profiling artifacts attached."
@@ -802,13 +807,14 @@ def _interactive_html(
     }}
 
     function renderProfiles() {{
-      const structuredProfiles = data.profiling.profiles || [];
+      const structuredProfiles = [...(data.profiling.profiles || []), ...((data.profiling.auto_capture || {{}}).artifacts || [])];
       if (structuredProfiles.length) {{
         const rows = structuredProfiles.map(item => {{
           const warnings = (item.warnings || []).join('; ') || 'none';
-          return `<tr><td>${{fmt(item.artifact_path || item.source_path)}}</td><td>${{fmt(item.type)}}</td><td>${{fmt(item.render_status)}}</td><td>${{fmt(warnings)}}</td></tr>`;
+          const topFunctions = (((item.summary || {{}}).top_functions || []).slice(0, 5).map(fn => `${{fn.name}} (${{fmt(fn.percent)}}%)`).join('<br>')) || 'n/a';
+          return `<tr><td>${{fmt(item.artifact_path || item.source_path)}}</td><td>${{fmt(item.type)}}</td><td>${{fmt(item.render_status)}}</td><td>${{topFunctions}}</td><td>${{fmt(warnings)}}</td></tr>`;
         }}).join('');
-        document.getElementById('profiles').innerHTML = `<table><thead><tr><th>Artifact</th><th>Type</th><th>Render status</th><th>Warnings</th></tr></thead><tbody>${{rows}}</tbody></table>`;
+        document.getElementById('profiles').innerHTML = `<table><thead><tr><th>Artifact</th><th>Type</th><th>Render status</th><th>Top functions</th><th>Warnings</th></tr></thead><tbody>${{rows}}</tbody></table>`;
         return;
       }}
       const profiles = data.profiling.artifacts || [];

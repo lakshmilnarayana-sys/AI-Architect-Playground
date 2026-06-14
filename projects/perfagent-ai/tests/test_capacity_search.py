@@ -14,7 +14,7 @@ def test_run_capacity_search_stops_at_first_failure(tmp_path, monkeypatch):
     decisions = ["PASS", "WARN"]
 
     def fake_run(command, text, capture_output, check):
-        probe_dir = tmp_path / "capacity" / f"probe-{command[command.index('--capacity-probe-rps') + 1]}rps"
+        probe_dir = tmp_path / "capacity" / f"probe-{command[command.index('--capacity-probe-rps') + 1]}rps" / "run-1"
         decision = decisions.pop(0)
         write_json(
             probe_dir / "reports" / "summary.json",
@@ -44,3 +44,44 @@ def test_run_capacity_search_stops_at_first_failure(tmp_path, monkeypatch):
     assert result["estimated_capacity_rps"] == 50
     assert result["breaking_point_rps"] == 100
     assert len(result["probes"]) == 2
+    assert result["confidence_interval_rps"] == {"lower": 50, "upper": 100}
+
+
+def test_run_capacity_search_refines_between_safe_and_breaking_point(tmp_path, monkeypatch):
+    openapi = tmp_path / "openapi.yaml"
+    openapi.write_text("openapi: 3.0.0\ninfo: {title: t, version: v}\npaths: {}\n")
+
+    def fake_run(command, text, capture_output, check):
+        rps = int(command[command.index("--capacity-probe-rps") + 1])
+        label = "refine" if "refine-" in command[command.index("--output") + 1] else "probe"
+        probe_dir = tmp_path / "capacity" / f"{label}-{rps}rps" / "run-1"
+        decision = "PASS" if rps <= 75 else "WARN"
+        write_json(
+            probe_dir / "reports" / "summary.json",
+            {
+                "release_decision": decision,
+                "features": {"max_p95_latency_ms": 100 if decision == "PASS" else 900, "max_error_rate_percent": 0},
+            },
+        )
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(capacity_search.subprocess, "run", fake_run)
+
+    result = capacity_search.run_capacity_search(
+        service_name="payments-api",
+        openapi_path=openapi,
+        target_url="http://localhost:8080",
+        runtime="python",
+        slo_p95_ms=500,
+        slo_error_rate_percent=1,
+        duration="10s",
+        output_dir=tmp_path / "capacity",
+        min_rps=50,
+        max_rps=100,
+        steps=2,
+        refinement_steps=1,
+    )
+
+    assert result["estimated_capacity_rps"] == 75
+    assert result["breaking_point_rps"] == 100
+    assert result["probes"][-1]["label"] == "refine"

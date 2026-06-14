@@ -37,24 +37,26 @@ The profiling collector also emits deterministic `profiling_summary.json`-style 
 
 Attached SVG profile artifacts are classified as `flamegraph` with `render_status: "provided"` so reports and downstream processors can surface them as already-rendered artifacts.
 
-PerfAgent can also create a deterministic profiler capture plan:
+PerfAgent can also create a deterministic eBPF/system profiler capture plan:
 
 ```bash
 perfagent profile plan \
   --runtime go \
-  --profile-endpoint http://localhost:6060/debug/pprof \
+  --mode ebpf \
+  --pid 12345 \
   --duration-seconds 60 \
   --output-json ./outputs/profile-plan.json
 ```
 
-The plan includes runtime-specific commands for Go pprof, JVM/JFR, py-spy, and Node.js/Clinic.js when the required local tools and target details are available. It records command availability and warnings.
+The default plan is language-independent and includes Linux perf/eBPF, bpftrace, Pyroscope eBPF, and Parca Agent options when the required local tools and target details are available. Runtime-specific commands for Go pprof, JVM/JFR, py-spy, and Node.js/Clinic.js remain available with `--mode runtime`.
 
 PerfAgent can execute those commands explicitly:
 
 ```bash
 perfagent profile run \
   --runtime go \
-  --profile-endpoint http://localhost:6060/debug/pprof \
+  --mode ebpf \
+  --pid 12345 \
   --duration-seconds 60 \
   --output-json ./outputs/profile-result.json
 ```

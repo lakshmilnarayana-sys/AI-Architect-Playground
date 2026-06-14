@@ -219,7 +219,7 @@ New extension surfaces:
 - `distributed coordinate` writes worker commands plus the deterministic merge command for distributed load runs.
 - `distributed run` executes the worker commands and merges worker summaries when they are available.
 - `distributed merge` combines worker summaries into a merged summary and aligned time-series.
-- `profile plan` writes runtime-specific profiler capture/render command plans for Go, JVM, Python, and Node.js.
+- `profile plan` writes eBPF/system profiler capture plans by default, with runtime-specific profilers available as fallback.
 - `profile run` executes available profiler capture/render commands explicitly.
 - `evaluate --profile-auto` runs supported profiler capture commands during the load window.
 - `capacity search` runs iterative capacity probes and records the first breaking point.
@@ -399,7 +399,8 @@ Plan profiler capture and flamegraph rendering commands:
 ```bash
 .venv/bin/python -m perfagent profile plan \
   --runtime go \
-  --profile-endpoint http://localhost:6060/debug/pprof \
+  --mode ebpf \
+  --pid 12345 \
   --duration-seconds 60 \
   --output-json ./outputs/profile-plan.json
 ```
@@ -409,7 +410,8 @@ Run profiler capture explicitly:
 ```bash
 .venv/bin/python -m perfagent profile run \
   --runtime go \
-  --profile-endpoint http://localhost:6060/debug/pprof \
+  --mode ebpf \
+  --pid 12345 \
   --duration-seconds 60 \
   --output-json ./outputs/profile-result.json
 ```
@@ -425,7 +427,8 @@ Run profiler capture during an evaluation:
   --slo-p95-ms 500 \
   --slo-error-rate 1 \
   --profile-auto \
-  --profile-endpoint http://localhost:6060/debug/pprof \
+  --profile-mode ebpf \
+  --profile-pid 12345 \
   --output ./outputs/payments-api
 ```
 
@@ -442,6 +445,8 @@ Run iterative capacity search:
   --min-rps 50 \
   --max-rps 800 \
   --steps 6 \
+  --repeats 3 \
+  --refinement-steps 3 \
   --output ./outputs/payments-api-capacity
 ```
 

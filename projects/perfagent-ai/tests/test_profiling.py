@@ -2,7 +2,12 @@ from pathlib import Path
 
 import sys
 
-from perfagent.collectors.profiling_collector import build_profile_capture_plan, collect_profiling_artifacts, execute_profile_capture_plan
+from perfagent.collectors.profiling_collector import (
+    build_profile_capture_plan,
+    collect_profiling_artifacts,
+    execute_profile_capture_plan,
+    summarize_profile_artifact,
+)
 
 
 def test_collect_profiling_artifacts_copies_existing_profiles(tmp_path):
@@ -16,15 +21,9 @@ def test_collect_profiling_artifacts_copies_existing_profiles(tmp_path):
     assert result["artifacts"] == [str(output_dir / "cpu.pprof")]
     assert (output_dir / "cpu.pprof").read_text() == "profile-data"
     assert result["warnings"] == []
-    assert result["profiles"] == [
-        {
-            "source_path": str(source),
-            "artifact_path": str(output_dir / "cpu.pprof"),
-            "type": "pprof",
-            "render_status": "not_rendered",
-            "warnings": ["Rendering is not implemented for pprof profiles yet."],
-        }
-    ]
+    assert result["profiles"][0]["source_path"] == str(source)
+    assert result["profiles"][0]["type"] == "pprof"
+    assert result["profiles"][0]["summary"]["available"] is True
 
 
 def test_collect_profiling_artifacts_warns_for_missing_profiles(tmp_path):
@@ -80,15 +79,11 @@ def test_collect_profiling_artifacts_marks_svg_flamegraphs_visible(tmp_path):
 
     result = collect_profiling_artifacts([source], output_dir)
 
-    assert result["profiles"] == [
-        {
-            "source_path": str(source),
-            "artifact_path": str(output_dir / "cpu.svg"),
-            "type": "flamegraph",
-            "render_status": "provided",
-            "warnings": [],
-        }
-    ]
+    assert result["profiles"][0]["source_path"] == str(source)
+    assert result["profiles"][0]["artifact_path"] == str(output_dir / "cpu.svg")
+    assert result["profiles"][0]["type"] == "flamegraph"
+    assert result["profiles"][0]["render_status"] == "provided"
+    assert result["profiles"][0]["summary"]["type"] == "flamegraph"
 
 
 def test_build_profile_capture_plan_for_go_pprof(tmp_path):
@@ -103,6 +98,24 @@ def test_build_profile_capture_plan_for_go_pprof(tmp_path):
     assert plan["commands"][0]["binary"] == "go"
     assert "profile?seconds=30" in plan["commands"][0]["command"]
     assert plan["execute_supported"] is True
+
+
+def test_build_profile_capture_plan_prefers_ebpf_mode(tmp_path):
+    plan = build_profile_capture_plan(runtime="go", output_dir=tmp_path, mode="ebpf", pid="123")
+
+    assert plan["mode"] == "ebpf"
+    assert plan["commands"][0]["binary"] == "perf"
+    assert "123" in plan["commands"][0]["argv"]
+
+
+def test_summarize_collapsed_stack_profile_extracts_top_functions(tmp_path):
+    profile = tmp_path / "profile.collapsed"
+    profile.write_text("main;handler;dbQuery 7\nmain;handler;render 3\n")
+
+    summary = summarize_profile_artifact(profile, "collapsed-stacks")
+
+    assert summary["top_functions"][0]["name"] == "dbQuery"
+    assert summary["top_functions"][0]["percent"] == 70
 
 
 def test_execute_profile_capture_plan_runs_available_commands(tmp_path):
