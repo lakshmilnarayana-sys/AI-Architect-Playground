@@ -42,6 +42,7 @@ def test_evaluate_skip_run_creates_mvp_artifacts(tmp_path):
     assert (output / "generated" / "perf_test.js").exists()
     assert (output / "generated" / "locustfile.py").exists()
     assert (output / "generated" / "jmeter_test_plan.jmx").exists()
+    assert (output / "generated" / "ui_journey.py").exists()
     assert (output / "processed" / "features.json").exists()
     assert (output / "processed" / "bottleneck_analysis.json").exists()
     assert (output / "reports" / "report.md").exists()
@@ -71,6 +72,7 @@ def test_generate_command_creates_k6_script_without_execution(tmp_path):
     assert (output / "perf_test.js").exists()
     assert (output / "locustfile.py").exists()
     assert (output / "jmeter_test_plan.jmx").exists()
+    assert (output / "ui_journey.py").exists()
 
 
 def test_evaluate_fail_on_exits_non_zero_for_matching_decision(tmp_path, monkeypatch):

@@ -57,6 +57,15 @@ Compare a run against the latest stored baseline:
   --fail-on-regression
 ```
 
+Generate a cross-run trend dashboard:
+
+```bash
+.venv/bin/python -m perfagent storage dashboard \
+  --db-path ./outputs/perfagent.db \
+  --service-name payments-api \
+  --output ./outputs/payments-api-trends.html
+```
+
 ## PR Complexity Triggering
 
 PerfAgent includes a PR complexity helper that classifies changed files:

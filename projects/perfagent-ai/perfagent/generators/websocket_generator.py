@@ -1,9 +1,18 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 
-def generate_websocket_load_test(*, service_name: str, target_url: str, output_path: Path) -> Path:
+def generate_websocket_load_test(
+    *,
+    service_name: str,
+    target_url: str,
+    output_path: Path,
+    config: dict[str, Any] | None = None,
+) -> Path:
+    config = config or {}
+    message = config.get("message", {"type": "ping"})
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
         f'''"""Generated WebSocket load harness for {service_name}."""
@@ -18,6 +27,7 @@ import websockets
 
 SERVICE_NAME = {service_name!r}
 TARGET_URL = {target_url!r}
+MESSAGE_TEMPLATE = {message!r}
 MAX_RETAINED_LATENCIES = 10000
 
 
@@ -29,7 +39,8 @@ async def worker(duration_seconds: int, worker_id: int) -> dict:
     try:
         async with websockets.connect(TARGET_URL) as websocket:
             while time.time() < deadline:
-                payload = {{"type": "ping", "service": SERVICE_NAME, "worker": worker_id, "request": request_count}}
+                payload = dict(MESSAGE_TEMPLATE)
+                payload.update({{"service": SERVICE_NAME, "worker": worker_id, "request": request_count}})
                 start = time.perf_counter()
                 try:
                     await websocket.send(json.dumps(payload))

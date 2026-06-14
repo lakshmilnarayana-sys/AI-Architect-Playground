@@ -1,0 +1,4 @@
+interface:
+  display_name: "Performance Engineer"
+  short_description: "Design, run, analyze, and report microservice performance tests."
+  default_prompt: "Use the Performance Engineer skill to design or analyze a PerfAgent AI performance evaluation with evidence-backed capacity, bottleneck, regression, and reporting guidance."

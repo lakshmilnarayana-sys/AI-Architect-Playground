@@ -5,11 +5,13 @@ PerfAgent ships local demo targets by protocol:
 | Protocol | Compose service | Port | Current framework support |
 | --- | --- | ---: | --- |
 | HTTP/OpenAPI | `demo-http-payments` | `8080` | Supported now |
-| WebSocket | `demo-websocket-payments` | `8081` | Demo target included; generator support later |
-| gRPC | `demo-grpc-payments` | `8082` | Demo target included; generator support later |
+| WebSocket | `demo-websocket-payments` | `8081` | Generated harness and direct execution supported |
+| gRPC | `demo-grpc-payments` | `8082` | Generated harness and direct execution supported |
 | UI/Browser | `demo-ui-checkout` | `8083` | Demo target included; browser test support later |
 
 The gRPC demo lives in `examples/demo-apps/grpc-payments-api`. It exposes `payments.Payments/CreatePayment` on port `8082` and is covered by tests that compile the protobuf contract and validate the service implementation.
+
+Full coverage plan: [Demo Applications Test Plan](demo-test-plan.md).
 
 ```bash
 make test-grpc

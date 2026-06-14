@@ -13,6 +13,7 @@ from perfagent.collectors.k6_collector import read_k6_summary, run_k6
 from perfagent.collectors.observability_adapters import collect_observability_traffic_profile
 from perfagent.collectors.profiling_collector import collect_profiling_artifacts
 from perfagent.collectors.protocol_collectors import duration_to_seconds, run_protocol_script
+from perfagent.collectors.traffic_replay import apply_replay_plan_to_strategy, build_traffic_replay_plan
 from perfagent.collectors.prometheus_collector import (
     collect_dependency_metrics,
     collect_prometheus_metrics,
@@ -31,6 +32,7 @@ from perfagent.generators.jmeter_generator import generate_jmeter_plan
 from perfagent.generators.locust_generator import generate_locustfile
 from perfagent.generators.report_renderer import render_reports
 from perfagent.generators.synthetic_data import generate_test_data
+from perfagent.generators.ui_generator import generate_ui_journey_test
 from perfagent.generators.websocket_generator import generate_websocket_load_test
 from perfagent.llm.client import disabled_ai_analysis, explain_with_ollama
 from perfagent.parsers.openapi_parser import parse_openapi
@@ -55,6 +57,7 @@ def evaluate_service(
     llm: dict[str, Any] | None = None,
     traffic_profile_config: dict[str, Any] | None = None,
     observability_config: dict[str, Any] | None = None,
+    protocol_config: dict[str, Any] | None = None,
     storage: dict[str, Any] | None = None,
     prometheus_url: str | None = None,
     prometheus_service_label: str | None = None,
@@ -102,6 +105,8 @@ def evaluate_service(
             traffic_profile_settings,
         )
     write_json(workspace.processed_dir / "traffic_profile.json", traffic_profile)
+    replay_plan = build_traffic_replay_plan(contract, traffic_profile)
+    write_json(workspace.processed_dir / "traffic_replay_plan.json", replay_plan)
 
     if traffic_profile.get("enabled") and traffic_profile.get("endpoint_mix"):
         strategy = derive_strategy_from_traffic_profile(
@@ -110,6 +115,7 @@ def evaluate_service(
             slo_p95_ms=slo_p95_ms,
             slo_error_rate_percent=slo_error_rate_percent,
         )
+        strategy = apply_replay_plan_to_strategy(strategy, replay_plan)
     else:
         strategy = default_strategy(duration, slo_p95_ms, slo_error_rate_percent, mode=mode)
     state["test_strategy"] = strategy
@@ -133,20 +139,28 @@ def evaluate_service(
     grpc_script_path = generate_grpc_load_test(
         service_name=service_name,
         target=target_url.replace("http://", "").replace("https://", ""),
-        proto_path="./protos/service.proto",
+        proto_path=(protocol_config or {}).get("grpc", {}).get("proto_path", "./protos/service.proto"),
         output_path=workspace.generated_dir / "grpc_load.py",
+        config=(protocol_config or {}).get("grpc", {}),
     )
     websocket_script_path = generate_websocket_load_test(
         service_name=service_name,
         target_url=target_url.replace("http://", "ws://").replace("https://", "wss://"),
         output_path=workspace.generated_dir / "websocket_load.py",
+        config=(protocol_config or {}).get("websocket", {}),
+    )
+    ui_script_path = generate_ui_journey_test(
+        service_name=service_name,
+        target_url=target_url,
+        output_path=workspace.generated_dir / "ui_journey.py",
+        config=(protocol_config or {}).get("ui", {}),
     )
 
     summary_path = workspace.raw_dir / "k6_summary.json"
     timeseries_path = workspace.raw_dir / "k6_timeseries.jsonl"
     engine_name = engine.lower()
     protocol_aligned: list[dict[str, Any]] | None = None
-    if skip_run or engine_name not in {"k6", "grpc", "websocket"}:
+    if skip_run or engine_name not in {"k6", "grpc", "websocket", "ui", "browser"}:
         execution_result: dict[str, Any] = {
             "exit_code": 0,
             "skipped": True,
@@ -158,14 +172,14 @@ def evaluate_service(
             else "k6 execution skipped by user",
         }
         k6_summary = {"metrics": {}}
-    elif engine_name in {"grpc", "websocket"}:
+    elif engine_name in {"grpc", "websocket", "ui", "browser"}:
         execution_result, k6_summary, protocol_aligned = run_protocol_script(
-            tool=engine_name,
-            script_path=grpc_script_path if engine_name == "grpc" else websocket_script_path,
+            tool="ui" if engine_name == "browser" else engine_name,
+            script_path=grpc_script_path if engine_name == "grpc" else websocket_script_path if engine_name == "websocket" else ui_script_path,
             summary_path=summary_path,
             execution_log_path=workspace.raw_dir / "execution.log",
             duration_seconds=duration_to_seconds(duration),
-            concurrency=max(1, int(strategy.get("stages", [{}])[0].get("target", 10) or 10)),
+            concurrency=max(1, int((protocol_config or {}).get("ui", {}).get("concurrency", strategy.get("stages", [{}])[0].get("target", 10)) or 10)),
         )
     else:
         execution_result = run_k6(script_path, summary_path, timeseries_path, workspace.raw_dir / "execution.log")
@@ -279,6 +293,11 @@ def generate_only(*, service_name: str, openapi_path: Path, target_url: str, out
         target_url=target_url.replace("http://", "ws://").replace("https://", "wss://"),
         output_path=output_dir / "websocket_load.py",
     )
+    ui_path = generate_ui_journey_test(
+        service_name=service_name,
+        target_url=target_url,
+        output_path=output_dir / "ui_journey.py",
+    )
     return {
         "contract_analysis": output_dir / "contract_analysis.json",
         "test_data": output_dir / "test_data.json",
@@ -287,6 +306,7 @@ def generate_only(*, service_name: str, openapi_path: Path, target_url: str, out
         "jmeter_plan": jmeter_path,
         "grpc_load": grpc_path,
         "websocket_load": websocket_path,
+        "ui_journey": ui_path,
     }
 
 

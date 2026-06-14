@@ -9,6 +9,30 @@ test:
   duration: 10s
   engine: k6
   mode: standard
+protocols:
+  grpc:
+    proto_path: ./examples/demo-apps/grpc-payments-api/protos/payments.proto
+    service_full_name: payments.Payments
+    method: CreatePayment
+    request:
+      customer_id: cust_grpc_1001
+      amount: 49.99
+      currency: GBP
+  websocket:
+    message:
+      type: authorizePayment
+      customerId: cust_ws_1001
+      amount: 49.99
+      currency: GBP
+  ui:
+    path: /
+    wait_selector: body
+    action_selector: button
+    concurrency: 1
+distributed:
+  enabled: false
+  workers: 2
+  compose_service: perfagent
 service:
   cpu_allocation: 500m
   memory_allocation: 512Mi

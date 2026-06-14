@@ -8,6 +8,10 @@ from perfagent.core.artifacts import read_json
 from perfagent.config import load_run_config, resolve_evaluate_options
 from perfagent.collectors.prometheus_collector import load_prometheus_query_config, validate_prometheus_queries
 from perfagent.core.artifacts import write_json
+from perfagent.executors.distributed import build_distributed_plan
+from perfagent.generators.trend_dashboard import render_trend_dashboard
+from perfagent.mcp_server import serve_stdio
+from perfagent.storage.vector_store import PgVectorStore, chunk_text
 from perfagent.storage.run_store import RunStore, compare_to_latest_baseline
 from perfagent.workflow import evaluate_service, generate_only, import_external_results
 
@@ -17,10 +21,12 @@ prometheus_app = typer.Typer(help="Prometheus helpers.")
 baseline_app = typer.Typer(help="Baseline management.")
 storage_app = typer.Typer(help="Run database management.")
 regression_app = typer.Typer(help="Regression comparison gates.")
+distributed_app = typer.Typer(help="Distributed/container execution planning.")
 app.add_typer(prometheus_app, name="prometheus")
 app.add_typer(baseline_app, name="baseline")
 app.add_typer(storage_app, name="storage")
 app.add_typer(regression_app, name="regression")
+app.add_typer(distributed_app, name="distributed")
 
 
 @app.command()
@@ -34,7 +40,7 @@ def evaluate(
     slo_error_rate: float | None = typer.Option(None, "--slo-error-rate"),
     duration: str | None = typer.Option(None, "--duration"),
     output: Path | None = typer.Option(None, "--output"),
-    engine: str | None = typer.Option(None, "--engine", help="Execution engine: k6, locust, jmeter, grpc, websocket."),
+    engine: str | None = typer.Option(None, "--engine", help="Execution engine: k6, locust, jmeter, grpc, websocket, ui, browser."),
     mode: str | None = typer.Option(None, "--mode", help="Evaluation mode: standard or capacity."),
     cpu_allocation: str | None = typer.Option(None, "--service-cpu", help="Service CPU allocation, for example 500m or 2 cores."),
     memory_allocation: str | None = typer.Option(None, "--service-memory", help="Service memory allocation, for example 512Mi."),
@@ -104,6 +110,7 @@ def evaluate(
         llm=options.get("llm"),
         traffic_profile_config=options.get("traffic_profile"),
         observability_config=options.get("observability"),
+        protocol_config=options.get("protocols"),
         storage=options.get("storage"),
         prometheus_url=options.get("prometheus_url"),
         prometheus_service_label=options.get("prometheus_service_label"),
@@ -187,6 +194,11 @@ def import_results(
     typer.echo(result["report_html_path"])
 
 
+@app.command("mcp")
+def mcp() -> None:
+    serve_stdio()
+
+
 @prometheus_app.command("validate")
 def prometheus_validate(
     prometheus_url: str = typer.Option(..., "--prometheus-url"),
@@ -265,6 +277,37 @@ def storage_retention(
     typer.echo(f"Deleted {deleted} runs older than {retention_days} days")
 
 
+@storage_app.command("dashboard")
+def storage_dashboard(
+    db_path: Path = typer.Option(Path("./outputs/perfagent.db"), "--db-path"),
+    output: Path = typer.Option(Path("./outputs/trends.html"), "--output"),
+    service_name: str | None = typer.Option(None, "--service-name"),
+) -> None:
+    path = render_trend_dashboard(RunStore(db_path).list_runs(service_name), output)
+    typer.echo(f"Trend dashboard: {path}")
+
+
+@distributed_app.command("plan")
+def distributed_plan(
+    service_name: str = typer.Option(..., "--service-name"),
+    engine: str = typer.Option("k6", "--engine"),
+    workers: int = typer.Option(2, "--workers"),
+    output: Path = typer.Option(Path("./outputs/distributed-plan.json"), "--output"),
+    compose_service: str = typer.Option("perfagent", "--compose-service"),
+) -> None:
+    plan = build_distributed_plan(
+        engine=engine,
+        service_name=service_name,
+        workers=workers,
+        output_dir=output.parent,
+        compose_service=compose_service,
+    )
+    write_json(output, plan)
+    typer.echo(f"Distributed plan: {output}")
+    for command in plan["commands"]:
+        typer.echo(command)
+
+
 @regression_app.command("compare")
 def regression_compare(
     run_dir: Path = typer.Option(..., "--run-dir", exists=True, file_okay=False),
@@ -295,6 +338,33 @@ def regression_compare(
         typer.echo(f"- {finding}")
     if fail_on_regression and result["regression_detected"]:
         raise typer.Exit(2)
+
+
+@regression_app.command("index")
+def regression_index(
+    run_dir: Path = typer.Option(..., "--run-dir", exists=True, file_okay=False),
+    dsn: str = typer.Option(..., "--postgres-dsn"),
+) -> None:
+    summary_path = run_dir / "reports" / "summary.json"
+    report_path = run_dir / "reports" / "report.md"
+    summary = read_json(summary_path)
+    text = report_path.read_text() if report_path.exists() else summary_path.read_text()
+    count = PgVectorStore(dsn).upsert_chunks(
+        run_id=summary.get("run_id", run_dir.name),
+        chunk_type="report",
+        chunks=chunk_text(text),
+    )
+    typer.echo(f"Indexed {count} chunks for {summary.get('service_name', run_dir.name)}")
+
+
+@regression_app.command("similar")
+def regression_similar(
+    query: str = typer.Option(..., "--query"),
+    dsn: str = typer.Option(..., "--postgres-dsn"),
+    limit: int = typer.Option(5, "--limit"),
+) -> None:
+    for item in PgVectorStore(dsn).similar(query, limit=limit):
+        typer.echo(f"{item['run_id']} {item['chunk_type']}#{item['chunk_index']} distance={item['distance']}")
 
 
 def main() -> None:

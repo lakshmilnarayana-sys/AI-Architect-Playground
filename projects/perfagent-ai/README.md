@@ -195,6 +195,16 @@ Protocol demo targets:
 
 More details: [docs/demo-applications.md](docs/demo-applications.md).
 
+Demo test plan and testcase inventory: [docs/demo-test-plan.md](docs/demo-test-plan.md).
+
+New extension surfaces:
+
+- `--engine ui` / `--engine browser` generates and executes a Playwright-style browser journey harness.
+- `distributed plan` writes a containerized distributed execution plan.
+- `storage dashboard` renders a cross-run trend dashboard from the run store.
+- `regression index` and `regression similar` provide pgvector-compatible semantic retrieval scaffolding.
+- `mcp` exposes a minimal stdio MCP-style tool interface for agents.
+
 Run the gRPC demo tests:
 
 ```bash
@@ -260,6 +270,8 @@ Observability integrations guide: [docs/observability-integrations.md](docs/obse
 Continuous performance guide: [docs/continuous-performance.md](docs/continuous-performance.md).
 
 FAQ: [docs/faq.md](docs/faq.md).
+
+Storage architecture: [docs/storage-architecture.md](docs/storage-architecture.md).
 
 MCP extension point: the same workflow can be exposed as MCP tools such as `evaluate_service`, `compare_regression`, `query_runs`, and `generate_report`, allowing IDEs and agent platforms to drive PerfAgent through a standard integration layer.
 

@@ -23,6 +23,8 @@ def resolve_evaluate_options(config: dict[str, Any], cli_values: dict[str, Any])
     traffic_profile = config.get("traffic_profile", {}) or {}
     observability = config.get("observability", {}) or {}
     storage = config.get("storage", {}) or {}
+    protocols = config.get("protocols", {}) or {}
+    distributed = config.get("distributed", {}) or {}
     dependencies = _normalize_dependencies(config.get("dependencies", []))
     prometheus_enabled = prometheus.get("enabled", bool(prometheus.get("url")))
     resolved = {
@@ -64,6 +66,12 @@ def resolve_evaluate_options(config: dict[str, Any], cli_values: dict[str, Any])
             ),
         },
         "observability": _resolve_observability_config(observability, traffic_profile),
+        "protocols": protocols,
+        "distributed": {
+            "enabled": bool(distributed.get("enabled", False)),
+            "workers": int(distributed.get("workers", 1)),
+            "compose_service": distributed.get("compose_service", "perfagent"),
+        },
         "storage": {
             "enabled": bool(storage.get("enabled", True)),
             "backend": storage.get("backend", "sqlite"),

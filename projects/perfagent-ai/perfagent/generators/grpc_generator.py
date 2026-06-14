@@ -1,9 +1,21 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 
-def generate_grpc_load_test(*, service_name: str, target: str, proto_path: str, output_path: Path) -> Path:
+def generate_grpc_load_test(
+    *,
+    service_name: str,
+    target: str,
+    proto_path: str,
+    output_path: Path,
+    config: dict[str, Any] | None = None,
+) -> Path:
+    config = config or {}
+    service_full_name = config.get("service_full_name", "payments.Payments")
+    method_name = config.get("method", "CreatePayment")
+    request_json = config.get("request", {})
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
         f'''"""Generated gRPC load harness for {service_name}.
@@ -21,6 +33,9 @@ import grpc
 SERVICE_NAME = {service_name!r}
 TARGET = {target!r}
 PROTO_PATH = {proto_path!r}
+SERVICE_FULL_NAME = {service_full_name!r}
+METHOD_NAME = {method_name!r}
+REQUEST_JSON = {request_json!r}
 MAX_RETAINED_LATENCIES = 10000
 
 
@@ -33,7 +48,7 @@ def run(duration_seconds: int, concurrency: int) -> dict:
         while time.time() < deadline:
             start = time.perf_counter()
             try:
-                # TODO: import generated *_pb2_grpc stubs and call the target RPC.
+                # TODO: import generated *_pb2_grpc stubs and call SERVICE_FULL_NAME/METHOD_NAME with REQUEST_JSON.
                 remaining = max(deadline - time.time(), 0.001)
                 grpc.channel_ready_future(channel).result(timeout=min(2, remaining))
             except Exception:
