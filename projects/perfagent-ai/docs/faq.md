@@ -57,14 +57,14 @@ Scaffolded but not fully active:
 
 - LLM narrative analysis
 - Prometheus saturation metrics
-- Profile parsing and correlation
+- profile phase correlation beyond top-function summaries
 - distributed worker orchestration beyond merge
 
 ## Can I see flame graphs?
 
-Not as built-in rendered flame graphs yet. PerfAgent can attach profiling files with `--profile`, copy them into `raw/profiles/`, and link them from the report. Built-in profiler capture, SVG flame graph generation, Speedscope rendering, and top-function parsing are tracked in [Profiling And Flame Graph Backlog](profiling-flamegraph-backlog.md).
+Yes, on Linux when `perf` is available. `profile run --mode ebpf` captures `perf.data`, converts `perf script` output into folded stacks, and writes `perf-flamegraph.svg`. The HTML report links the generated profiling artifacts and shows parsed top functions.
 
-Today you can attach existing artifacts such as Go `.pprof`, Java `.jfr`, py-spy Speedscope JSON, Clinic.js output, or collapsed stacks. The release decision still comes from SLO/time-series math, not from profile files.
+You can also attach existing artifacts such as Go `.pprof`, Java `.jfr`, py-spy Speedscope JSON, Clinic.js output, SVG flamegraphs, or collapsed stacks with `--profile`. The release decision still comes from SLO/time-series math, not from profile files.
 
 ## How do I run the project?
 
@@ -371,7 +371,7 @@ PerfAgent replaces `{service}` with `--prometheus-service-label`. This lets user
 
 ## Does PerfAgent support profiling?
 
-It supports profiling artifact attachment.
+Yes. PerfAgent supports language-independent eBPF-style capture through Linux `perf` and can also attach existing profiling artifacts.
 
 Example:
 
@@ -395,7 +395,19 @@ raw/profiles/
 raw/profiling_artifacts.json
 ```
 
-PerfAgent does not yet parse pprof, JFR, py-spy, or Clinic output.
+For automatic eBPF capture, use:
+
+```bash
+.venv/bin/python -m perfagent profile run \
+  --runtime system \
+  --mode ebpf \
+  --pid 12345 \
+  --duration-seconds 60 \
+  --output-dir ./outputs/profiles \
+  --output-json ./outputs/profiles/profile-result.json
+```
+
+PerfAgent summarizes collapsed stacks, Speedscope-style profiles, simple text profile output, and `perf script` output. See [eBPF Profiling Setup](ebpf-profiling.md).
 
 ## What does the HTML report include?
 

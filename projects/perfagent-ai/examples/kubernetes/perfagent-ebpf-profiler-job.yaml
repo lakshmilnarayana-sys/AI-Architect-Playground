@@ -1,0 +1,79 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: perfagent-ebpf-profiler
+  labels:
+    app.kubernetes.io/name: perfagent-ai
+    app.kubernetes.io/component: ebpf-profiler
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: perfagent-ai
+        app.kubernetes.io/component: ebpf-profiler
+    spec:
+      restartPolicy: Never
+      hostPID: true
+      containers:
+        - name: perfagent-ebpf-profiler
+          image: perfagent-ai:local
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+            capabilities:
+              add:
+                - SYS_ADMIN
+                - SYS_PTRACE
+                - PERFMON
+                - BPF
+          env:
+            - name: TARGET_PID
+              value: "1"
+            - name: DURATION_SECONDS
+              value: "60"
+          workingDir: /workspace
+          command:
+            - /bin/sh
+            - -lc
+          args:
+            - >
+              perfagent profile run
+              --runtime system
+              --mode ebpf
+              --pid "${TARGET_PID}"
+              --duration-seconds "${DURATION_SECONDS}"
+              --output-dir /workspace/outputs/profiles
+              --output-json /workspace/outputs/profiles/profile-result.json
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: sys-kernel-debug
+              mountPath: /sys/kernel/debug
+            - name: sys-kernel-tracing
+              mountPath: /sys/kernel/tracing
+            - name: lib-modules
+              mountPath: /lib/modules
+              readOnly: true
+            - name: usr-src
+              mountPath: /usr/src
+              readOnly: true
+      volumes:
+        - name: workspace
+          emptyDir: {}
+        - name: sys-kernel-debug
+          hostPath:
+            path: /sys/kernel/debug
+            type: DirectoryOrCreate
+        - name: sys-kernel-tracing
+          hostPath:
+            path: /sys/kernel/tracing
+            type: DirectoryOrCreate
+        - name: lib-modules
+          hostPath:
+            path: /lib/modules
+            type: DirectoryOrCreate
+        - name: usr-src
+          hostPath:
+            path: /usr/src
+            type: DirectoryOrCreate

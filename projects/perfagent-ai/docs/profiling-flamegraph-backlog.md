@@ -2,7 +2,7 @@
 
 ## Current State
 
-PerfAgent currently supports profiling artifact attachment:
+PerfAgent supports profiling artifact attachment:
 
 ```bash
 perfagent evaluate \
@@ -61,7 +61,11 @@ perfagent profile run \
   --output-json ./outputs/profile-result.json
 ```
 
-PerfAgent can also run capture-phase commands during an evaluation with `evaluate --profile-auto`. Remaining backlog work is embedded flamegraph rendering, top-function extraction, and phase-window correlation.
+PerfAgent can also run capture-phase commands during an evaluation with `evaluate --profile-auto`.
+
+When Linux `perf` is available, PerfAgent captures `perf.data`, converts `perf script` output into `perf.folded`, renders `perf-flamegraph.svg`, and extracts top functions from the generated stack evidence. See [eBPF Profiling Setup](ebpf-profiling.md).
+
+Remaining backlog work is phase-window correlation, richer runtime-specific profile interpretation, allocation hot spots, and embedded interactive profile viewers.
 
 ## What Users Can See Today
 
@@ -73,12 +77,13 @@ Today the report can show:
 - attached runtime artifacts such as `.pprof`, `.jfr`, `py-spy`, Clinic.js, collapsed stacks, and Speedscope files
 - structured profile entries with source path, copied artifact path, detected type, render status, and per-profile warnings
 - supplied SVG flame graph artifacts as visible profiling entries
+- generated eBPF artifacts such as `perf.data`, `perf.script`, `perf.folded`, and `perf-flamegraph.svg`
+- top functions parsed from collapsed stacks, Speedscope files, simple text profiles, and `perf script`
 
 Today the report does not yet embed:
 
 - SVG flame graphs directly in report pages
 - interactive Speedscope iframe/viewer
-- top CPU functions
 - allocation hot spots
 - thread or goroutine breakdown
 - GC pause analysis

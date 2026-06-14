@@ -284,6 +284,8 @@ HTTP service onboarding guide: [docs/onboarding/http-service.md](docs/onboarding
 
 Capacity and profiling guide: [docs/capacity-and-profiling.md](docs/capacity-and-profiling.md).
 
+eBPF profiling setup: [docs/ebpf-profiling.md](docs/ebpf-profiling.md).
+
 Prometheus integration guide: [docs/prometheus-integration.md](docs/prometheus-integration.md).
 
 Dependency analysis guide: [docs/dependency-analysis.md](docs/dependency-analysis.md).
@@ -415,6 +417,8 @@ Run profiler capture explicitly:
   --duration-seconds 60 \
   --output-json ./outputs/profile-result.json
 ```
+
+On Linux with `perf`, PerfAgent also generates `perf.folded` and `perf-flamegraph.svg` from captured stacks. Container and Kubernetes setup examples are in [docs/ebpf-profiling.md](docs/ebpf-profiling.md).
 
 Run profiler capture during an evaluation:
 

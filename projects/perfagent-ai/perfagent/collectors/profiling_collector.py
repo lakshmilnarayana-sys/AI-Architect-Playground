@@ -19,6 +19,7 @@ SUPPORTED_FORMATS = [
     "speedscope",
     "v8-cpuprofile",
     "flamegraph",
+    "perf-script",
 ]
 
 
@@ -28,6 +29,8 @@ def _classify_profile(profile_path: Path) -> str:
 
     if ".svg" in suffixes:
         return "flamegraph"
+    if ".perf" in suffixes or name.endswith("perf.script") or name == "perf.script":
+        return "perf-script"
     if ".pprof" in suffixes or name.endswith(".pb.gz"):
         return "pprof"
     if ".jfr" in suffixes:
@@ -229,7 +232,20 @@ def _ebpf_commands(*, output_dir: Path, duration_seconds: int, pid: str | None, 
     commands = [
         _command(
             "perf",
-            ["perf", "record", "-F", "99", "-g", "-p", target_pid, "--", "sleep", str(duration_seconds)],
+            [
+                "perf",
+                "record",
+                "-F",
+                "99",
+                "-g",
+                "-p",
+                target_pid,
+                "-o",
+                str(output_dir / "perf.data"),
+                "--",
+                "sleep",
+                str(duration_seconds),
+            ],
             "Capture language-independent CPU stacks with Linux perf/eBPF without application instrumentation.",
             phase="capture",
         ),
@@ -359,6 +375,8 @@ def summarize_profile_artifact(profile_path: Path, profile_type: str | None = No
         return {"available": False, "top_functions": [], "warnings": ["profile artifact missing"]}
     if profile_type == "collapsed-stacks":
         return _summarize_collapsed_stacks(profile_path)
+    if profile_type == "perf-script":
+        return _summarize_perf_script(profile_path)
     if profile_type == "speedscope":
         return _summarize_speedscope(profile_path)
     if profile_type in {"pprof", "py-spy", "clinic", "v8-cpuprofile", "jfr"}:
@@ -388,15 +406,99 @@ def _run_render_commands(plan: dict[str, Any], *, log_dir: Path) -> dict[str, An
         result = subprocess.run(command["argv"], text=True, capture_output=True, check=False)
         stdout_path.write_text(result.stdout)
         stderr_path.write_text(result.stderr)
+        generated_artifacts = _postprocess_render_output(command, result.stdout, log_dir)
         completed.append(
             {
                 "command": command["command"],
                 "exit_code": result.returncode,
                 "stdout_path": str(stdout_path),
                 "stderr_path": str(stderr_path),
+                "generated_artifacts": generated_artifacts,
             }
         )
     return {"completed": completed, "warnings": warnings}
+
+
+def convert_perf_script_to_collapsed(script_text: str) -> str:
+    """Convert `perf script` text output into folded-stack lines.
+
+    The converter is intentionally conservative. It extracts frame symbols from
+    indented stack lines and ignores event/header lines. Each observed stack is
+    counted once so the output can be summarized and rendered deterministically
+    without external FlameGraph scripts.
+    """
+    stacks: dict[str, int] = {}
+    current: list[str] = []
+    for raw_line in script_text.splitlines():
+        line = raw_line.rstrip()
+        if not line.strip():
+            _flush_stack(current, stacks)
+            current = []
+            continue
+        function = _perf_stack_function(line)
+        if function:
+            current.append(function)
+            continue
+        if current:
+            _flush_stack(current, stacks)
+            current = []
+    _flush_stack(current, stacks)
+    return "\n".join(f"{stack} {count}" for stack, count in sorted(stacks.items())) + ("\n" if stacks else "")
+
+
+def render_collapsed_flamegraph_svg(collapsed_text: str, *, title: str = "PerfAgent eBPF Flamegraph") -> str:
+    """Render folded stacks into a compact deterministic SVG flamegraph.
+
+    This is not a full Brendan Gregg FlameGraph replacement, but it gives every
+    PerfAgent run a portable first-view flamegraph artifact without adding a
+    host dependency. Users can still pass the folded stack file to richer tools.
+    """
+    root: dict[str, Any] = {"name": "root", "value": 0.0, "children": {}}
+    for line in collapsed_text.splitlines():
+        if not line.strip() or " " not in line:
+            continue
+        stack, raw_count = line.rsplit(" ", 1)
+        try:
+            count = float(raw_count)
+        except ValueError:
+            continue
+        root["value"] += count
+        node = root
+        for frame in [part for part in stack.split(";") if part]:
+            children = node["children"]
+            node = children.setdefault(frame, {"name": frame, "value": 0.0, "children": {}})
+            node["value"] += count
+
+    width = 1200
+    frame_height = 18
+    gap = 1
+    max_depth = _flamegraph_depth(root)
+    height = max(100, 54 + (max_depth + 1) * (frame_height + gap))
+    elements = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
+        "<style>text{font-family:Arial,sans-serif;font-size:12px}.frame{stroke:#fff;stroke-width:.5}.label{fill:#111;pointer-events:none}.title{font-size:18px;font-weight:700}</style>",
+        f'<text class="title" x="16" y="28">{_xml_escape(title)}</text>',
+        f'<text x="16" y="46">Samples: {_xml_escape(str(round(root["value"], 4)))}</text>',
+    ]
+    _append_flamegraph_frames(elements, root, 0, 60, width, frame_height, gap, root["value"] or 1.0)
+    elements.append("</svg>")
+    return "\n".join(elements)
+
+
+def _postprocess_render_output(command: dict[str, Any], stdout: str, log_dir: Path) -> list[str]:
+    argv = command.get("argv", [])
+    if len(argv) < 2 or argv[0] != "perf" or argv[1] != "script" or not stdout.strip():
+        return []
+    output_dir = Path(command.get("output_dir") or log_dir.parent / "captured")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    script_path = output_dir / "perf.script"
+    folded_path = output_dir / "perf.folded"
+    svg_path = output_dir / "perf-flamegraph.svg"
+    script_path.write_text(stdout)
+    folded = convert_perf_script_to_collapsed(stdout)
+    folded_path.write_text(folded)
+    svg_path.write_text(render_collapsed_flamegraph_svg(folded))
+    return [str(script_path), str(folded_path), str(svg_path)]
 
 
 def _captured_artifacts(output_dir: Path) -> list[dict[str, Any]]:
@@ -417,9 +519,13 @@ def _captured_artifacts(output_dir: Path) -> list[dict[str, Any]]:
 
 
 def _summarize_collapsed_stacks(path: Path) -> dict[str, Any]:
+    return _summarize_collapsed_stacks_from_text(path.read_text(errors="ignore"))
+
+
+def _summarize_collapsed_stacks_from_text(text: str) -> dict[str, Any]:
     totals: dict[str, float] = {}
     total_samples = 0.0
-    for line in path.read_text(errors="ignore").splitlines():
+    for line in text.splitlines():
         if not line.strip() or " " not in line:
             continue
         stack, raw_count = line.rsplit(" ", 1)
@@ -431,6 +537,12 @@ def _summarize_collapsed_stacks(path: Path) -> dict[str, Any]:
         totals[function] = totals.get(function, 0.0) + count
         total_samples += count
     return _top_function_summary("collapsed-stacks", totals, total_samples)
+
+
+def _summarize_perf_script(path: Path) -> dict[str, Any]:
+    folded = convert_perf_script_to_collapsed(path.read_text(errors="ignore"))
+    summary = _summarize_collapsed_stacks_from_text(folded)
+    return summary | {"type": "perf-script"}
 
 
 def _summarize_text_profile(path: Path) -> dict[str, Any]:
@@ -499,6 +611,98 @@ def _is_number(value: Any) -> bool:
         return False
 
 
+def _flush_stack(current: list[str], stacks: dict[str, int]) -> None:
+    if not current:
+        return
+    stack = ";".join(reversed(current))
+    stacks[stack] = stacks.get(stack, 0) + 1
+
+
+def _perf_stack_function(line: str) -> str | None:
+    if not line.startswith((" ", "\t")):
+        return None
+    stripped = line.strip()
+    if not stripped:
+        return None
+    parts = stripped.split()
+    if not parts:
+        return None
+    if re.fullmatch(r"[0-9a-fA-F]+", parts[0]) and len(parts) > 1:
+        candidate = parts[1]
+    else:
+        candidate = parts[0]
+    candidate = candidate.split("+", 1)[0].strip()
+    if not candidate or candidate in {"[unknown]", "??"}:
+        return "unknown"
+    return candidate
+
+
+def _flamegraph_depth(node: dict[str, Any]) -> int:
+    children = node.get("children", {})
+    if not children:
+        return 0
+    return 1 + max(_flamegraph_depth(child) for child in children.values())
+
+
+def _append_flamegraph_frames(
+    elements: list[str],
+    node: dict[str, Any],
+    x: float,
+    y: float,
+    width: float,
+    frame_height: int,
+    gap: int,
+    total: float,
+) -> None:
+    children = sorted(node.get("children", {}).values(), key=lambda child: (-child["value"], child["name"]))
+    cursor = x
+    for child in children:
+        child_width = width * (child["value"] / total)
+        if child_width < 0.5:
+            continue
+        color = _frame_color(child["name"])
+        label = _xml_escape(child["name"])
+        percent = (child["value"] / total) * 100 if total else 0
+        elements.append(
+            f'<g><title>{label} - {round(child["value"], 4)} samples ({round(percent, 2)}%)</title>'
+            f'<rect class="frame" x="{cursor:.2f}" y="{y:.2f}" width="{child_width:.2f}" height="{frame_height}" fill="{color}"/>'
+        )
+        if child_width > 46:
+            max_chars = max(1, int(child_width / 7))
+            visible_label = label if len(label) <= max_chars else label[: max_chars - 1] + "..."
+            elements.append(f'<text class="label" x="{cursor + 4:.2f}" y="{y + 13:.2f}">{visible_label}</text>')
+        elements.append("</g>")
+        _append_flamegraph_frames(
+            elements,
+            child,
+            cursor,
+            y + frame_height + gap,
+            child_width,
+            frame_height,
+            gap,
+            child["value"] or 1.0,
+        )
+        cursor += child_width
+
+
+def _frame_color(name: str) -> str:
+    seed = sum(ord(char) for char in name)
+    red = 180 + (seed % 60)
+    green = 70 + ((seed // 3) % 90)
+    blue = 40 + ((seed // 7) % 70)
+    return f"rgb({red},{green},{blue})"
+
+
+def _xml_escape(value: str) -> str:
+    return (
+        value.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&apos;")
+    )
+
+
 def _public_plan(plan: dict[str, Any]) -> dict[str, Any]:
     return {
         key: value
@@ -508,6 +712,11 @@ def _public_plan(plan: dict[str, Any]) -> dict[str, Any]:
 
 
 def _command(binary: str, argv: list[str], description: str, *, phase: str) -> dict[str, Any]:
+    output_dir = None
+    if "-o" in argv:
+        output_index = argv.index("-o") + 1
+        if output_index < len(argv):
+            output_dir = str(Path(argv[output_index]).parent)
     return {
         "binary": binary,
         "available": shutil.which(binary) is not None,
@@ -515,4 +724,5 @@ def _command(binary: str, argv: list[str], description: str, *, phase: str) -> d
         "command": " ".join(argv),
         "description": description,
         "phase": phase,
+        "output_dir": output_dir,
     }

@@ -123,7 +123,7 @@ raw/profiles/
 raw/profiling_artifacts.json
 ```
 
-The report links the attached artifacts but does not infer root cause from profiles yet. That keeps the current MVP rule intact: code calculates evidence, and higher-level analysis explains only evidence that exists.
+The report links the attached artifacts and surfaces parsed top functions when the artifact format can be summarized. That keeps the current MVP rule intact: code calculates evidence, and higher-level analysis explains only evidence that exists.
 
 ## Automatic eBPF Profiler Capture
 
@@ -168,6 +168,8 @@ Capture during an evaluation:
 ```
 
 PerfAgent starts capture-phase commands before load execution and finalizes/render commands after the run. Captured stdout/stderr and `profile_capture_result.json` are stored under `raw/profiles/`.
+
+When Linux `perf` is available, PerfAgent writes `perf.data`, converts `perf script` output into `perf.folded`, and renders `perf-flamegraph.svg`. See [eBPF Profiling Setup](ebpf-profiling.md) for Linux, Docker Compose, and Kubernetes setup.
 
 Runtime-specific profilers are still available with `--mode runtime` for cases where eBPF is not available or a runtime-native profile is required.
 

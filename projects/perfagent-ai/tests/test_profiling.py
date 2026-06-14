@@ -2,10 +2,13 @@ from pathlib import Path
 
 import sys
 
+import perfagent.collectors.profiling_collector as profiling_collector
 from perfagent.collectors.profiling_collector import (
     build_profile_capture_plan,
     collect_profiling_artifacts,
+    convert_perf_script_to_collapsed,
     execute_profile_capture_plan,
+    render_collapsed_flamegraph_svg,
     summarize_profile_artifact,
 )
 
@@ -106,6 +109,8 @@ def test_build_profile_capture_plan_prefers_ebpf_mode(tmp_path):
     assert plan["mode"] == "ebpf"
     assert plan["commands"][0]["binary"] == "perf"
     assert "123" in plan["commands"][0]["argv"]
+    assert "-o" in plan["commands"][0]["argv"]
+    assert str(tmp_path / "perf.data") in plan["commands"][0]["argv"]
 
 
 def test_summarize_collapsed_stack_profile_extracts_top_functions(tmp_path):
@@ -116,6 +121,52 @@ def test_summarize_collapsed_stack_profile_extracts_top_functions(tmp_path):
 
     assert summary["top_functions"][0]["name"] == "dbQuery"
     assert summary["top_functions"][0]["percent"] == 70
+
+
+def test_convert_perf_script_to_collapsed_stacks():
+    script = """
+python 123 [001] 10.000000: cycles:
+        7fff111 handler+0x10 (/app/server)
+        7fff222 dbQuery+0x20 (/app/server)
+
+python 123 [001] 10.100000: cycles:
+        7fff111 handler+0x10 (/app/server)
+        7fff333 render+0x20 (/app/server)
+"""
+
+    collapsed = convert_perf_script_to_collapsed(script)
+
+    assert "dbQuery;handler 1" in collapsed
+    assert "render;handler 1" in collapsed
+
+
+def test_render_collapsed_flamegraph_svg_contains_labels():
+    svg = render_collapsed_flamegraph_svg("main;handler;dbQuery 7\nmain;handler;render 3\n")
+
+    assert svg.startswith("<svg")
+    assert "PerfAgent eBPF Flamegraph" in svg
+    assert "dbQuery" in svg
+
+
+def test_summarize_perf_script_profile_extracts_top_functions(tmp_path):
+    profile = tmp_path / "perf.script"
+    profile.write_text(
+        """
+python 123 [001] 10.000000: cycles:
+        7fff111 handler+0x10 (/app/server)
+        7fff222 dbQuery+0x20 (/app/server)
+
+python 123 [001] 10.100000: cycles:
+        7fff111 handler+0x10 (/app/server)
+        7fff222 dbQuery+0x20 (/app/server)
+"""
+    )
+
+    summary = summarize_profile_artifact(profile)
+
+    assert summary["type"] == "perf-script"
+    assert summary["top_functions"][0]["name"] == "handler"
+    assert summary["top_functions"][0]["samples"] == 2
 
 
 def test_execute_profile_capture_plan_runs_available_commands(tmp_path):
@@ -149,3 +200,47 @@ def test_execute_profile_capture_plan_runs_available_commands(tmp_path):
     assert result["started_count"] == 1
     assert result["completed"][0]["exit_code"] == 0
     assert result["rendered"][0]["exit_code"] == 0
+
+
+def test_execute_profile_capture_plan_generates_perf_folded_and_svg(tmp_path, monkeypatch):
+    class Completed:
+        returncode = 0
+        stdout = """
+python 123 [001] 10.000000: cycles:
+        7fff111 handler+0x10 (/app/server)
+        7fff222 dbQuery+0x20 (/app/server)
+"""
+        stderr = ""
+
+    def fake_run(*args, **kwargs):
+        return Completed()
+
+    monkeypatch.setattr(profiling_collector.subprocess, "run", fake_run)
+    plan = {
+        "runtime": "system",
+        "duration_seconds": 1,
+        "output_dir": str(tmp_path / "captured"),
+        "warnings": [],
+        "commands": [
+            {
+                "binary": "perf",
+                "available": True,
+                "argv": ["perf", "script", "-i", str(tmp_path / "captured" / "perf.data")],
+                "command": "perf script",
+                "description": "test render",
+                "phase": "render",
+            }
+        ],
+    }
+
+    result = execute_profile_capture_plan(plan, log_dir=tmp_path / "logs", timeout_seconds=5)
+
+    assert (tmp_path / "captured" / "perf.script").exists()
+    assert (tmp_path / "captured" / "perf.folded").read_text() == "dbQuery;handler 1\n"
+    assert (tmp_path / "captured" / "perf-flamegraph.svg").read_text().startswith("<svg")
+    assert result["rendered"][0]["generated_artifacts"] == [
+        str(tmp_path / "captured" / "perf.script"),
+        str(tmp_path / "captured" / "perf.folded"),
+        str(tmp_path / "captured" / "perf-flamegraph.svg"),
+    ]
+    assert {artifact["type"] for artifact in result["artifacts"]} >= {"perf-script", "collapsed-stacks", "flamegraph"}

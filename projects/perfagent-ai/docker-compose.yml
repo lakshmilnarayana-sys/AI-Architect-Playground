@@ -9,6 +9,38 @@ services:
     entrypoint: ["perfagent"]
     command: ["--help"]
 
+  perfagent-ebpf:
+    profiles: ["profiling"]
+    build:
+      context: .
+    image: perfagent-ai:local
+    pid: host
+    privileged: true
+    cap_add:
+      - SYS_ADMIN
+      - SYS_PTRACE
+      - PERFMON
+      - BPF
+    security_opt:
+      - apparmor:unconfined
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - /sys/kernel/debug:/sys/kernel/debug
+      - /sys/kernel/tracing:/sys/kernel/tracing
+      - /lib/modules:/lib/modules:ro
+      - /usr/src:/usr/src:ro
+    entrypoint: ["perfagent"]
+    command:
+      - profile
+      - plan
+      - --runtime
+      - system
+      - --mode
+      - ebpf
+      - --pid
+      - "1"
+
   demo-http-payments:
     profiles: ["demo"]
     build:

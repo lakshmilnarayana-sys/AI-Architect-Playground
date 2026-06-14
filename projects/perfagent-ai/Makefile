@@ -28,7 +28,7 @@ help:
 	@printf "  make evaluate-local     Run PerfAgent against LOCAL_TARGET_URL\n"
 	@printf "  make report-suite       Generate HTTP/gRPC/WebSocket/UI reports without executing targets\n"
 	@printf "  make build              Build PerfAgent container image\n"
-	@printf "  make compose-config     Validate docker compose config, including demo/tools profiles\n"
+	@printf "  make compose-config     Validate docker compose config, including demo/tools/profiling profiles\n"
 	@printf "  make demo-up            Start demo services with docker compose\n"
 	@printf "  make demo-down          Stop demo services\n"
 	@printf "  make dependencies-up    Start optional DB/cache/stream/search dependencies\n"
@@ -128,7 +128,7 @@ build:
 	$(COMPOSE) build perfagent
 
 compose-config:
-	$(COMPOSE) --profile demo --profile tools --profile dependencies config
+	$(COMPOSE) --profile demo --profile tools --profile dependencies --profile profiling config
 
 demo-up:
 	$(COMPOSE) --profile demo up --build -d demo-http-payments demo-websocket-payments demo-grpc-payments demo-ui-checkout
