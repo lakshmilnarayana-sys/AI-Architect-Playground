@@ -13,7 +13,7 @@ from perfagent.analyzers.protocols import analyze_protocol_metrics
 from perfagent.analyzers.timeseries_reasoning import analyze_timeseries, reason_over_timeseries
 from perfagent.collectors.external_results import load_external_results
 from perfagent.collectors.k6_collector import read_k6_summary, run_k6
-from perfagent.collectors.observability_adapters import collect_observability_traffic_profile
+from perfagent.collectors.observability_adapters import collect_observability_timeseries, collect_observability_traffic_profile
 from perfagent.collectors.profiling_collector import (
     build_profile_capture_plan,
     collect_profiling_artifacts,
@@ -44,6 +44,7 @@ from perfagent.generators.ui_generator import generate_ui_journey_test
 from perfagent.generators.websocket_generator import generate_websocket_load_test
 from perfagent.llm.client import disabled_ai_analysis, explain_with_ollama
 from perfagent.parsers.openapi_parser import parse_openapi
+from perfagent.protocols.scenarios import normalize_protocol_scenarios, validate_protocol_scenarios
 from perfagent.storage.postgres_store import PostgresRunStore
 from perfagent.storage.run_store import RunStore
 from perfagent.storage.vector_store import PgVectorStore, index_run_narratives
@@ -153,24 +154,32 @@ def evaluate_service(
     state["generated_k6_script_path"] = str(script_path)
     generate_locustfile(contract, test_data, target_url, workspace.generated_dir / "locustfile.py")
     generate_jmeter_plan(contract, test_data, strategy, target_url, workspace.generated_dir / "jmeter_test_plan.jmx")
+    normalized_protocol_config = normalize_protocol_scenarios(protocol_config)
+    protocol_validation = validate_protocol_scenarios(normalized_protocol_config)
+    write_json(workspace.processed_dir / "protocol_scenarios.json", normalized_protocol_config)
+    write_json(workspace.processed_dir / "protocol_scenario_validation.json", protocol_validation)
+    state["warnings"].extend(protocol_validation.get("warnings", []))
+    if not protocol_validation.get("valid", True):
+        state["warnings"].extend(protocol_validation.get("errors", []))
+
     grpc_script_path = generate_grpc_load_test(
         service_name=service_name,
         target=target_url.replace("http://", "").replace("https://", ""),
-        proto_path=(protocol_config or {}).get("grpc", {}).get("proto_path", "./protos/service.proto"),
+        proto_path=normalized_protocol_config.get("grpc", {}).get("proto_path", "./protos/service.proto"),
         output_path=workspace.generated_dir / "grpc_load.py",
-        config=(protocol_config or {}).get("grpc", {}),
+        config=normalized_protocol_config.get("grpc", {}),
     )
     websocket_script_path = generate_websocket_load_test(
         service_name=service_name,
         target_url=target_url.replace("http://", "ws://").replace("https://", "wss://"),
         output_path=workspace.generated_dir / "websocket_load.py",
-        config=(protocol_config or {}).get("websocket", {}),
+        config=normalized_protocol_config.get("websocket", {}),
     )
     ui_script_path = generate_ui_journey_test(
         service_name=service_name,
         target_url=target_url,
         output_path=workspace.generated_dir / "ui_journey.py",
-        config=(protocol_config or {}).get("ui", {}),
+        config=normalized_protocol_config.get("ui", {}),
     )
 
     summary_path = workspace.raw_dir / "k6_summary.json"
@@ -211,7 +220,7 @@ def evaluate_service(
             summary_path=summary_path,
             execution_log_path=workspace.raw_dir / "execution.log",
             duration_seconds=duration_to_seconds(duration),
-            concurrency=max(1, int((protocol_config or {}).get("ui", {}).get("concurrency", strategy.get("stages", [{}])[0].get("target", 10)) or 10)),
+            concurrency=max(1, int(normalized_protocol_config.get(engine_name if engine_name != "browser" else "ui", {}).get("concurrency", strategy.get("stages", [{}])[0].get("target", 10)) or 10)),
         )
     else:
         execution_result = run_k6(script_path, summary_path, timeseries_path, workspace.raw_dir / "execution.log")
@@ -238,9 +247,14 @@ def evaluate_service(
         prometheus_service_label,
         query_templates=prometheus_query_templates,
     )
+    provider_timeseries: list[dict[str, Any]] = []
+    provider_name = str((observability_config or {}).get("provider", "")).lower()
+    if provider_name and provider_name not in {"prometheus"}:
+        provider_timeseries = collect_observability_timeseries(observability_config or {}, service_name)
     dependency_metrics = collect_dependency_metrics(prometheus_url, prometheus_service_label, dependencies or [])
     state["raw_prometheus_metrics"] = prometheus_metrics
     write_json(workspace.raw_dir / "prometheus_metrics.json", prometheus_metrics)
+    write_json(workspace.raw_dir / "observability_timeseries.json", provider_timeseries)
     write_json(workspace.raw_dir / "dependency_metrics.json", dependency_metrics)
 
     profiling = collect_profiling_artifacts(profile_paths or [], workspace.raw_dir / "profiles")
@@ -255,6 +269,7 @@ def evaluate_service(
     state["warnings"].extend(profiling.get("warnings", []))
 
     aligned = merge_prometheus_metrics(aligned, prometheus_metrics)
+    aligned = _merge_observability_timeseries(aligned, provider_timeseries)
     aligned = merge_dependency_metrics(aligned, dependency_metrics)
     aligned_path = write_aligned_csv(workspace.processed_dir / "aligned_timeseries.csv", aligned)
     state["aligned_timeseries_path"] = str(aligned_path)
@@ -641,3 +656,23 @@ def _metric_contract(state: EvaluationState, strategy: dict[str, Any]) -> dict[s
             "bottleneck_classification",
         ],
     }
+
+
+def _merge_observability_timeseries(aligned: list[dict[str, Any]], rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not rows:
+        return aligned
+    by_timestamp = {row.get("timestamp"): row for row in aligned}
+    for metric_row in rows:
+        timestamp = metric_row.get("timestamp")
+        if not timestamp:
+            continue
+        target = by_timestamp.get(timestamp)
+        if target is None:
+            target = {"timestamp": timestamp, "phase": "observability"}
+            by_timestamp[timestamp] = target
+            aligned.append(target)
+        metric_name = str(metric_row.get("metric", "metric_value"))
+        if metric_row.get("dependency"):
+            metric_name = f"dependency_{metric_row['dependency']}_{metric_name}"
+        target[metric_name] = metric_row.get("value")
+    return sorted(aligned, key=lambda item: str(item.get("timestamp", "")))

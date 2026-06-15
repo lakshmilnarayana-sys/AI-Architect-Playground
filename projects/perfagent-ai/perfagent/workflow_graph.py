@@ -11,7 +11,7 @@ from perfagent.analyzers.profile_phase_correlation import analyze_profile_phase_
 from perfagent.analyzers.protocols import analyze_protocol_metrics
 from perfagent.analyzers.timeseries_reasoning import analyze_timeseries, reason_over_timeseries
 from perfagent.collectors.k6_collector import read_k6_summary, run_k6
-from perfagent.collectors.observability_adapters import collect_observability_traffic_profile
+from perfagent.collectors.observability_adapters import collect_observability_timeseries, collect_observability_traffic_profile
 from perfagent.collectors.profiling_collector import (
     build_profile_capture_plan,
     collect_profiling_artifacts,
@@ -41,7 +41,8 @@ from perfagent.generators.synthetic_data import generate_test_data
 from perfagent.generators.ui_generator import generate_ui_journey_test
 from perfagent.generators.websocket_generator import generate_websocket_load_test
 from perfagent.parsers.openapi_parser import parse_openapi
-from perfagent.workflow import _index_run_vectors, _metric_contract, _persist_run, _run_ai_analysis
+from perfagent.protocols.scenarios import normalize_protocol_scenarios, validate_protocol_scenarios
+from perfagent.workflow import _index_run_vectors, _merge_observability_timeseries, _metric_contract, _persist_run, _run_ai_analysis
 
 
 class GraphInput(TypedDict, total=False):
@@ -223,7 +224,14 @@ def _stage_plan_strategy(state: GraphInput) -> GraphInput:
 def _stage_generate_tests(state: GraphInput) -> GraphInput:
     evaluation_state = state["evaluation_state"]
     workspace = state["workspace"]
-    protocol_config = state.get("protocol_config") or {}
+    protocol_config = normalize_protocol_scenarios(state.get("protocol_config"))
+    protocol_validation = validate_protocol_scenarios(protocol_config)
+    state["protocol_config"] = protocol_config
+    evaluation_state["warnings"].extend(protocol_validation.get("warnings", []))
+    if not protocol_validation.get("valid", True):
+        evaluation_state["warnings"].extend(protocol_validation.get("errors", []))
+    write_json(workspace.processed_dir / "protocol_scenarios.json", protocol_config)
+    write_json(workspace.processed_dir / "protocol_scenario_validation.json", protocol_validation)
     contract = state["contract"]
     strategy = state["strategy"]
 
@@ -311,7 +319,7 @@ def _stage_execute_load(state: GraphInput) -> GraphInput:
         k6_summary = {"metrics": {}}
     elif engine_name in {"grpc", "websocket", "ui", "browser"}:
         script_path = _protocol_script_path(state, engine_name)
-        ui_config = protocol_config.get("ui", {})
+        engine_config = protocol_config.get(engine_name if engine_name != "browser" else "ui", {})
         execution_result, k6_summary, protocol_aligned = run_protocol_script(
             tool="ui" if engine_name == "browser" else engine_name,
             script_path=script_path,
@@ -320,7 +328,7 @@ def _stage_execute_load(state: GraphInput) -> GraphInput:
             duration_seconds=duration_to_seconds(state["duration"]),
             concurrency=max(
                 1,
-                int(ui_config.get("concurrency", state["strategy"].get("stages", [{}])[0].get("target", 10)) or 10),
+                int(engine_config.get("concurrency", state["strategy"].get("stages", [{}])[0].get("target", 10)) or 10),
             ),
         )
     else:
@@ -364,6 +372,13 @@ def _stage_collect_signals(state: GraphInput) -> GraphInput:
         state.get("prometheus_service_label"),
         query_templates=query_templates,
     )
+    observability_config = state.get("observability_config") or {}
+    provider_name = str(observability_config.get("provider", "")).lower()
+    provider_timeseries = (
+        collect_observability_timeseries(observability_config, state["service_name"])
+        if provider_name and provider_name not in {"prometheus"}
+        else []
+    )
     dependency_metrics = collect_dependency_metrics(
         state.get("prometheus_url"),
         state.get("prometheus_service_label"),
@@ -371,6 +386,7 @@ def _stage_collect_signals(state: GraphInput) -> GraphInput:
     )
     evaluation_state["raw_prometheus_metrics"] = prometheus_metrics
     write_json(workspace.raw_dir / "prometheus_metrics.json", prometheus_metrics)
+    write_json(workspace.raw_dir / "observability_timeseries.json", provider_timeseries)
     write_json(workspace.raw_dir / "dependency_metrics.json", dependency_metrics)
 
     profiling = collect_profiling_artifacts(state.get("profile_paths") or [], workspace.raw_dir / "profiles")
@@ -385,6 +401,7 @@ def _stage_collect_signals(state: GraphInput) -> GraphInput:
     write_json(workspace.processed_dir / "profiling_summary.json", profiling)
 
     aligned = merge_prometheus_metrics(aligned, prometheus_metrics)
+    aligned = _merge_observability_timeseries(aligned, provider_timeseries)
     aligned = merge_dependency_metrics(aligned, dependency_metrics)
     aligned_path = write_aligned_csv(workspace.processed_dir / "aligned_timeseries.csv", aligned)
     evaluation_state["aligned_timeseries_path"] = str(aligned_path)

@@ -130,6 +130,58 @@ def test_provider_query_pack_validation_reports_dependency_coverage():
     assert "kubernetes" in pack["coverage"]["query_groups"]
 
 
+def test_collect_observability_timeseries_normalizes_provider_rows(monkeypatch):
+    def fake_urlopen(req, timeout):
+        return FakeResponse(
+            {
+                "series": [
+                    {
+                        "metric": "trace.http.request.duration",
+                        "tag_set": ["metric:p95_latency_ms", "resource_name:/v1/payments"],
+                        "pointlist": [[1781344800000, 420]],
+                    },
+                    {
+                        "metric": "postgresql.query.time",
+                        "tag_set": ["metric:dependency_latency_ms", "dependency:postgres"],
+                        "pointlist": [[1781344800000, 88]],
+                    },
+                ]
+            }
+        )
+
+    monkeypatch.setattr(adapters.request, "urlopen", fake_urlopen)
+
+    rows = adapters.collect_observability_timeseries(
+        {"provider": "datadog", "api_key": "x", "app_key": "y", "site": "http://datadog"},
+        "payments-api",
+        start=datetime(2026, 6, 13, 10, tzinfo=UTC),
+        end=datetime(2026, 6, 13, 10, 1, tzinfo=UTC),
+    )
+
+    assert rows == [
+        {
+            "timestamp": "2026-06-13T10:00:00Z",
+            "source": "datadog",
+            "service": "payments-api",
+            "metric": "p95_latency_ms",
+            "value": 420.0,
+            "group": "golden_signal",
+            "endpoint": "/v1/payments",
+            "dependency": None,
+        },
+        {
+            "timestamp": "2026-06-13T10:00:00Z",
+            "source": "datadog",
+            "service": "payments-api",
+            "metric": "dependency_latency_ms",
+            "value": 88.0,
+            "group": "dependency",
+            "endpoint": None,
+            "dependency": "postgres",
+        },
+    ]
+
+
 def test_validate_provider_query_pack_reports_missing_config():
     pack = adapters.validate_provider_query_pack("newrelic", "payments-api", {"api_key": "key"})
 

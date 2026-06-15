@@ -306,9 +306,9 @@ Current limits:
 
 ## What about Datadog, New Relic, and ELK?
 
-PerfAgent includes traffic-profile adapters for Datadog, New Relic, and Elasticsearch. They normalize provider results into the same `traffic_profile` shape used by the Prometheus path.
+PerfAgent includes traffic-profile and normalized time-series adapters for Datadog, New Relic, and Elasticsearch. Traffic-profile adapters produce the same `traffic_profile` shape used by the Prometheus path. Time-series adapters produce normalized metric rows that are merged into `aligned_timeseries.csv`.
 
-Those providers should normalize traffic and dependency data into the same PerfAgent traffic profile shape, so the downstream strategy generation, analysis, bottleneck rules, and AI report narrative stay the same.
+Those providers normalize traffic and dependency samples before deterministic analysis, so strategy generation, bottleneck rules, and AI report narrative stay provider-agnostic.
 
 Dependency metrics still depend on explicit provider-specific mappings because labels, metric names, facets, and index schemas vary by platform.
 
@@ -456,13 +456,13 @@ If the release decision matches one of the configured values, the command exits 
 
 Highest-value next work:
 
-1. Real Prometheus integration for saturation metrics.
-2. Stored baselines and run-to-baseline comparison.
-3. Locust/JMeter execution and result parsers.
-4. gRPC/WebSocket/UI performance evaluators.
-5. Profile parsing and correlation.
-6. LangGraph workflow integration.
-7. LLM evidence explanation with strict JSON output.
+1. Automatic proto compilation/import generation for gRPC scenarios.
+2. Schema-driven WebSocket scenario generation from message contracts.
+3. Browser trace/video artifact capture and richer Web Vitals reporting.
+4. Provider-specific dependency metric contracts for Datadog, New Relic, and Elasticsearch.
+5. Remote/Kubernetes distributed workers with artifact upload/download and retry policy.
+6. Deeper eBPF interpretation for off-CPU, allocation, runtime, and kernel evidence.
+7. Polished CI package with reusable GitHub Action and regression-gate examples.
 
 ## What should be prioritized next?
 
