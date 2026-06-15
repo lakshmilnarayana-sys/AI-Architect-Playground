@@ -297,12 +297,17 @@ def _dependency_lines(dependency_analysis: dict[str, Any]) -> str:
 def _protocol_lines(protocol_analysis: dict[str, Any]) -> str:
     metrics = protocol_analysis.get("protocol_metrics", {})
     browser_metrics = protocol_analysis.get("browser_metrics", {})
+    browser_artifacts = protocol_analysis.get("browser_artifacts", [])
     findings = protocol_analysis.get("findings", [])
     warnings = protocol_analysis.get("warnings", [])
-    if not metrics and not browser_metrics and not findings:
+    if not metrics and not browser_metrics and not browser_artifacts and not findings:
         return "\n".join(f"- Warning: {item}" for item in warnings) or "- No protocol-native metrics available."
     lines = [f"- {key}: {value}" for key, value in sorted(metrics.items())]
     lines.extend(f"- browser_{key}: {value}" for key, value in sorted(browser_metrics.items()))
+    if browser_artifacts:
+        lines.append("")
+        lines.append("Browser artifacts:")
+        lines.extend(f"- {item.get('type', 'artifact')}: {item.get('path')}" for item in browser_artifacts)
     if findings:
         lines.append("")
         lines.append("Findings:")
@@ -674,15 +679,19 @@ def _interactive_html(
       const analysis = data.protocolAnalysis || {{}};
       const metrics = analysis.protocol_metrics || {{}};
       const browserMetrics = analysis.browser_metrics || {{}};
+      const browserArtifacts = analysis.browser_artifacts || [];
       const findings = analysis.findings || [];
       const warnings = analysis.warnings || [];
       const allMetrics = {{...metrics, ...Object.fromEntries(Object.entries(browserMetrics).map(([key, value]) => [`browser_${{key}}`, value]))}};
       const metricRows = Object.entries(allMetrics).map(([key, value]) => `<tr><td>${{fmt(key)}}</td><td>${{fmt(typeof value === 'object' ? JSON.stringify(value) : value)}}</td></tr>`).join('');
+      const artifactRows = browserArtifacts.map(item => `<tr><td>${{fmt(item.type)}}</td><td>${{fmt(item.path)}}</td></tr>`).join('');
       const findingRows = findings.map(item => `<tr><td>${{fmt(item.type)}}</td><td>${{fmt(item.severity)}}</td><td>${{fmt(item.evidence)}}</td></tr>`).join('');
       const warningRows = warnings.map(item => `<li>${{fmt(item)}}</li>`).join('');
       document.getElementById('protocol-analysis').innerHTML = `
         <h3>Protocol Metrics</h3>
         <table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>${{metricRows || '<tr><td colspan="2">No protocol-native metrics available.</td></tr>'}}</tbody></table>
+        <h3>Browser Artifacts</h3>
+        <table><thead><tr><th>Type</th><th>Path</th></tr></thead><tbody>${{artifactRows || '<tr><td colspan="2">No browser artifacts captured.</td></tr>'}}</tbody></table>
         <h3>Protocol Findings</h3>
         <table><thead><tr><th>Type</th><th>Severity</th><th>Evidence</th></tr></thead><tbody>${{findingRows || '<tr><td colspan="3">No protocol findings detected.</td></tr>'}}</tbody></table>
         ${{warningRows ? `<h3>Warnings</h3><ul>${{warningRows}}</ul>` : ''}}

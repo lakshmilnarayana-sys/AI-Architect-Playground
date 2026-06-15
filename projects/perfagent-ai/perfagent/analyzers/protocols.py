@@ -7,6 +7,7 @@ from typing import Any
 def analyze_protocol_metrics(summary: dict[str, Any], aligned_rows: list[dict[str, Any]]) -> dict[str, Any]:
     protocol_metrics = dict(summary.get("protocol_metrics", {}) or {})
     browser_metrics = dict(summary.get("browser_metrics", {}) or {})
+    browser_artifacts = list(summary.get("browser_artifacts", []) or [])
     for row in aligned_rows:
         for key in (
             "grpc_status",
@@ -90,6 +91,7 @@ def analyze_protocol_metrics(summary: dict[str, Any], aligned_rows: list[dict[st
     return {
         "protocol_metrics": protocol_metrics,
         "browser_metrics": browser_metrics,
+        "browser_artifacts": browser_artifacts,
         "findings": findings,
         "warnings": [] if protocol_metrics or browser_metrics else ["no protocol-native metrics available"],
     }

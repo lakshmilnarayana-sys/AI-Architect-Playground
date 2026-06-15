@@ -1,4 +1,5 @@
 from perfagent.collectors.protocol_collectors import duration_to_seconds, protocol_result_to_summary, run_protocol_script
+from perfagent.analyzers.protocols import analyze_protocol_metrics
 
 
 def test_protocol_result_to_summary_normalizes_websocket_rows():
@@ -15,6 +16,40 @@ def test_protocol_result_to_summary_normalizes_websocket_rows():
     assert summary["metrics"]["http_req_failed"]["rate"] == 1 / 3
     assert summary["metrics"]["http_req_duration"]["p(95)"] == 30
     assert summary["browser_metrics"]["first_contentful_paint_ms"] == 90
+
+
+def test_protocol_result_to_summary_preserves_browser_artifacts():
+    summary = protocol_result_to_summary(
+        [
+            {
+                "requests": 1,
+                "errors": 0,
+                "latencies_ms": [50],
+                "browser_metrics": [{"largest_contentful_paint_ms": 1200}],
+                "browser_artifacts": [
+                    {"type": "trace", "path": "generated/ui-artifacts/checkout-trace.zip"},
+                    {"type": "screenshot", "path": "generated/ui-artifacts/checkout-error.png"},
+                ],
+            }
+        ],
+        elapsed_seconds=1,
+    )
+
+    assert summary["browser_artifacts"] == [
+        {"type": "trace", "path": "generated/ui-artifacts/checkout-trace.zip"},
+        {"type": "screenshot", "path": "generated/ui-artifacts/checkout-error.png"},
+    ]
+
+
+def test_protocol_analysis_exposes_browser_artifacts():
+    summary = {
+        "browser_metrics": {"largest_contentful_paint_ms": 1200},
+        "browser_artifacts": [{"type": "trace", "path": "generated/ui-artifacts/checkout-trace.zip"}],
+    }
+
+    analysis = analyze_protocol_metrics(summary, [])
+
+    assert analysis["browser_artifacts"] == [{"type": "trace", "path": "generated/ui-artifacts/checkout-trace.zip"}]
 
 
 def test_run_protocol_script_executes_json_harness(tmp_path):

@@ -71,6 +71,7 @@ def protocol_result_to_summary(result: Any, *, elapsed_seconds: float) -> dict[s
     errors = sum(int(row.get("errors", 0) or 0) for row in rows if isinstance(row, dict))
     latencies: list[float] = []
     browser_metrics: list[dict[str, Any]] = []
+    browser_artifacts: list[dict[str, Any]] = []
     protocol_metrics: dict[str, Any] = {}
     for row in rows:
         if isinstance(row, dict):
@@ -80,6 +81,11 @@ def protocol_result_to_summary(result: Any, *, elapsed_seconds: float) -> dict[s
                 browser_metrics.append(raw_browser_metrics)
             else:
                 browser_metrics.extend(item for item in raw_browser_metrics if isinstance(item, dict))
+            raw_browser_artifacts = row.get("browser_artifacts", [])
+            if isinstance(raw_browser_artifacts, dict):
+                browser_artifacts.append(raw_browser_artifacts)
+            else:
+                browser_artifacts.extend(item for item in raw_browser_artifacts if isinstance(item, dict))
             _merge_protocol_metrics(protocol_metrics, row.get("protocol_metrics", {}))
             _merge_protocol_metrics(
                 protocol_metrics,
@@ -99,6 +105,8 @@ def protocol_result_to_summary(result: Any, *, elapsed_seconds: float) -> dict[s
     }
     if browser_metrics:
         summary["browser_metrics"] = _average_browser_metrics(browser_metrics)
+    if browser_artifacts:
+        summary["browser_artifacts"] = browser_artifacts
     if protocol_metrics:
         summary["protocol_metrics"] = protocol_metrics
     return summary
