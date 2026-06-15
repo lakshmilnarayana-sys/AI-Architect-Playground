@@ -34,6 +34,10 @@ def hydrate_streamlit_secrets() -> None:
         "NEO4J_USERNAME",
         "NEO4J_PASSWORD",
         "NEXUSGRAPH_AUTO_IMPORT_NEO4J",
+        "INCIDENT_SIM_ENABLED",
+        "INCIDENT_USE_LLM",
+        "INCIDENT_USE_NEO4J",
+        "INCIDENT_USE_VECTOR",
     ]
     try:
         secrets = st.secrets
