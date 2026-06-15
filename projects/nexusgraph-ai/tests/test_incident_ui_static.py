@@ -26,3 +26,15 @@ def test_incident_section_wired():
     assert "stream_incident(" in APP                        # timed playback driver
     assert "load_scenarios(" in APP                         # scenario picker
     assert "time.sleep(" in APP                             # timed streaming pacing
+
+
+def test_incident_section_behind_feature_flag():
+    assert 'env_flag("INCIDENT_SIM_ENABLED"' in APP         # gated behind a flag
+
+
+def test_playback_uses_widgetless_feed():
+    # Streaming loop must use the widget-free feed to avoid duplicate widget keys.
+    assert "def render_slack_feed(" in APP
+    assert 'render_slack_feed(state["incident"], collected)' in APP
+    # Searchable channel (the keyed text_input) renders from session_state, once per run.
+    assert 'st.session_state["inc_result"]' in APP
