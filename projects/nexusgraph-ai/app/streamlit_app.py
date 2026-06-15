@@ -458,6 +458,25 @@ def render_slack_channel(incident: dict, messages: list[dict]) -> None:
     st.caption(f"{len(visible)} / {len(messages)} messages")
 
 
+def render_slack_feed(incident: dict, messages: list[dict]) -> None:
+    """Header + scrollable feed only — no input widgets, safe to call repeatedly
+    during streaming playback (avoids duplicate widget keys)."""
+    import base64
+    logo_path = ROOT / "app" / "assets" / "slack-logo.svg"
+    logo_tag = ""
+    if logo_path.exists():
+        b64 = base64.b64encode(logo_path.read_bytes()).decode("ascii")
+        logo_tag = f'<img src="data:image/svg+xml;base64,{b64}" width="22" style="vertical-align:middle"/>'
+    st.markdown(f"{logo_tag} **{channel_name(incident)}**", unsafe_allow_html=True)
+    with st.container(height=420):  # fixed-height scrollable feed
+        for m in messages:
+            st.markdown(
+                f"{m.get('avatar','💬')} **{m.get('author','')}** "
+                f"`{m.get('phase','')}` · {m.get('ts','')}  \n{m.get('text','')}"
+            )
+    st.caption(f"{len(messages)} messages")
+
+
 def render_incident_response_simulation() -> None:
     st.caption("Hierarchical multi-agent incident simulation grounded in the knowledge graph.")
     scenarios = load_scenarios()
@@ -482,6 +501,8 @@ def render_incident_response_simulation() -> None:
                              severity, [service] if service else [], signal)
         state["incident"]["recovered"] = True
 
+    feed = st.empty()
+
     if st.button("Run incident simulation", key="inc_run"):
         use_real_llm = env_flag("INCIDENT_USE_LLM", False)
         llm = None
@@ -489,7 +510,6 @@ def render_incident_response_simulation() -> None:
             from src.hybrid_rag import get_llm
             llm = get_llm()
         ctx = GraphContext(use_neo4j=env_flag("INCIDENT_USE_NEO4J", False))
-        feed = st.empty()
         collected: list[dict] = []
         for phase, messages in stream_incident(state, llm=llm, ctx=ctx,
                                                 use_vector=env_flag("INCIDENT_USE_VECTOR", False),
@@ -497,9 +517,16 @@ def render_incident_response_simulation() -> None:
                                                 thread_id=f"ui-{state['incident']['id']}"):
             collected.extend(messages)
             with feed.container():
-                render_slack_channel(state["incident"], collected)
+                render_slack_feed(state["incident"], collected)  # no widgets in the loop
             time.sleep(0.6)  # timed streaming playback pacing
+        st.session_state["inc_result"] = {"incident": state["incident"], "messages": collected}
         st.success("Incident resolved — postmortem generated.")
+
+    # Persistent, searchable render — exactly one search widget per run.
+    result = st.session_state.get("inc_result")
+    if result:
+        with feed.container():
+            render_slack_channel(result["incident"], result["messages"])
 
 
 def render_rag_mode_explainer() -> None:
@@ -1084,8 +1111,9 @@ with st.expander("GraphRAG Demo Queries", expanded=True):
                     st.session_state.pending_query = item['query']
                     st.rerun()
 
-with st.expander("Incident Response Simulation", expanded=True):
-    render_incident_response_simulation()
+if env_flag("INCIDENT_SIM_ENABLED", False):
+    with st.expander("Incident Response Simulation", expanded=True):
+        render_incident_response_simulation()
 
 render_project_story(nodes, edges)
 
