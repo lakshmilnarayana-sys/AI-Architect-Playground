@@ -123,6 +123,29 @@ def test_summarize_collapsed_stack_profile_extracts_top_functions(tmp_path):
     assert summary["top_functions"][0]["percent"] == 70
 
 
+def test_summarize_collapsed_stack_profile_interprets_ebpf_wait_and_syscalls(tmp_path):
+    profile = tmp_path / "profile.folded"
+    profile.write_text(
+        "\n".join(
+            [
+                "main;handler;runtime.futex 5",
+                "main;handler;sys_epoll_wait 3",
+                "main;handler;tcp_sendmsg 2",
+                "main;handler;malloc 4",
+            ]
+        )
+        + "\n"
+    )
+
+    summary = summarize_profile_artifact(profile, "collapsed-stacks")
+
+    assert summary["ebpf_interpretation"]["off_cpu_samples"] == 8
+    assert summary["ebpf_interpretation"]["allocation_samples"] == 4
+    assert summary["ebpf_interpretation"]["network_samples"] == 2
+    assert summary["ebpf_interpretation"]["dominant_category"] == "off_cpu_blocking"
+    assert "off_cpu_blocking" in summary["ebpf_interpretation"]["evidence"][0]
+
+
 def test_convert_perf_script_to_collapsed_stacks():
     script = """
 python 123 [001] 10.000000: cycles:

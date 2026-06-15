@@ -283,5 +283,5 @@ make demo-down
 - gRPC harness can invoke configured protobuf stubs/RPC methods and optionally compile protos at runtime with inferred module/stub/request names.
 - WebSocket harness supports configured message scenarios and deterministic JSON Schema-style message generation.
 - Dependency containers are scaffolding; realistic dependency tests require schemas, data volumes, topics, indexes, and client behavior.
-- Vendor observability adapters normalize traffic profiles and provider time-series rows; full provider-specific dependency metric contracts still need hardening.
+- Vendor observability adapters normalize traffic profiles, provider time-series rows, and dependency metric contracts; real environments still need label/facet/index validation.
 - Capacity confidence is lower without service, infra, and dependency time-series.

@@ -133,6 +133,7 @@ def build_provider_query_pack(provider: str, service_name: str, config: dict[str
     }
     rendered_dependencies = _render_query(dependency_queries, service_name)
     query_groups = _provider_query_groups(provider_name, service_name, config)
+    dependency_metric_contracts = _dependency_metric_contracts(provider_name, service_name, config)
     golden_signals = ["latency_p95", "request_rate", "error_rate", "cpu_usage", "memory_usage"]
     return {
         "provider": provider_name,
@@ -141,11 +142,12 @@ def build_provider_query_pack(provider: str, service_name: str, config: dict[str
         "queries": rendered,
         "query_groups": query_groups,
         "dependency_queries": rendered_dependencies,
+        "dependency_metric_contracts": dependency_metric_contracts,
         "golden_signals": golden_signals,
         "coverage": {
             "golden_signals": golden_signals,
             "dependencies": sorted(rendered_dependencies.keys()),
-            "query_groups": sorted(query_groups.keys()),
+            "query_groups": sorted([*query_groups.keys(), "dependency_metric_contracts"]),
         },
         "required_config": required,
         "warnings": [],
@@ -156,11 +158,108 @@ def validate_provider_query_pack(provider: str, service_name: str, config: dict[
     config = config or {}
     pack = build_provider_query_pack(provider, service_name, config)
     missing = [key for key in pack.get("required_config", []) if not config.get(key)]
+    dependency_validation = _validate_dependency_contract_mappings(pack, config)
     pack["valid"] = bool(pack.get("supported")) and not missing
     pack["missing_config"] = missing
+    pack["dependency_contract_validation"] = dependency_validation
     if missing:
         pack["warnings"] = [*pack.get("warnings", []), "missing provider config: " + ", ".join(missing)]
+    if not dependency_validation["valid"]:
+        pack["warnings"] = [
+            *pack.get("warnings", []),
+            "missing dependency mappings: " + ", ".join(dependency_validation["missing_mappings"]),
+        ]
     return pack
+
+
+def _dependency_metric_contracts(provider: str, service_name: str, config: dict[str, Any]) -> dict[str, Any]:
+    label_key = "required_labels" if provider != "elasticsearch" else "required_fields"
+    contracts = {
+        "postgres": {
+            "type": "postgres",
+            label_key: ["service", "db.system"] if provider != "elasticsearch" else ["service.name", "db.system", "event.duration"],
+            "queries": {
+                "p95_latency_ms": _provider_dependency_query(provider, "postgres", "p95_latency_ms", service_name, config),
+                "connection_pool_utilization_percent": _provider_dependency_query(provider, "postgres", "connection_pool_utilization_percent", service_name, config),
+            },
+        },
+        "redis": {
+            "type": "redis",
+            label_key: ["service", "db.system"] if provider != "elasticsearch" else ["service.name", "db.system", "event.duration"],
+            "queries": {
+                "p95_latency_ms": _provider_dependency_query(provider, "redis", "p95_latency_ms", service_name, config),
+                "memory_utilization_percent": _provider_dependency_query(provider, "redis", "memory_utilization_percent", service_name, config),
+            },
+        },
+        "kafka": {
+            "type": "kafka",
+            label_key: ["service", "topic"] if provider != "elasticsearch" else ["service.name", "messaging.destination.name"],
+            "queries": {
+                "consumer_lag": _provider_dependency_query(provider, "kafka", "consumer_lag", service_name, config),
+                "broker_bytes_in": _provider_dependency_query(provider, "kafka", "broker_bytes_in", service_name, config),
+            },
+        },
+        "cassandra": {
+            "type": "cassandra",
+            label_key: ["service", "db.system"] if provider != "elasticsearch" else ["service.name", "db.system", "event.duration"],
+            "queries": {
+                "read_latency_p95": _provider_dependency_query(provider, "cassandra", "read_latency_p95", service_name, config),
+                "write_latency_p95": _provider_dependency_query(provider, "cassandra", "write_latency_p95", service_name, config),
+            },
+        },
+        "elasticsearch": {
+            "type": "elasticsearch",
+            label_key: ["service", "cluster"] if provider != "elasticsearch" else ["service.name", "elasticsearch.cluster.name"],
+            "queries": {
+                "search_latency_p95": _provider_dependency_query(provider, "elasticsearch", "search_latency_p95", service_name, config),
+                "rejected_threads": _provider_dependency_query(provider, "elasticsearch", "rejected_threads", service_name, config),
+            },
+        },
+    }
+    return contracts
+
+
+def _provider_dependency_query(provider: str, dependency: str, metric: str, service_name: str, config: dict[str, Any]) -> Any:
+    if provider == "datadog":
+        datadog_metrics = {
+            "p95_latency_ms": f"p95:{dependency}.query.time{{service:{service_name}}}",
+            "connection_pool_utilization_percent": f"avg:{dependency}.connections{{service:{service_name}}}",
+            "memory_utilization_percent": f"avg:{dependency}.mem.used_percent{{service:{service_name}}}",
+            "consumer_lag": f"max:kafka.consumer_lag{{service:{service_name}}} by {{topic}}",
+            "broker_bytes_in": f"sum:kafka.net.bytes_in.rate{{service:{service_name}}}",
+            "read_latency_p95": f"p95:cassandra.client.request.latency{{service:{service_name},scope:read}}",
+            "write_latency_p95": f"p95:cassandra.client.request.latency{{service:{service_name},scope:write}}",
+            "search_latency_p95": f"p95:elasticsearch.search.query.time{{service:{service_name}}}",
+            "rejected_threads": f"sum:elasticsearch.thread_pool.search.rejected{{service:{service_name}}}",
+        }
+        return datadog_metrics.get(metric)
+    if provider in {"newrelic", "new_relic"}:
+        type_name = {"postgres": "Postgres", "redis": "Redis", "cassandra": "Cassandra", "elasticsearch": "Elasticsearch"}.get(dependency, dependency)
+        if dependency == "kafka":
+            return "SELECT max(consumerLag) FROM KafkaConsumerSample WHERE appName = '{service}' FACET topic".replace("{service}", service_name)
+        if metric.endswith("latency_p95") or metric == "p95_latency_ms":
+            return f"SELECT percentile(duration, 95) FROM DatastoreSample WHERE appName = '{service_name}' AND datastoreType = '{type_name}'"
+        return f"SELECT average({metric}) FROM DatastoreSample WHERE appName = '{service_name}' AND datastoreType = '{type_name}'"
+    if provider in {"elasticsearch", "elk"}:
+        mapping = (config.get("dependency_mappings", {}) or {}).get(dependency, {})
+        return {
+            "index": mapping.get("index", config.get("index", "traces-*")),
+            "service_field": mapping.get("service_field", config.get("service_field", "service.name")),
+            "duration_field": mapping.get("duration_field", config.get("duration_field", "event.duration")),
+            "dependency_filter": mapping.get("dependency_filter", {"term": {"db.system": dependency}}),
+            "metric": metric,
+        }
+    return None
+
+
+def _validate_dependency_contract_mappings(pack: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+    provider = pack.get("provider")
+    dependencies = sorted((pack.get("dependency_metric_contracts") or {}).keys())
+    mappings = config.get("dependency_mappings")
+    if provider not in {"elasticsearch", "elk"} or mappings is None:
+        return {"valid": True, "missing_mappings": [], "checked_dependencies": dependencies}
+    missing = [dependency for dependency in dependencies if dependency not in mappings]
+    return {"valid": not missing, "missing_mappings": missing, "checked_dependencies": dependencies}
 
 
 def _provider_query_groups(provider: str, service_name: str, config: dict[str, Any]) -> dict[str, Any]:
