@@ -63,6 +63,26 @@ def test_build_distributed_coordinator_plan_has_worker_commands(tmp_path):
     assert "distributed merge" in plan["merge_command"]
 
 
+def test_build_distributed_coordinator_plan_supports_docker_compose_backend(tmp_path):
+    plan = build_distributed_coordinator_plan(
+        engine="k6",
+        service_name="payments-api",
+        workers=2,
+        output_dir=tmp_path,
+        backend="docker-compose",
+        compose_file="./docker-compose.perfagent.yml",
+        project_name="perfagent-ci",
+    )
+
+    assert plan["backend"] == "docker-compose"
+    assert plan["compose_file"] == "./docker-compose.perfagent.yml"
+    assert plan["project_name"] == "perfagent-ci"
+    assert plan["lifecycle"]["setup"][0] == "docker compose -f ./docker-compose.perfagent.yml -p perfagent-ci build perfagent"
+    assert plan["lifecycle"]["teardown"][0] == "docker compose -f ./docker-compose.perfagent.yml -p perfagent-ci down --remove-orphans"
+    assert "-f ./docker-compose.perfagent.yml -p perfagent-ci run" in plan["worker_specs"][0]["command"]
+    assert plan["worker_specs"][0]["environment"]["PERFAGENT_WORKER_ID"] == "worker-1"
+
+
 def test_run_distributed_coordinator_executes_and_merges(tmp_path, monkeypatch):
     plan = build_distributed_coordinator_plan(
         engine="k6",

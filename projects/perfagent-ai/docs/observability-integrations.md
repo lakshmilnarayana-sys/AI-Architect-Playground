@@ -5,7 +5,7 @@ PerfAgent uses observability data for two jobs:
 1. derive production traffic profiles
 2. collect service/dependency evidence for bottleneck analysis
 
-The executable clients include Prometheus-compatible `/api/v1/query_range`, Datadog `/api/v1/query`, New Relic GraphQL NRQL, and Elasticsearch `_search` traffic-profile adapters.
+The executable clients include Prometheus-compatible `/api/v1/query_range`, Datadog `/api/v1/query`, New Relic GraphQL NRQL, and Elasticsearch `_search` traffic-profile and time-series adapters.
 
 You can render and validate provider query packs without running a load test:
 
@@ -25,15 +25,18 @@ Query packs include golden-signal templates for request rate, p95 latency, error
 
 ## Common Mapping
 
-Every provider should normalize data into this shape:
+Every non-Prometheus provider now normalizes metric samples into this shape before they are merged into `aligned_timeseries.csv`:
 
 ```json
 {
   "timestamp": "2026-06-13T10:00:00Z",
-  "path": "/v1/payments",
-  "rps": 120,
-  "p95_latency_ms": 420,
-  "error_rate_percent": 0.4
+  "source": "datadog",
+  "service": "payments-api",
+  "metric": "p95_latency_ms",
+  "value": 420,
+  "group": "golden_signal",
+  "endpoint": "/v1/payments",
+  "dependency": null
 }
 ```
 
@@ -42,9 +45,13 @@ For dependency metrics:
 ```json
 {
   "timestamp": "2026-06-13T10:00:00Z",
+  "source": "datadog",
+  "service": "payments-api",
+  "metric": "dependency_latency_ms",
+  "value": 88,
+  "group": "dependency",
+  "endpoint": null,
   "dependency": "postgres",
-  "metric": "connection_pool_utilization_percent",
-  "value": 92
 }
 ```
 
@@ -236,6 +243,7 @@ Current provider adapter module:
 
 ```python
 from perfagent.collectors.observability_adapters import (
+    collect_observability_timeseries,
     collect_observability_traffic_profile,
     validate_provider_query_pack,
 )
@@ -247,6 +255,7 @@ Then PerfAgent can keep the same deterministic analysis path:
 provider query
   -> normalized traffic profile
   -> derived strategy
+  -> normalized provider metric rows
   -> generated load test
   -> aligned time-series
   -> features

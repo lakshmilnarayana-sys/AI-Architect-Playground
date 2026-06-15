@@ -414,6 +414,9 @@ def distributed_coordinate(
     output: Path = typer.Option(Path("./outputs/distributed-coordinator-plan.json"), "--output"),
     base_config: str = typer.Option("./examples/sample-config.yaml", "--config"),
     compose_service: str = typer.Option("perfagent", "--compose-service"),
+    backend: str = typer.Option("local", "--backend", help="Worker backend: local or docker-compose."),
+    compose_file: str = typer.Option("docker-compose.yml", "--compose-file"),
+    project_name: str | None = typer.Option(None, "--project-name"),
     execute: bool = typer.Option(False, "--execute", help="Execute worker commands and merge available results."),
 ) -> None:
     plan = build_distributed_coordinator_plan(
@@ -423,6 +426,9 @@ def distributed_coordinate(
         output_dir=output.parent,
         base_config=base_config,
         compose_service=compose_service,
+        backend=backend,
+        compose_file=compose_file,
+        project_name=project_name,
     )
     if execute:
         result = run_distributed_coordinator(plan, output_path=output)
@@ -447,6 +453,9 @@ def distributed_run(
     output: Path = typer.Option(Path("./outputs/distributed-run.json"), "--output"),
     base_config: str = typer.Option("./examples/sample-config.yaml", "--config"),
     compose_service: str = typer.Option("perfagent", "--compose-service"),
+    backend: str = typer.Option("local", "--backend", help="Worker backend: local or docker-compose."),
+    compose_file: str = typer.Option("docker-compose.yml", "--compose-file"),
+    project_name: str | None = typer.Option(None, "--project-name"),
 ) -> None:
     plan = build_distributed_coordinator_plan(
         engine=engine,
@@ -455,6 +464,9 @@ def distributed_run(
         output_dir=output.parent,
         base_config=base_config,
         compose_service=compose_service,
+        backend=backend,
+        compose_file=compose_file,
+        project_name=project_name,
     )
     result = run_distributed_coordinator(plan, output_path=output)
     typer.echo(f"Distributed run result: {output}")

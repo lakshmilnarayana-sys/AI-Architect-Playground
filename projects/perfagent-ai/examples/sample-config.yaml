@@ -23,35 +23,46 @@ protocols:
       amount: 49.99
       currency: GBP
   websocket:
-    message:
-      type: authorizePayment
-      customerId: cust_ws_1001
-      amount: 49.99
-      currency: GBP
-    sequence:
-      - message:
-          type: authorizePayment
-          customerId: cust_ws_1001
-          amount: 49.99
-          currency: GBP
-        expect_json_field: status
-        think_time_ms: 100
-      - message:
-          type: authorizePayment
-          customerId: cust_ws_1002
-          amount: 19.99
-          currency: USD
-        expect_json_field: paymentId
-        think_time_ms: 50
+    scenarios:
+      - name: authorize-payment
+        sequence:
+          - send:
+              type: authorizePayment
+              customerId: cust_ws_1001
+              amount: 49.99
+              currency: GBP
+            expect:
+              json_field: status
+            think_time_ms: 100
+          - send:
+              type: authorizePayment
+              customerId: cust_ws_1002
+              amount: 19.99
+              currency: USD
+            expect:
+              json_field: paymentId
+            think_time_ms: 50
   ui:
-    path: /
-    wait_selector: body
-    action_selector: button
+    journeys:
+      - name: checkout
+        path: /
+        web_vitals: true
+        screenshot_on_error: true
+        steps:
+          - action: goto
+            path: /
+          - action: wait_for_selector
+            selector: body
+          - action: click
+            selector: button
     concurrency: 1
 distributed:
   enabled: false
   workers: 2
   compose_service: perfagent
+  backend: docker-compose
+  compose_file: docker-compose.yml
+  project_name: perfagent-local
 service:
   cpu_allocation: 500m
   memory_allocation: 512Mi
@@ -74,7 +85,6 @@ prometheus:
   url: http://localhost:9090
   service_label: sample-payments-api
   query_config: ./examples/prometheus-queries.yaml
-# Future provider adapters can use this shape. See docs/observability-integrations.md.
 observability:
   provider: prometheus
   datadog:

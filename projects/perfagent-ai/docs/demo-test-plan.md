@@ -279,9 +279,9 @@ make demo-down
 
 ## Known Gaps To Track
 
-- Browser UI load testing has an MVP Playwright-style harness; richer journey recording, browser metrics, screenshots, and Web Vitals are still future work.
-- gRPC harness currently validates channel/readiness unless service-specific protobuf stubs and RPC calls are wired into the generated test.
-- WebSocket harness uses generic message round trips unless service-specific message schemas are provided.
+- Browser UI load testing supports configured journeys, basic browser metrics, LCP, and optional error screenshots; richer journey recording and browser trace artifacts are still future work.
+- gRPC harness can invoke configured protobuf stubs/RPC methods; automatic proto compilation/import generation is still future work.
+- WebSocket harness supports configured message scenarios; schema-driven scenario generation is still future work.
 - Dependency containers are scaffolding; realistic dependency tests require schemas, data volumes, topics, indexes, and client behavior.
-- Vendor observability adapters normalize traffic profiles; full dependency metric collection per vendor needs provider-specific metric contracts.
+- Vendor observability adapters normalize traffic profiles and provider time-series rows; full provider-specific dependency metric contracts still need hardening.
 - Capacity confidence is lower without service, infra, and dependency time-series.

@@ -23,6 +23,23 @@ def collect_observability_traffic_profile(
     return {"enabled": False, "source": provider or "unknown", "endpoint_mix": [], "warnings": ["unsupported observability provider"]}
 
 
+def collect_observability_timeseries(
+    provider_config: dict[str, Any],
+    service_name: str,
+    *,
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> list[dict[str, Any]]:
+    provider = str(provider_config.get("provider", provider_config.get("source", ""))).lower()
+    if provider == "datadog":
+        return collect_datadog_timeseries(provider_config, service_name, start=start, end=end)
+    if provider in {"newrelic", "new_relic"}:
+        return collect_newrelic_timeseries(provider_config, service_name, start=start, end=end)
+    if provider in {"elasticsearch", "elk"}:
+        return collect_elasticsearch_timeseries(provider_config, service_name, start=start, end=end)
+    return []
+
+
 def build_provider_query_pack(provider: str, service_name: str, config: dict[str, Any] | None = None) -> dict[str, Any]:
     config = config or {}
     provider_name = provider.lower()
@@ -220,6 +237,33 @@ def collect_datadog_traffic_profile(
     return _traffic_profile("datadog", config, totals, query=query)
 
 
+def collect_datadog_timeseries(
+    config: dict[str, Any],
+    service_name: str,
+    *,
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> list[dict[str, Any]]:
+    end = end or datetime.now(UTC)
+    start = start or end - _lookback_delta(str(config.get("lookback", "15m")))
+    query = str(config.get("timeseries_query", "avg:trace.http.request.duration{service:{service}} by {resource_name}"))
+    query = query.replace("{service}", service_name)
+    base_url = str(config.get("site", config.get("base_url", "https://api.datadoghq.com"))).rstrip("/")
+    params = parse.urlencode({"from": int(start.timestamp()), "to": int(end.timestamp()), "query": query})
+    headers = {"Accept": "application/json", "DD-API-KEY": str(config.get("api_key", "")), "DD-APPLICATION-KEY": str(config.get("app_key", ""))}
+    payload = _json_request(base_url + "/api/v1/query?" + params, headers=headers)
+    rows: list[dict[str, Any]] = []
+    for series in payload.get("series", []):
+        metric = _extract_datadog_tag(series, "metric") or _metric_name(series.get("metric"))
+        endpoint = _extract_datadog_tag(series, str(config.get("endpoint_label", "resource_name")))
+        dependency = _extract_datadog_tag(series, "dependency")
+        for point in series.get("pointlist", []) or []:
+            if len(point) < 2:
+                continue
+            rows.append(_normalized_metric_row("datadog", service_name, point[0], metric, point[1], endpoint=endpoint, dependency=dependency))
+    return rows
+
+
 def collect_newrelic_traffic_profile(
     config: dict[str, Any],
     service_name: str,
@@ -252,6 +296,44 @@ def collect_newrelic_traffic_profile(
         if path:
             totals[str(path)] = max(totals.get(str(path), 0.0), _first_numeric(row, exclude={endpoint_label, "facet", "name"}))
     return _traffic_profile("newrelic", config, totals, query=nrql)
+
+
+def collect_newrelic_timeseries(
+    config: dict[str, Any],
+    service_name: str,
+    *,
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> list[dict[str, Any]]:
+    end = end or datetime.now(UTC)
+    start = start or end - _lookback_delta(str(config.get("lookback", "15m")))
+    account_id = config.get("account_id")
+    nrql = str(
+        config.get(
+            "timeseries_nrql",
+            "SELECT percentile(duration, 95) AS p95_latency_ms FROM Transaction WHERE appName = '{service}' FACET request.uri TIMESERIES",
+        )
+    ).replace("{service}", service_name)
+    if "SINCE" not in nrql.upper():
+        nrql += f" SINCE '{_format_time(start)}' UNTIL '{_format_time(end)}'"
+    graphql = {
+        "query": "query($accountId: Int!, $nrql: Nrql!) { actor { account(id: $accountId) { nrql(query: $nrql) { results } } } }",
+        "variables": {"accountId": int(account_id), "nrql": nrql},
+    }
+    headers = {"Accept": "application/json", "Content-Type": "application/json", "Api-Key": str(config.get("api_key", ""))}
+    payload = _json_request(str(config.get("base_url", "https://api.newrelic.com/graphql")), headers=headers, body=graphql)
+    results = payload.get("data", {}).get("actor", {}).get("account", {}).get("nrql", {}).get("results", [])
+    rows: list[dict[str, Any]] = []
+    for item in results:
+        timestamp = item.get("timestamp") or item.get("beginTimeSeconds") or item.get("endTimeSeconds")
+        endpoint = item.get(config.get("endpoint_label", "request.uri")) or item.get("facet")
+        dependency = item.get("dependency")
+        for metric, value in item.items():
+            if metric in {"timestamp", "beginTimeSeconds", "endTimeSeconds", "facet", "request.uri", "dependency"}:
+                continue
+            if isinstance(value, int | float):
+                rows.append(_normalized_metric_row("newrelic", service_name, timestamp, metric, value, endpoint=endpoint, dependency=dependency))
+    return rows
 
 
 def collect_elasticsearch_traffic_profile(
@@ -294,6 +376,43 @@ def collect_elasticsearch_traffic_profile(
     return _traffic_profile("elasticsearch", config, totals, query=body)
 
 
+def collect_elasticsearch_timeseries(
+    config: dict[str, Any],
+    service_name: str,
+    *,
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> list[dict[str, Any]]:
+    end = end or datetime.now(UTC)
+    start = start or end - _lookback_delta(str(config.get("lookback", "15m")))
+    service_field = str(config.get("service_field", "service.name"))
+    index = str(config.get("index", "logs-*"))
+    body = config.get("timeseries_query") or {
+        "size": 0,
+        "query": {"bool": {"filter": [{"term": {service_field: service_name}}, {"range": {"@timestamp": {"gte": _format_time(start), "lte": _format_time(end)}}}]}},
+        "aggs": {
+            "timeseries": {
+                "date_histogram": {"field": "@timestamp", "fixed_interval": str(config.get("interval", "10s"))},
+                "aggs": {
+                    "p95_latency_ms": {"percentiles": {"field": config.get("duration_field", "event.duration"), "percents": [95]}},
+                    "error_rate_percent": {"avg": {"field": config.get("error_rate_field", "event.error_rate")}},
+                },
+            }
+        },
+    }
+    base_url = str(config.get("base_url", "http://localhost:9200")).rstrip("/")
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    if config.get("api_key"):
+        headers["Authorization"] = "ApiKey " + str(config["api_key"])
+    payload = _json_request(base_url + "/" + index + "/_search", headers=headers, body=body)
+    rows: list[dict[str, Any]] = []
+    for bucket in payload.get("aggregations", {}).get("timeseries", {}).get("buckets", []):
+        timestamp = bucket.get("key_as_string") or bucket.get("key")
+        for metric, value in _flatten_elastic_bucket(bucket).items():
+            rows.append(_normalized_metric_row("elasticsearch", service_name, timestamp, metric, value))
+    return rows
+
+
 def _traffic_profile(source: str, config: dict[str, Any], totals: dict[str, float], *, query: Any) -> dict[str, Any]:
     total_rps = sum(totals.values())
     peak_multiplier = float(config.get("peak_multiplier", 1.5))
@@ -329,13 +448,17 @@ def _render_query(query: Any, service_name: str) -> Any:
 
 
 def _extract_datadog_label(series: dict[str, Any], label: str) -> str | None:
+    return _extract_datadog_tag(series, label) or series.get("metric")
+
+
+def _extract_datadog_tag(series: dict[str, Any], label: str) -> str | None:
     for tag in series.get("tag_set", []) or series.get("scope", "").split(","):
         if ":" not in tag:
             continue
         key, value = tag.split(":", 1)
         if key == label:
             return value
-    return series.get("metric")
+    return None
 
 
 def _first_numeric(row: dict[str, Any], *, exclude: set[str]) -> float:
@@ -369,3 +492,66 @@ def _safe_float(value: Any) -> float:
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _normalized_metric_row(
+    source: str,
+    service_name: str,
+    timestamp: Any,
+    metric: str | None,
+    value: Any,
+    *,
+    endpoint: str | None = None,
+    dependency: str | None = None,
+) -> dict[str, Any]:
+    metric_name = _metric_name(metric)
+    return {
+        "timestamp": _normalize_timestamp(timestamp),
+        "source": source,
+        "service": service_name,
+        "metric": metric_name,
+        "value": _safe_float(value),
+        "group": "dependency" if dependency else "golden_signal",
+        "endpoint": endpoint,
+        "dependency": dependency,
+    }
+
+
+def _normalize_timestamp(value: Any) -> str:
+    if isinstance(value, datetime):
+        return _format_time(value)
+    numeric = _safe_float(value)
+    if numeric:
+        if numeric > 10_000_000_000:
+            numeric = numeric / 1000
+        return _format_time(datetime.fromtimestamp(numeric, tz=UTC))
+    if isinstance(value, str):
+        return value.replace("+00:00", "Z")
+    return _format_time(datetime.now(UTC))
+
+
+def _metric_name(value: Any) -> str:
+    raw = str(value or "metric_value").split(":")[-1]
+    mapping = {
+        "trace.http.request.duration": "p95_latency_ms",
+        "trace.http.request.hits": "request_rate",
+        "trace.http.request.errors": "error_rate_percent",
+        "postgresql.query.time": "dependency_latency_ms",
+    }
+    return mapping.get(raw, raw)
+
+
+def _flatten_elastic_bucket(bucket: dict[str, Any]) -> dict[str, float]:
+    flattened: dict[str, float] = {}
+    for key, value in bucket.items():
+        if key in {"key", "key_as_string", "doc_count"}:
+            continue
+        if isinstance(value, dict) and "values" in value:
+            percentile_values = value.get("values", {})
+            if "95.0" in percentile_values:
+                flattened[key] = _safe_float(percentile_values["95.0"])
+        elif isinstance(value, dict) and "value" in value:
+            flattened[key] = _safe_float(value["value"])
+        elif isinstance(value, int | float):
+            flattened[key] = _safe_float(value)
+    return flattened

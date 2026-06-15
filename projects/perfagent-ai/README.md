@@ -219,6 +219,7 @@ New extension surfaces:
 - `--engine ui` / `--engine browser` generates and executes a Playwright-style browser journey harness.
 - `distributed plan` writes a containerized distributed execution plan.
 - `distributed coordinate` writes worker commands plus the deterministic merge command, or executes them with `--execute`.
+- `distributed coordinate --backend docker-compose` adds Compose build/down lifecycle commands, worker environment, and deterministic result merge.
 - `distributed run` executes the worker commands and merges worker summaries when they are available.
 - `distributed merge` combines worker summaries into a merged summary and aligned time-series.
 - `profile plan` writes eBPF/system profiler capture plans by default, with runtime-specific profilers available as fallback.
@@ -466,6 +467,9 @@ Plan distributed worker execution:
   --engine k6 \
   --workers 4 \
   --config ./examples/sample-config.yaml \
+  --backend docker-compose \
+  --compose-file ./docker-compose.yml \
+  --project-name perfagent-ci \
   --output ./outputs/distributed-coordinate.json
 ```
 
@@ -477,6 +481,9 @@ Run distributed workers and merge results:
   --engine k6 \
   --workers 4 \
   --config ./examples/sample-config.yaml \
+  --backend docker-compose \
+  --compose-file ./docker-compose.yml \
+  --project-name perfagent-ci \
   --output ./outputs/distributed-run.json
 ```
 
@@ -488,9 +495,14 @@ The same coordinator can execute directly:
   --engine k6 \
   --workers 4 \
   --config ./examples/sample-config.yaml \
+  --backend docker-compose \
+  --compose-file ./docker-compose.yml \
+  --project-name perfagent-ci \
   --output ./outputs/distributed-run.json \
   --execute
 ```
+
+Protocol scenarios are configured under `protocols.grpc`, `protocols.websocket.scenarios`, and `protocols.ui.journeys` in `examples/sample-config.yaml`. PerfAgent writes `processed/protocol_scenarios.json` and `processed/protocol_scenario_validation.json` for each run.
 
 Generate a PR comment body from a completed run:
 

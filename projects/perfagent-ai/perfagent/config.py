@@ -6,6 +6,8 @@ from typing import Any
 
 import yaml
 
+from perfagent.protocols.scenarios import normalize_protocol_scenarios
+
 
 def load_run_config(path: Path | None) -> dict[str, Any]:
     if path is None:
@@ -68,7 +70,7 @@ def resolve_evaluate_options(config: dict[str, Any], cli_values: dict[str, Any])
             ),
         },
         "observability": _resolve_observability_config(observability, traffic_profile),
-        "protocols": protocols,
+        "protocols": normalize_protocol_scenarios(protocols),
         "distributed": {
             "enabled": bool(distributed.get("enabled", False)),
             "workers": int(distributed.get("workers", 1)),
