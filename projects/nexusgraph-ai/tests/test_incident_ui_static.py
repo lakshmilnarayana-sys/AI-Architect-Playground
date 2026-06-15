@@ -32,6 +32,14 @@ def test_incident_section_behind_feature_flag():
     assert 'env_flag("INCIDENT_SIM_ENABLED"' in APP         # gated behind a flag
 
 
+def test_incident_flags_propagated_from_streamlit_secrets():
+    # Streamlit Cloud secrets only reach os.environ via hydrate_streamlit_secrets()'s
+    # allow-list, which env_flag reads. The INCIDENT_* flags must be listed.
+    for flag in ("INCIDENT_SIM_ENABLED", "INCIDENT_USE_LLM",
+                 "INCIDENT_USE_NEO4J", "INCIDENT_USE_VECTOR"):
+        assert f'"{flag}"' in APP
+
+
 def test_playback_uses_widgetless_feed():
     # Streaming loop must use the widget-free feed to avoid duplicate widget keys.
     assert "def render_slack_feed(" in APP
