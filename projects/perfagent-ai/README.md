@@ -220,13 +220,14 @@ New extension surfaces:
 - `distributed plan` writes a containerized distributed execution plan.
 - `distributed coordinate` writes worker commands plus the deterministic merge command, or executes them with `--execute`.
 - `distributed coordinate --backend docker-compose` adds Compose build/down lifecycle commands, worker environment, and deterministic result merge.
+- `distributed coordinate --backend kubernetes` emits Kubernetes Job manifests, wait/copy commands, retry policy, and optional PVC artifact wiring.
 - `distributed run` executes the worker commands and merges worker summaries when they are available.
 - `distributed merge` combines worker summaries into a merged summary and aligned time-series.
 - `profile plan` writes eBPF/system profiler capture plans by default, with runtime-specific profilers available as fallback.
 - `profile run` executes available profiler capture/render commands explicitly.
 - `evaluate --profile-auto` runs supported profiler capture commands during the load window.
 - `capacity search` runs iterative capacity probes and records the first breaking point.
-- `observability query-pack` renders and validates provider query packs for Datadog, New Relic, and Elasticsearch, including golden signals, Kubernetes workload signals, and common dependency templates.
+- `observability query-pack` renders and validates provider query packs for Datadog, New Relic, and Elasticsearch, including golden signals, Kubernetes workload signals, dependency metric contracts, and common dependency templates.
 - `ci comment` renders reusable Markdown for PR comments from `reports/summary.json`.
 - `storage dashboard` renders a cross-run trend dashboard from the run store.
 - `regression index` and `regression similar` combine deterministic SQL history with optional pgvector retrieval.
@@ -500,6 +501,22 @@ The same coordinator can execute directly:
   --project-name perfagent-ci \
   --output ./outputs/distributed-run.json \
   --execute
+```
+
+Plan Kubernetes worker Jobs:
+
+```bash
+.venv/bin/python -m perfagent distributed coordinate \
+  --service-name payments-api \
+  --engine k6 \
+  --workers 4 \
+  --config ./examples/sample-config.yaml \
+  --backend kubernetes \
+  --namespace perfagent \
+  --image ghcr.io/example/perfagent:ci \
+  --artifact-pvc perfagent-artifacts \
+  --retry-limit 2 \
+  --output ./outputs/distributed-k8s.json
 ```
 
 Protocol scenarios are configured under `protocols.grpc`, `protocols.websocket.scenarios`, and `protocols.ui.journeys` in `examples/sample-config.yaml`. gRPC can compile protos at runtime with `auto_compile: true`; WebSocket can generate messages from `message_schema`; UI journeys can capture traces, videos, and error screenshots. PerfAgent writes `processed/protocol_scenarios.json` and `processed/protocol_scenario_validation.json` for each run.

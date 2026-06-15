@@ -65,6 +65,11 @@ distributed:
   backend: docker-compose
   compose_file: docker-compose.yml
   project_name: perfagent-local
+  kubernetes:
+    namespace: perfagent
+    image: ghcr.io/example/perfagent:ci
+    artifact_pvc: perfagent-artifacts
+    retry_limit: 2
 service:
   cpu_allocation: 500m
   memory_allocation: 512Mi
@@ -100,6 +105,17 @@ observability:
     url: http://localhost:9200
     api_key_env: ELASTICSEARCH_API_KEY
     index: traces-apm-*
+    dependency_mappings:
+      postgres:
+        duration_field: event.duration
+      redis:
+        duration_field: event.duration
+      kafka:
+        duration_field: event.duration
+      cassandra:
+        duration_field: event.duration
+      elasticsearch:
+        duration_field: event.duration
 storage:
   enabled: true
   backend: sqlite

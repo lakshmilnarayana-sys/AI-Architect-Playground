@@ -130,6 +130,35 @@ def test_provider_query_pack_validation_reports_dependency_coverage():
     assert "kubernetes" in pack["coverage"]["query_groups"]
 
 
+def test_provider_query_pack_includes_dependency_metric_contracts():
+    pack = adapters.validate_provider_query_pack(
+        "datadog",
+        "payments-api",
+        {"api_key": "api", "app_key": "app", "site": "http://datadog"},
+    )
+
+    postgres = pack["dependency_metric_contracts"]["postgres"]
+    kafka = pack["dependency_metric_contracts"]["kafka"]
+
+    assert pack["valid"] is True
+    assert postgres["required_labels"] == ["service", "db.system"]
+    assert "connection_pool_utilization_percent" in postgres["queries"]
+    assert "consumer_lag" in kafka["queries"]
+    assert "dependency_metric_contracts" in pack["coverage"]["query_groups"]
+
+
+def test_provider_query_pack_validation_reports_missing_dependency_mappings():
+    pack = adapters.validate_provider_query_pack(
+        "elasticsearch",
+        "payments-api",
+        {"base_url": "http://elastic:9200", "index": "traces-*", "dependency_mappings": {"postgres": {"duration_field": "db.duration"}}},
+    )
+
+    assert pack["dependency_contract_validation"]["valid"] is False
+    assert "redis" in pack["dependency_contract_validation"]["missing_mappings"]
+    assert any("missing dependency mappings" in warning for warning in pack["warnings"])
+
+
 def test_collect_observability_timeseries_normalizes_provider_rows(monkeypatch):
     def fake_urlopen(req, timeout):
         return FakeResponse(

@@ -21,7 +21,7 @@ perfagent observability query-pack \
 
 The command reports missing provider configuration and writes the exact rendered query strings or Elasticsearch query templates. Use it as the first CI/onboarding check before relying on production traffic replay or dependency evidence.
 
-Query packs include golden-signal templates for request rate, p95 latency, error rate, CPU, and memory; Kubernetes workload query groups for CPU, memory, restarts, and throttling; and dependency templates for common systems such as Postgres, Redis, Kafka, Cassandra, and Elasticsearch. The generated JSON includes a `coverage` section so onboarding and CI can see which signal groups are present. Treat them as starting packs: real environments still need label, facet, index, and service-name mapping validation.
+Query packs include golden-signal templates for request rate, p95 latency, error rate, CPU, and memory; Kubernetes workload query groups for CPU, memory, restarts, and throttling; dependency metric contracts for Postgres, Redis, Kafka, Cassandra, and Elasticsearch; and provider-specific query templates. The generated JSON includes a `coverage` section and `dependency_contract_validation` so onboarding and CI can see which signal groups are present and which dependency mappings are missing. Treat them as starting packs: real environments still need label, facet, index, and service-name mapping validation.
 
 ## Common Mapping
 
@@ -54,6 +54,19 @@ For dependency metrics:
   "dependency": "postgres",
 }
 ```
+
+Dependency metric contracts are also emitted by:
+
+```bash
+perfagent observability query-pack \
+  --provider elasticsearch \
+  --service-name payments-api \
+  --base-url http://localhost:9200 \
+  --index traces-* \
+  --output-json ./outputs/elasticsearch-query-pack.json
+```
+
+The output includes `dependency_metric_contracts` and `dependency_contract_validation`. For Elasticsearch, pass `dependency_mappings` in config to confirm every dependency has the required index/field mapping.
 
 ## Prometheus
 

@@ -83,6 +83,33 @@ def test_build_distributed_coordinator_plan_supports_docker_compose_backend(tmp_
     assert plan["worker_specs"][0]["environment"]["PERFAGENT_WORKER_ID"] == "worker-1"
 
 
+def test_build_distributed_coordinator_plan_supports_kubernetes_backend(tmp_path):
+    plan = build_distributed_coordinator_plan(
+        engine="k6",
+        service_name="payments-api",
+        workers=2,
+        output_dir=tmp_path,
+        backend="kubernetes",
+        namespace="perfagent",
+        image="ghcr.io/example/perfagent:ci",
+        artifact_pvc="perfagent-artifacts",
+        retry_limit=2,
+    )
+
+    assert plan["backend"] == "kubernetes"
+    assert plan["namespace"] == "perfagent"
+    assert plan["image"] == "ghcr.io/example/perfagent:ci"
+    assert plan["artifact_pvc"] == "perfagent-artifacts"
+    assert plan["retry_limit"] == 2
+    assert plan["lifecycle"]["setup"][0] == "kubectl -n perfagent create configmap perfagent-config --from-file=config=./examples/sample-config.yaml --dry-run=client -o yaml | kubectl apply -f -"
+    assert plan["worker_specs"][0]["kind"] == "Job"
+    assert plan["worker_specs"][0]["manifest"]["kind"] == "Job"
+    assert plan["worker_specs"][0]["manifest"]["spec"]["backoffLimit"] == 2
+    assert "kubectl -n perfagent apply -f" in plan["worker_specs"][0]["command"]
+    assert "kubectl -n perfagent wait --for=condition=complete job/perfagent-payments-api-worker-1" in plan["worker_specs"][0]["wait_command"]
+    assert "kubectl -n perfagent cp" in plan["worker_specs"][0]["artifact_command"]
+
+
 def test_run_distributed_coordinator_executes_and_merges(tmp_path, monkeypatch):
     plan = build_distributed_coordinator_plan(
         engine="k6",

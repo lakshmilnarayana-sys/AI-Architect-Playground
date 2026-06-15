@@ -559,6 +559,7 @@ def _summarize_collapsed_stacks(path: Path) -> dict[str, Any]:
 def _summarize_collapsed_stacks_from_text(text: str) -> dict[str, Any]:
     totals: dict[str, float] = {}
     total_samples = 0.0
+    frames_for_interpretation: list[tuple[list[str], float]] = []
     for line in text.splitlines():
         if not line.strip() or " " not in line:
             continue
@@ -567,10 +568,14 @@ def _summarize_collapsed_stacks_from_text(text: str) -> dict[str, Any]:
             count = float(raw_count)
         except ValueError:
             continue
-        function = stack.split(";")[-1].strip() or "unknown"
+        frames = [frame.strip() for frame in stack.split(";") if frame.strip()]
+        function = frames[-1] if frames else "unknown"
         totals[function] = totals.get(function, 0.0) + count
         total_samples += count
-    return _top_function_summary("collapsed-stacks", totals, total_samples)
+        frames_for_interpretation.append((frames, count))
+    summary = _top_function_summary("collapsed-stacks", totals, total_samples)
+    summary["ebpf_interpretation"] = _interpret_ebpf_stacks(frames_for_interpretation, total_samples)
+    return summary
 
 
 def _summarize_perf_script(path: Path) -> dict[str, Any]:
@@ -634,6 +639,49 @@ def _top_function_summary(profile_type: str, totals: dict[str, float], total_sam
         "sample_count": round(total_samples, 4),
         "top_functions": top_functions,
         "warnings": [] if top_functions else ["no top functions parsed"],
+    }
+
+
+def _interpret_ebpf_stacks(frames: list[tuple[list[str], float]], total_samples: float) -> dict[str, Any]:
+    categories = {
+        "off_cpu_blocking": {
+            "samples": 0.0,
+            "patterns": ("futex", "epoll_wait", "poll", "select", "pthread_cond", "park", "wait", "sleep"),
+        },
+        "allocation": {
+            "samples": 0.0,
+            "patterns": ("malloc", "calloc", "realloc", "newobject", "gc_alloc", "alloc", "mmap"),
+        },
+        "network": {
+            "samples": 0.0,
+            "patterns": ("tcp_", "sock_", "sendmsg", "recvmsg", "read", "write", "ssl_", "tls"),
+        },
+        "syscall": {
+            "samples": 0.0,
+            "patterns": ("sys_", "__x64_sys", "entry_SYSCALL", "do_syscall"),
+        },
+    }
+    evidence: list[str] = []
+    for stack_frames, count in frames:
+        stack_text = ";".join(stack_frames).lower()
+        matched = []
+        for category, spec in categories.items():
+            if any(pattern.lower() in stack_text for pattern in spec["patterns"]):
+                spec["samples"] += count
+                matched.append(category)
+        if matched:
+            evidence.append(f"{', '.join(matched)} matched stack {';'.join(stack_frames[-3:])} samples={round(count, 4)}")
+    dominant = max(categories.items(), key=lambda item: item[1]["samples"])[0] if categories else "unknown"
+    if categories[dominant]["samples"] == 0:
+        dominant = "cpu_hot_path"
+    return {
+        "off_cpu_samples": round(categories["off_cpu_blocking"]["samples"], 4),
+        "allocation_samples": round(categories["allocation"]["samples"], 4),
+        "network_samples": round(categories["network"]["samples"], 4),
+        "syscall_samples": round(categories["syscall"]["samples"], 4),
+        "dominant_category": dominant,
+        "sample_count": round(total_samples, 4),
+        "evidence": evidence[:10],
     }
 
 
