@@ -206,9 +206,9 @@ Protocol demo targets:
 | Protocol | Compose service | Port | PerfAgent support |
 | --- | --- | ---: | --- |
 | HTTP/OpenAPI | `demo-http-payments` | `8080` | End-to-end now |
-| WebSocket | `demo-websocket-payments` | `8081` | Generated scenario sequence harness and direct execution |
-| gRPC | `demo-grpc-payments` | `8082` | Generated proto/stub invocation harness and direct execution |
-| UI/Browser | `demo-ui-checkout` | `8083` | Generated browser journey harness with Web Vitals-style metrics |
+| WebSocket | `demo-websocket-payments` | `8081` | Generated scenario sequence harness, schema-derived messages, and direct execution |
+| gRPC | `demo-grpc-payments` | `8082` | Generated proto/stub invocation harness with optional runtime proto compilation |
+| UI/Browser | `demo-ui-checkout` | `8083` | Generated browser journey harness with Web Vitals-style metrics, traces, video, and error screenshots |
 
 More details: [docs/demo-applications.md](docs/demo-applications.md).
 
@@ -502,7 +502,7 @@ The same coordinator can execute directly:
   --execute
 ```
 
-Protocol scenarios are configured under `protocols.grpc`, `protocols.websocket.scenarios`, and `protocols.ui.journeys` in `examples/sample-config.yaml`. PerfAgent writes `processed/protocol_scenarios.json` and `processed/protocol_scenario_validation.json` for each run.
+Protocol scenarios are configured under `protocols.grpc`, `protocols.websocket.scenarios`, and `protocols.ui.journeys` in `examples/sample-config.yaml`. gRPC can compile protos at runtime with `auto_compile: true`; WebSocket can generate messages from `message_schema`; UI journeys can capture traces, videos, and error screenshots. PerfAgent writes `processed/protocol_scenarios.json` and `processed/protocol_scenario_validation.json` for each run.
 
 Generate a PR comment body from a completed run:
 

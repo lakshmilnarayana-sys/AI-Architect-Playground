@@ -12,42 +12,44 @@ test:
 protocols:
   grpc:
     proto_path: ./examples/demo-apps/grpc-payments-api/protos/payments.proto
+    auto_compile: true
     service_full_name: payments.Payments
-    pb2_module: payments_pb2
-    pb2_grpc_module: payments_pb2_grpc
-    stub_class: PaymentsStub
     method: CreatePayment
-    request_class: CreatePaymentRequest
     request:
       customer_id: cust_grpc_1001
       amount: 49.99
       currency: GBP
   websocket:
+    message_schema:
+      type: object
+      required: [type, customerId, amount, currency]
+      properties:
+        type:
+          type: string
+          const: authorizePayment
+        customerId:
+          type: string
+          pattern: "^cust_"
+        amount:
+          type: number
+          minimum: 1
+        currency:
+          type: string
+          enum: [GBP, USD]
+    expected_response:
+      json_field: status
     scenarios:
       - name: authorize-payment
         sequence:
-          - send:
-              type: authorizePayment
-              customerId: cust_ws_1001
-              amount: 49.99
-              currency: GBP
-            expect:
-              json_field: status
-            think_time_ms: 100
-          - send:
-              type: authorizePayment
-              customerId: cust_ws_1002
-              amount: 19.99
-              currency: USD
-            expect:
-              json_field: paymentId
-            think_time_ms: 50
+          - think_time_ms: 100
   ui:
     journeys:
       - name: checkout
         path: /
         web_vitals: true
         screenshot_on_error: true
+        trace: true
+        video: true
         steps:
           - action: goto
             path: /

@@ -456,12 +456,12 @@ If the release decision matches one of the configured values, the command exits 
 
 Highest-value next work:
 
-1. Automatic proto compilation/import generation for gRPC scenarios.
-2. Schema-driven WebSocket scenario generation from message contracts.
-3. Browser trace/video artifact capture and richer Web Vitals reporting.
-4. Provider-specific dependency metric contracts for Datadog, New Relic, and Elasticsearch.
-5. Remote/Kubernetes distributed workers with artifact upload/download and retry policy.
-6. Deeper eBPF interpretation for off-CPU, allocation, runtime, and kernel evidence.
+1. Provider-specific dependency metric contracts for Datadog, New Relic, and Elasticsearch.
+2. Remote/Kubernetes distributed workers with artifact upload/download and retry policy.
+3. Deeper eBPF interpretation for off-CPU, allocation, runtime, and kernel evidence.
+4. Browser trace parsing, waterfall summaries, and video links in the interactive report.
+5. AsyncAPI-native WebSocket parsing beyond JSON Schema-style message generation.
+6. gRPC reflection/protoset support for services that do not ship source `.proto` files.
 7. Polished CI package with reusable GitHub Action and regression-gate examples.
 
 ## What should be prioritized next?

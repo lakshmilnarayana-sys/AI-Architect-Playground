@@ -36,6 +36,45 @@ def test_generate_grpc_load_test_artifact(tmp_path):
     assert "localhost:8082" in content
 
 
+def test_generate_grpc_load_test_auto_compiles_proto_and_infers_modules(tmp_path):
+    output = tmp_path / "grpc_load.py"
+    proto = tmp_path / "protos" / "payments.proto"
+    proto.parent.mkdir()
+    proto.write_text(
+        """
+syntax = "proto3";
+package payments;
+service Payments {
+  rpc CreatePayment (CreatePaymentRequest) returns (CreatePaymentResponse);
+}
+message CreatePaymentRequest {
+  string customer_id = 1;
+}
+message CreatePaymentResponse {
+  string status = 1;
+}
+""".strip()
+    )
+
+    generate_grpc_load_test(
+        service_name="payments-api",
+        target="localhost:8082",
+        proto_path=str(proto),
+        output_path=output,
+        config={"auto_compile": True, "method": "CreatePayment", "request": {"customer_id": "cust_1"}},
+    )
+
+    content = output.read_text()
+    assert "AUTO_COMPILE_PROTO = True" in content
+    assert "grpc_tools.protoc" in content
+    assert "GENERATED_PROTO_DIR" in content
+    assert "PB2_MODULE = 'payments_pb2'" in content
+    assert "PB2_GRPC_MODULE = 'payments_pb2_grpc'" in content
+    assert "STUB_CLASS = 'PaymentsStub'" in content
+    assert "REQUEST_CLASS = 'CreatePaymentRequest'" in content
+    assert "_ensure_generated_stubs()" in content
+
+
 def test_generate_websocket_load_test_artifact(tmp_path):
     output = tmp_path / "websocket_load.py"
 
@@ -65,6 +104,35 @@ def test_generate_websocket_load_test_artifact(tmp_path):
     assert "connection_errors" in content
     assert "payments-api" in content
     assert "ws://localhost:8081/ws" in content
+
+
+def test_websocket_schema_generates_message_sequence():
+    normalized = normalize_protocol_scenarios(
+        {
+            "websocket": {
+                "message_schema": {
+                    "type": "object",
+                    "required": ["type", "customerId", "amount", "currency"],
+                    "properties": {
+                        "type": {"type": "string", "const": "authorizePayment"},
+                        "customerId": {"type": "string", "pattern": "^cust_"},
+                        "amount": {"type": "number", "minimum": 1},
+                        "currency": {"type": "string", "enum": ["GBP", "USD"]},
+                    },
+                },
+                "expected_response": {"json_field": "status"},
+            }
+        }
+    )
+
+    step = normalized["websocket"]["sequence"][0]
+    assert step["message"] == {
+        "type": "authorizePayment",
+        "customerId": "cust_test_1001",
+        "amount": 1,
+        "currency": "GBP",
+    }
+    assert step["expect_json_field"] == "status"
 
 
 def test_protocol_scenario_config_normalizes_and_validates_all_protocols():
@@ -142,3 +210,29 @@ def test_ui_generator_uses_journey_steps_and_error_screenshot(tmp_path):
     assert "page.fill" in content
     assert "page.screenshot" in content
     assert "largest_contentful_paint_ms" in content
+
+
+def test_ui_generator_captures_trace_video_and_artifact_paths(tmp_path):
+    output = tmp_path / "ui_journey.py"
+
+    generate_ui_journey_test(
+        service_name="checkout-ui",
+        target_url="http://localhost:8083",
+        output_path=output,
+        config={
+            "journey_name": "checkout",
+            "trace": True,
+            "video": True,
+            "screenshot_on_error": True,
+        },
+    )
+
+    content = output.read_text()
+    assert "TRACE_ENABLED = True" in content
+    assert "VIDEO_ENABLED = True" in content
+    assert "browser.new_context(record_video_dir=ARTIFACT_DIR" in content
+    assert "context.tracing.start" in content
+    assert "context.tracing.stop(path=trace_path)" in content
+    assert '"browser_artifacts": browser_artifacts' in content
+    assert '"trace_path"' in content
+    assert '"screenshot_path"' in content

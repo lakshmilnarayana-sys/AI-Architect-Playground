@@ -52,23 +52,26 @@ def _normalize_grpc(config: dict[str, Any]) -> dict[str, Any]:
 
 def _normalize_websocket(config: dict[str, Any]) -> dict[str, Any]:
     scenario = _first_named(config, "scenarios")
-    message = config.get("message", scenario.get("message", {"type": "ping"}))
+    schema_message = _message_from_schema(config.get("message_schema") or scenario.get("message_schema"))
+    message = config.get("message", scenario.get("message", schema_message or {"type": "ping"}))
     raw_sequence = scenario.get("sequence") or config.get("sequence") or [{"message": message, "think_time_ms": 0}]
-    sequence = [_normalize_websocket_step(step, message) for step in raw_sequence]
+    expected_response = scenario.get("expected_response", config.get("expected_response", {})) or {}
+    sequence = [_normalize_websocket_step(step, message, expected_response) for step in raw_sequence]
     return {
         **config,
         **scenario,
         "enabled": config.get("enabled", scenario.get("enabled", True)),
         "scenario_name": scenario.get("name", config.get("scenario_name", "default-websocket")),
         "message": message,
+        "message_schema": config.get("message_schema", scenario.get("message_schema")),
         "sequence": sequence,
     }
 
 
-def _normalize_websocket_step(step: dict[str, Any], default_message: dict[str, Any]) -> dict[str, Any]:
+def _normalize_websocket_step(step: dict[str, Any], default_message: dict[str, Any], default_expect: dict[str, Any] | None = None) -> dict[str, Any]:
     message = step.get("message", step.get("send", default_message))
     normalized = {"message": message, "think_time_ms": int(step.get("think_time_ms", 0) or 0)}
-    expect = step.get("expect", {}) or {}
+    expect = step.get("expect", {}) or default_expect or {}
     if step.get("expect_json_field"):
         normalized["expect_json_field"] = step["expect_json_field"]
     elif expect.get("json_field"):
@@ -76,6 +79,33 @@ def _normalize_websocket_step(step: dict[str, Any], default_message: dict[str, A
     if expect.get("json_equals"):
         normalized["expect_json_equals"] = expect["json_equals"]
     return normalized
+
+
+def _message_from_schema(schema: Any) -> dict[str, Any] | None:
+    if not isinstance(schema, dict):
+        return None
+    properties = schema.get("properties", {}) or {}
+    required = schema.get("required") or list(properties.keys())
+    return {field: _schema_value(field, properties.get(field, {})) for field in required}
+
+
+def _schema_value(field: str, schema: dict[str, Any]) -> Any:
+    if "const" in schema:
+        return schema["const"]
+    if "enum" in schema and schema["enum"]:
+        return schema["enum"][0]
+    schema_type = schema.get("type", "string")
+    if schema_type in {"number", "integer"}:
+        return schema.get("minimum", 1)
+    if schema_type == "boolean":
+        return True
+    if schema_type == "array":
+        return [_schema_value(field, schema.get("items", {"type": "string"}))]
+    if schema_type == "object":
+        return _message_from_schema(schema) or {}
+    if field.lower().endswith("id") or "id" in field.lower():
+        return "cust_test_1001" if "cust" in str(schema.get("pattern", "")).lower() or "customer" in field.lower() else f"{field}_test_1001"
+    return f"{field}_test"
 
 
 def _normalize_ui(config: dict[str, Any]) -> dict[str, Any]:

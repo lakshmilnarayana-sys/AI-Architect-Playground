@@ -17,6 +17,8 @@ def generate_ui_journey_test(*, service_name: str, target_url: str, output_path:
     ]
     web_vitals = bool(config.get("web_vitals", True))
     screenshot_on_error = bool(config.get("screenshot_on_error", False))
+    trace_enabled = bool(config.get("trace", config.get("trace_enabled", False)))
+    video_enabled = bool(config.get("video", config.get("video_enabled", False)))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
         f'''"""Generated browser/UI performance harness for {service_name}.
@@ -28,6 +30,7 @@ JSON result instead of crashing so PerfAgent can still produce an evidence-backe
 import argparse
 import json
 import time
+from pathlib import Path
 
 
 SERVICE_NAME = {service_name!r}
@@ -39,6 +42,9 @@ WAIT_SELECTOR = {wait_selector!r}
 JOURNEY_STEPS = {steps!r}
 WEB_VITALS = {web_vitals!r}
 SCREENSHOT_ON_ERROR = {screenshot_on_error!r}
+TRACE_ENABLED = {trace_enabled!r}
+VIDEO_ENABLED = {video_enabled!r}
+ARTIFACT_DIR = str(Path(__file__).resolve().parent / "ui-artifacts")
 MAX_RETAINED_LATENCIES = 10000
 
 
@@ -95,14 +101,19 @@ def run(duration_seconds: int, concurrency: int) -> list[dict]:
     errors = 0
     latencies_ms = []
     browser_metrics = []
+    browser_artifacts = []
     try:
         from playwright.sync_api import sync_playwright
     except Exception as exc:
         return [{{"requests": 1, "errors": 1, "latencies_ms": [0], "error": f"playwright unavailable: {{exc}}"}}]
 
     with sync_playwright() as p:
+        Path(ARTIFACT_DIR).mkdir(parents=True, exist_ok=True)
         browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
+        context = browser.new_context(record_video_dir=ARTIFACT_DIR if VIDEO_ENABLED else None)
+        if TRACE_ENABLED:
+            context.tracing.start(screenshots=True, snapshots=True, sources=True)
+        page = context.new_page()
         while time.time() - started < duration_seconds:
             start = time.perf_counter()
             try:
@@ -114,12 +125,26 @@ def run(duration_seconds: int, concurrency: int) -> list[dict]:
                 errors += 1
                 requests += 1
                 if SCREENSHOT_ON_ERROR:
-                    page.screenshot(path=f"ui-error-{{JOURNEY_NAME}}-{{requests}}.png", full_page=True)
+                    screenshot_path = str(Path(ARTIFACT_DIR) / f"ui-error-{{JOURNEY_NAME}}-{{requests}}.png")
+                    page.screenshot(path=screenshot_path, full_page=True)
+                    browser_artifacts.append({{"type": "screenshot", "path": screenshot_path, "screenshot_path": screenshot_path, "error": str(exc)}})
             finally:
                 if len(latencies_ms) < MAX_RETAINED_LATENCIES:
                     latencies_ms.append((time.perf_counter() - start) * 1000)
+        if TRACE_ENABLED:
+            trace_path = str(Path(ARTIFACT_DIR) / f"{{JOURNEY_NAME}}-trace.zip")
+            context.tracing.stop(path=trace_path)
+            browser_artifacts.append({{"type": "trace", "path": trace_path, "trace_path": trace_path}})
+        if VIDEO_ENABLED:
+            for page_item in context.pages:
+                if page_item.video:
+                    try:
+                        browser_artifacts.append({{"type": "video", "path": page_item.video.path()}})
+                    except Exception:
+                        pass
+        context.close()
         browser.close()
-    return [{{"service": SERVICE_NAME, "journey": JOURNEY_NAME, "requests": requests, "errors": errors, "latencies_ms": latencies_ms, "concurrency": concurrency, "browser_metrics": browser_metrics}}]
+    return [{{"service": SERVICE_NAME, "journey": JOURNEY_NAME, "requests": requests, "errors": errors, "latencies_ms": latencies_ms, "concurrency": concurrency, "browser_metrics": browser_metrics, "browser_artifacts": browser_artifacts}}]
 
 
 if __name__ == "__main__":
