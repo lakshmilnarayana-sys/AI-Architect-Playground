@@ -112,18 +112,254 @@ NODE_COLORS = {
 DESIGN_TOKENS_CSS = """
 <style>
   :root {
-    --bg-panel: rgba(15, 23, 42, 0.86);
-    --bg-card: #0b1220;
-    --border: #334155;
-    --text-primary: #f8fafc;
-    --text-muted: #94a3b8;
-    --accent-indigo: #312e81;
-    --accent-emerald: #064e3b;
-    --accent-amber: #7c2d12;
-    --accent-hybrid: #1d4ed8;
+    --bg-panel: rgba(12, 13, 12, 0.94);
+    --bg-card: #111211;
+    --border: #2c332a;
+    --text-primary: #f5f7ef;
+    --text-muted: #9da69b;
+    --accent-lime: #b9ff4a;
+    --accent-green: #3ce37a;
+    --accent-cyan: #6be7ff;
+    --accent-amber: #ffcf5a;
+    --accent-indigo: #172411;
+    --accent-emerald: #10291a;
+    --accent-hybrid: #102235;
   }
 </style>
 """
+
+
+def render_page_chrome() -> None:
+    st.markdown(
+        """
+        <style>
+          :root {
+            --ng-bg: #050605;
+            --ng-panel: #0c0d0c;
+            --ng-card: #111211;
+            --ng-border: #2c332a;
+            --ng-border-soft: #1d231b;
+            --ng-text: #f5f7ef;
+            --ng-muted: #9da69b;
+            --ng-lime: #b9ff4a;
+            --ng-green: #3ce37a;
+            --ng-cyan: #6be7ff;
+          }
+          .stApp {
+            background:
+              radial-gradient(circle at 18% 12%, rgba(185, 255, 74, 0.10), transparent 32rem),
+              linear-gradient(180deg, #050605 0%, #080908 45%, #050605 100%);
+            color: var(--ng-text);
+          }
+          [data-testid="stHeader"] { background: transparent; }
+          .block-container {
+            max-width: 1180px;
+            padding-top: 2rem;
+            padding-bottom: 4rem;
+          }
+          [data-testid="stExpander"] {
+            background: rgba(12, 13, 12, 0.82);
+            border: 1px solid var(--ng-border-soft);
+            border-radius: 8px;
+            box-shadow: none;
+          }
+          [data-testid="stExpander"] details {
+            border-radius: 8px;
+          }
+          [data-testid="stExpander"] summary {
+            color: var(--ng-text);
+            font-weight: 700;
+          }
+          [data-testid="stMetric"] {
+            background: #101110;
+            border: 1px solid var(--ng-border-soft);
+            border-radius: 8px;
+            padding: 12px;
+          }
+          div[data-testid="stButton"] > button {
+            background: #b9ff4a;
+            border: 1px solid #d6ff86;
+            border-radius: 8px;
+            color: #10140d;
+            font-weight: 800;
+            box-shadow: none;
+          }
+          div[data-testid="stButton"] > button:hover {
+            background: #d0ff75;
+            border-color: #edffbf;
+            color: #10140d;
+          }
+          .stTextInput input, .stTextArea textarea {
+            background: #0b0c0b;
+            border: 1px solid var(--ng-border);
+            border-radius: 8px;
+            color: var(--ng-text);
+          }
+          div[data-baseweb="select"] > div, div[data-baseweb="popover"] {
+            background: #0b0c0b;
+          }
+          .stTabs [data-baseweb="tab-list"] {
+            gap: 8px;
+          }
+          .stTabs [data-baseweb="tab"] {
+            border: 1px solid var(--ng-border-soft);
+            border-radius: 8px;
+            background: #0f100f;
+            color: var(--ng-muted);
+            height: 38px;
+          }
+          .stTabs [aria-selected="true"] {
+            color: #10140d;
+            background: var(--ng-lime);
+          }
+          hr { border-color: var(--ng-border-soft); }
+          .ng-hero {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+            gap: 18px;
+            align-items: stretch;
+            margin: 0 0 18px;
+          }
+          .ng-hero-main, .ng-demo-panel {
+            border: 1px solid var(--ng-border);
+            background: rgba(10, 11, 10, 0.86);
+            border-radius: 8px;
+            padding: 22px;
+          }
+          .ng-brand-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            margin-bottom: 22px;
+          }
+          .ng-mark {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--ng-text);
+            font-weight: 900;
+            letter-spacing: 0;
+          }
+          .ng-mark-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            display: grid;
+            place-items: center;
+            background: var(--ng-lime);
+            color: #11140d;
+            font-weight: 950;
+          }
+          .ng-pill {
+            border: 1px solid var(--ng-border);
+            border-radius: 999px;
+            color: var(--ng-muted);
+            padding: 7px 10px;
+            font-size: 12px;
+            background: #0d0e0d;
+          }
+          .ng-hero h1 {
+            margin: 0;
+            color: var(--ng-text);
+            font-size: 56px;
+            line-height: 0.95;
+            letter-spacing: 0;
+          }
+          .ng-hero-subtitle {
+            color: var(--ng-muted);
+            font-size: 18px;
+            margin: 12px 0 20px;
+            max-width: 620px;
+          }
+          .ng-command {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            border: 1px solid var(--ng-border);
+            background: #080908;
+            color: var(--ng-lime);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 13px;
+          }
+          .ng-demo-panel {
+            display: grid;
+            grid-template-rows: auto auto 1fr;
+            gap: 12px;
+          }
+          .ng-demo-tabs {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+          }
+          .ng-demo-tab {
+            border: 1px solid var(--ng-border);
+            border-radius: 8px;
+            padding: 7px 9px;
+            color: var(--ng-muted);
+            font-size: 12px;
+          }
+          .ng-demo-tab-active {
+            background: var(--ng-lime);
+            color: #10140d;
+            border-color: var(--ng-lime);
+            font-weight: 800;
+          }
+          .ng-code-window {
+            border: 1px solid var(--ng-border-soft);
+            border-radius: 8px;
+            background: #070807;
+            padding: 14px;
+            color: var(--ng-muted);
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 12px;
+            line-height: 1.55;
+          }
+          .ng-code-window b { color: var(--ng-lime); font-weight: 700; }
+          @media (max-width: 860px) {
+            .ng-hero { grid-template-columns: 1fr; }
+            .ng-hero h1 { font-size: 42px; }
+            .ng-brand-row { align-items: flex-start; flex-direction: column; }
+          }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_ag2_style_header() -> None:
+    st.markdown(
+        """
+        <section class="ng-hero">
+          <div class="ng-hero-main">
+            <div class="ng-brand-row">
+              <div class="ng-mark"><span class="ng-mark-icon">NG</span><span>NexusGraph</span></div>
+              <span class="ng-pill">GraphRAG playground</span>
+            </div>
+            <h1>nexusgraph-ai</h1>
+            <p class="ng-hero-subtitle">Multi-agent operational knowledge at play: ask graph questions, compare vector retrieval, and simulate incident response over a connected service catalog.</p>
+            <div class="ng-command"><span>$</span><span>streamlit run app/streamlit_app.py</span></div>
+          </div>
+          <aside class="ng-demo-panel">
+            <div class="ng-demo-tabs">
+              <span class="ng-demo-tab ng-demo-tab-active">Pattern</span>
+              <span class="ng-demo-tab">Links</span>
+              <span class="ng-demo-tab">Demo Code</span>
+            </div>
+            <div class="ng-pill">Graph -> runbook -> on-call -> answer</div>
+            <div class="ng-code-window">
+              <b>agent</b>.route("playback-service")<br/>
+              graph.match("HAS_ONCALL_SCHEDULE")<br/>
+              evidence.attach("runbook", "slo", "dashboard")<br/>
+              response.compare("GraphRAG", "Vector RAG")
+            </div>
+          </aside>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def env_flag(name: str, default: bool = False) -> bool:
@@ -235,8 +471,8 @@ def render_graph_view(nodes_df: pd.DataFrame, edges_df: pd.DataFrame) -> None:
     net = Network(
         height='600px',
         width='100%',
-        bgcolor='#0e1117',
-        font_color='#fafafa',
+        bgcolor='#080908',
+        font_color='#f5f7ef',
         directed=True,
         cdn_resources='remote',
     )
@@ -259,15 +495,15 @@ def render_graph_view(nodes_df: pd.DataFrame, edges_df: pd.DataFrame) -> None:
             label=row['name'],
             title=tooltip,
             color=NODE_COLORS.get(row['label'], '#9aa0a6'),
-            font={'size': 12, 'color': '#fafafa'},
+            font={'size': 12, 'color': '#f5f7ef'},
         )
     for _, row in filtered_edges.iterrows():
         net.add_edge(
             row['source'], row['target'],
             label=row['relationship'],
             title=row['relationship'],
-            color='#5f6368',
-            font={'size': 9, 'color': '#aaaaaa', 'align': 'middle'},
+            color='#4b5548',
+            font={'size': 9, 'color': '#aab5a6', 'align': 'middle'},
         )
 
     components.html(net.generate_html(notebook=False), height=620, scrolling=True)
@@ -383,24 +619,24 @@ def render_incident_command_center() -> None:
         DESIGN_TOKENS_CSS + """
         <style>
           .ng-wrap {font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            background: linear-gradient(135deg, #07111f 0%, #0c1220 48%, #111827 100%);
-            border: 1px solid #263244; border-radius: 14px; padding: 18px; color: #e5e7eb; overflow: hidden;}
+            background: #080908;
+            border: 1px solid var(--border); border-radius: 8px; padding: 18px; color: var(--text-primary); overflow: hidden;}
           .ng-grid {display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px;}
           .ng-title {font-size: 24px; font-weight: 800; margin: 0 0 4px;}
-          .ng-sub {color: #9ca3af; font-size: 13px; margin-bottom: 16px;}
-          .ng-panel {background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px;}
-          .ng-pulse {display:inline-block; width:9px; height:9px; background:#fb923c; border-radius:50%;
-            box-shadow:0 0 0 rgba(251,146,60,.75); animation:pulse 1.4s infinite;}
+          .ng-sub {color: var(--text-muted); font-size: 13px; margin-bottom: 16px;}
+          .ng-panel {background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px;}
+          .ng-pulse {display:inline-block; width:9px; height:9px; background:var(--accent-lime); border-radius:50%;
+            box-shadow:0 0 0 rgba(185,255,74,.75); animation:pulse 1.4s infinite;}
           .ng-metrics {display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; margin-top: 14px;}
-          .ng-card {background: var(--bg-card); border:1px solid #1f2937; border-radius:10px; padding:10px; min-height:74px;}
-          .ng-label {font-size:11px; color: var(--text-muted); text-transform:uppercase; letter-spacing:.08em;}
+          .ng-card {background: var(--bg-card); border:1px solid #1d231b; border-radius:8px; padding:10px; min-height:74px;}
+          .ng-label {font-size:11px; color: var(--text-muted); text-transform:uppercase; letter-spacing:0;}
           .ng-value {font-size:16px; font-weight:700; color: var(--text-primary); margin-top:6px;}
           .ng-flow {display:grid; gap:10px; margin-top: 8px;}
-          .ng-step {display:flex; align-items:center; gap:10px; background:#0b1220; border:1px solid #1f2937; border-radius:10px; padding:9px;}
-          .ng-dot {width:24px; height:24px; border-radius:50%; display:grid; place-items:center; font-weight:800; font-size:12px;}
-          .ng-line {height:8px; background:#1f2937; border-radius:999px; overflow:hidden; margin-top:12px;}
-          .ng-fill {height:100%; width:72%; background:linear-gradient(90deg,#22c55e,#14b8a6,#38bdf8); animation:fill 2.6s ease-in-out infinite alternate;}
-          @keyframes pulse {0%{box-shadow:0 0 0 0 rgba(251,146,60,.75)} 70%{box-shadow:0 0 0 12px rgba(251,146,60,0)} 100%{box-shadow:0 0 0 0 rgba(251,146,60,0)}}
+          .ng-step {display:flex; align-items:center; gap:10px; background:#101110; border:1px solid #1d231b; border-radius:8px; padding:9px;}
+          .ng-dot {width:24px; height:24px; border-radius:8px; display:grid; place-items:center; font-weight:800; font-size:12px; color:#10140d;}
+          .ng-line {height:8px; background:#1d231b; border-radius:999px; overflow:hidden; margin-top:12px;}
+          .ng-fill {height:100%; width:72%; background:linear-gradient(90deg,var(--accent-lime),var(--accent-green),var(--accent-cyan)); animation:fill 2.6s ease-in-out infinite alternate;}
+          @keyframes pulse {0%{box-shadow:0 0 0 0 rgba(185,255,74,.75)} 70%{box-shadow:0 0 0 12px rgba(185,255,74,0)} 100%{box-shadow:0 0 0 0 rgba(185,255,74,0)}}
           @keyframes fill {from{width:42%} to{width:92%}}
           @media (max-width: 780px) {.ng-grid,.ng-metrics{grid-template-columns:1fr}.ng-title{font-size:20px}}
         </style>
@@ -420,10 +656,10 @@ def render_incident_command_center() -> None:
             <div class="ng-panel">
               <div class="ng-label">Behind the scenes</div>
               <div class="ng-flow">
-                <div class="ng-step"><div class="ng-dot" style="background:#2563eb">1</div><div>Resolve service and intent</div></div>
-                <div class="ng-step"><div class="ng-dot" style="background:#0f766e">2</div><div>Select a graph query pattern</div></div>
-                <div class="ng-step"><div class="ng-dot" style="background:#7c3aed">3</div><div>Traverse graph relationships</div></div>
-                <div class="ng-step"><div class="ng-dot" style="background:#15803d">4</div><div>Answer with graph evidence and gaps</div></div>
+                <div class="ng-step"><div class="ng-dot" style="background:#ffcf5a">1</div><div>Resolve service and intent</div></div>
+                <div class="ng-step"><div class="ng-dot" style="background:#b9ff4a">2</div><div>Select a graph query pattern</div></div>
+                <div class="ng-step"><div class="ng-dot" style="background:#6be7ff">3</div><div>Traverse graph relationships</div></div>
+                <div class="ng-step"><div class="ng-dot" style="background:#3ce37a">4</div><div>Answer with graph evidence and gaps</div></div>
               </div>
             </div>
           </div>
@@ -554,12 +790,12 @@ def render_tech_stack() -> None:
         with stack_cols[index % len(stack_cols)]:
             st.markdown(
                 f"""
-                <div style="border:1px solid #263244;border-radius:8px;padding:12px;background:#0f172a;min-height:112px;margin-bottom:10px">
+                <div style="border:1px solid #2c332a;border-radius:8px;padding:12px;background:#101110;min-height:112px;margin-bottom:10px">
                   <div style="display:flex;align-items:center;gap:10px">
-                    <div style="width:34px;height:34px;border-radius:8px;background:#1d4ed8;color:#dbeafe;display:grid;place-items:center;font-size:12px;font-weight:900">{html.escape(icon)}</div>
-                    <div style="font-weight:800;color:#f8fafc">{html.escape(name)}</div>
+                    <div style="width:34px;height:34px;border-radius:8px;background:#b9ff4a;color:#10140d;display:grid;place-items:center;font-size:12px;font-weight:900">{html.escape(icon)}</div>
+                    <div style="font-weight:800;color:#f5f7ef">{html.escape(name)}</div>
                   </div>
-                  <div style="font-size:13px;color:#94a3b8;margin-top:6px">{html.escape(description)}</div>
+                  <div style="font-size:13px;color:#9da69b;margin-top:6px">{html.escape(description)}</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -588,12 +824,12 @@ def render_store_overview(nodes_count: int, relationships_count: int, query_coun
         DESIGN_TOKENS_CSS + f"""
         <style>
           .store-grid {{font-family: ui-sans-serif, system-ui; display:grid; grid-template-columns:repeat(3,1fr); gap:14px;}}
-          .store-card {{border:1px solid var(--border); border-radius:12px; padding:16px; color: var(--text-primary); display:flex; gap:14px; align-items:center; min-height:112px; position:relative; overflow:hidden;}}
-          .store-card:after {{content:""; position:absolute; inset:auto -20% 0 -20%; height:2px; background:linear-gradient(90deg,transparent,#fff,transparent); animation:sweep 3s linear infinite; opacity:.35;}}
-          .store-icon {{width:44px; height:44px; border-radius:10px; background:rgba(255,255,255,.12); display:grid; place-items:center; font-weight:900; letter-spacing:.04em;}}
-          .store-title {{font-size:15px; font-weight:800; color:#f8fafc;}}
+          .store-card {{border:1px solid var(--border); border-radius:8px; padding:16px; color: var(--text-primary); display:flex; gap:14px; align-items:center; min-height:112px; position:relative; overflow:hidden;}}
+          .store-card:after {{content:""; position:absolute; inset:auto -20% 0 -20%; height:2px; background:linear-gradient(90deg,transparent,var(--accent-lime),transparent); animation:sweep 3s linear infinite; opacity:.45;}}
+          .store-icon {{width:44px; height:44px; border-radius:8px; background:var(--accent-lime); color:#10140d; display:grid; place-items:center; font-weight:900; letter-spacing:0;}}
+          .store-title {{font-size:15px; font-weight:800; color:#f5f7ef;}}
           .store-primary {{font-size:26px; font-weight:900; margin-top:4px;}}
-          .store-secondary {{font-size:12px; color:#cbd5e1; margin-top:2px;}}
+          .store-secondary {{font-size:12px; color:#9da69b; margin-top:2px;}}
           @keyframes sweep {{from{{transform:translateX(-40%)}} to{{transform:translateX(40%)}}}}
           @media (max-width: 860px) {{.store-grid{{grid-template-columns:1fr}}}}
         </style>
@@ -631,11 +867,11 @@ def render_trace_evidence(trace: dict | None) -> None:
         DESIGN_TOKENS_CSS + f"""
         <style>
           .ev-flow {{font-family: ui-sans-serif, system-ui; display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;}}
-          .ev-card {{border-radius:10px; padding:12px; min-height:86px; color:#e5e7eb; border:1px solid var(--border); position:relative; overflow:hidden;}}
-          .ev-card:after {{content:""; position:absolute; inset:auto -30% 0 -30%; height:2px; background:linear-gradient(90deg,transparent,#fff,transparent); animation:sweep 2.8s linear infinite; opacity:.45;}}
+          .ev-card {{border-radius:8px; padding:12px; min-height:86px; color:#f5f7ef; border:1px solid var(--border); position:relative; overflow:hidden;}}
+          .ev-card:after {{content:""; position:absolute; inset:auto -30% 0 -30%; height:2px; background:linear-gradient(90deg,transparent,var(--accent-lime),transparent); animation:sweep 2.8s linear infinite; opacity:.45;}}
           .ev-title {{font-weight:800; margin-bottom:8px;}}
           .ev-count {{font-size:28px; font-weight:900;}}
-          .ev-note {{font-size:12px; color:#cbd5e1;}}
+          .ev-note {{font-size:12px; color:#9da69b;}}
           @keyframes sweep {{from{{transform:translateX(-40%)}} to{{transform:translateX(40%)}}}}
           @media (max-width: 480px) {{.ev-flow{{grid-template-columns:1fr}}}}
         </style>
@@ -711,9 +947,9 @@ def readiness_score(row: pd.Series) -> int:
 
 
 def render_badge(label: str, ready: bool) -> str:
-    bg = "#064e3b" if ready else "#3f1d1d"
-    border = "#10b981" if ready else "#ef4444"
-    color = "#d1fae5" if ready else "#fecaca"
+    bg = "#10291a" if ready else "#251816"
+    border = "#3ce37a" if ready else "#ff8a6b"
+    color = "#d9ffd8" if ready else "#ffd6ca"
     symbol = "OK" if ready else "Gap"
     return (
         f"<span style='display:inline-block;margin:0 6px 6px 0;padding:4px 8px;"
@@ -724,7 +960,7 @@ def render_badge(label: str, ready: bool) -> str:
 
 def render_service_card(row: pd.Series) -> None:
     score = readiness_score(row)
-    score_color = "#22c55e" if score >= 80 else "#f59e0b" if score >= 50 else "#ef4444"
+    score_color = "#b9ff4a" if score >= 80 else "#ffcf5a" if score >= 50 else "#ff8a6b"
     badges = "".join(render_badge(label, ready) for label, ready in readiness_items(row))
     service = html.escape(str(row["Service"]))
     description = html.escape(str(row["Description"]))
@@ -732,19 +968,19 @@ def render_service_card(row: pd.Series) -> None:
     dependency_count = int(row["Dependency Count"])
     st.markdown(
         f"""
-        <div style="border:1px solid #263244;border-radius:8px;padding:14px;background:#0f172a;margin-bottom:12px;min-height:220px">
+        <div style="border:1px solid #2c332a;border-radius:8px;padding:14px;background:#101110;margin-bottom:12px;min-height:220px">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
             <div>
-              <div style="font-size:18px;font-weight:800;color:#f8fafc">{service}</div>
-              <div style="font-size:13px;color:#94a3b8;margin-top:2px">{description}</div>
+              <div style="font-size:18px;font-weight:800;color:#f5f7ef">{service}</div>
+              <div style="font-size:13px;color:#9da69b;margin-top:2px">{description}</div>
             </div>
             <div style="min-width:58px;text-align:center;border:1px solid {score_color};border-radius:8px;padding:6px;color:{score_color};font-weight:900">
               {score}%
-              <div style="font-size:10px;color:#94a3b8;font-weight:600">ready</div>
+              <div style="font-size:10px;color:#9da69b;font-weight:600">ready</div>
             </div>
           </div>
-          <div style="margin-top:12px;color:#cbd5e1;font-size:13px"><b>Owner:</b> {owner}</div>
-          <div style="margin-top:8px;color:#cbd5e1;font-size:13px"><b>Dependencies:</b> {dependency_count}</div>
+          <div style="margin-top:12px;color:#cfd8ca;font-size:13px"><b>Owner:</b> {owner}</div>
+          <div style="margin-top:8px;color:#cfd8ca;font-size:13px"><b>Dependencies:</b> {dependency_count}</div>
           <div style="margin-top:12px">{badges}</div>
         </div>
         """,
@@ -960,8 +1196,8 @@ def render_project_story(nodes_df: pd.DataFrame, edges_df: pd.DataFrame) -> None
 # Page
 # ---------------------------------------------------------------------------
 st.set_page_config(page_title='nexusgraph-ai', layout='wide')
-st.title('nexusgraph-ai')
-st.caption('GraphRAG for Organizational Knowledge and Decision Intelligence')
+render_page_chrome()
+render_ag2_style_header()
 
 with st.spinner("Preparing local retrieval stores..."):
     ensure_runtime_data()
@@ -1069,13 +1305,16 @@ with st.expander("GraphRAG Demo Queries", expanded=True):
             with col:
                 st.markdown(
                     f"""
-                    <div style="border:1px solid #263244;border-radius:8px;padding:12px;background:#0f172a;min-height:128px;margin-bottom:8px">
-                      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-                        <div style="width:34px;height:34px;border-radius:8px;background:#312e81;color:#ddd6fe;display:grid;place-items:center;font-size:12px;font-weight:900">{html.escape(item['icon'])}</div>
-                        <div style="font-weight:800;color:#f8fafc">Query {i + 1}</div>
+                    <div style="border:1px solid #2c332a;border-radius:8px;padding:12px;background:#101110;min-height:142px;margin-bottom:8px">
+                      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px">
+                        <div style="display:flex;align-items:center;gap:10px">
+                          <div style="width:34px;height:34px;border-radius:8px;background:#b9ff4a;color:#10140d;display:grid;place-items:center;font-size:12px;font-weight:900">{html.escape(item['icon'])}</div>
+                          <div style="font-weight:800;color:#f5f7ef">Pattern {i + 1}</div>
+                        </div>
+                        <div style="border:1px solid #2c332a;border-radius:999px;color:#9da69b;padding:3px 7px;font-size:11px">Graph</div>
                       </div>
-                      <div style="font-size:14px;color:#e5e7eb;line-height:1.35">{html.escape(item['query'])}</div>
-                      <div style="font-size:12px;color:#94a3b8;margin-top:8px">{html.escape(item['insight'])}</div>
+                      <div style="font-size:14px;color:#f5f7ef;line-height:1.35">{html.escape(item['query'])}</div>
+                      <div style="font-size:12px;color:#9da69b;margin-top:8px">{html.escape(item['insight'])}</div>
                     </div>
                     """,
                     unsafe_allow_html=True,
