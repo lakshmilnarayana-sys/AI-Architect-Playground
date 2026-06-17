@@ -57,6 +57,7 @@ from src.incident.scenarios import load_scenarios
 from src.incident.state import new_incident
 from src.incident.graph_lookup import GraphContext
 from src.incident.supervisor import run_incident, stream_incident
+from src.project_status.supervisor import run_project_status
 from src.status_page import build_status_summary, incident_history
 from ui_trace import evidence_counts, format_stage_elapsed
 
@@ -836,6 +837,61 @@ def render_streamflix_status_page() -> None:
     st.dataframe(pd.DataFrame(history_rows), width="stretch", hide_index=True)
 
 
+def render_project_status_agent() -> None:
+    st.subheader("Project Status Agent")
+    st.caption("Weekly multi-agent status synthesis over synthetic Jira, GitHub, dependency, and decision snapshots.")
+
+    project = st.selectbox(
+        "Project",
+        [
+            "Playback Resiliency 2026",
+            "Observability Unification",
+            "Billing Platform Modernization",
+        ],
+        key="project_status_project",
+    )
+
+    if st.button("Generate weekly report", key="project_status_report"):
+        report = run_project_status(project)
+        st.markdown("**Weekly report**")
+
+        metric_cols = st.columns(4)
+        metric_cols[0].metric("Status", report["overall_status"])
+        metric_cols[1].metric("Risks", len(report["risks"]))
+        metric_cols[2].metric("Blockers", len(report["blockers"]))
+        metric_cols[3].metric("Dependencies", len(report["dependencies"]))
+
+        st.info(report["executive_summary"])
+        st.caption(f"Owner: {report['owner']} | Reporting week: {report['week']}")
+
+        tab_risks, tab_blockers, tab_deps, tab_actions = st.tabs(
+            ["Risks", "Blockers", "Dependencies", "Next actions"]
+        )
+        with tab_risks:
+            if report["risks"]:
+                st.dataframe(pd.DataFrame(report["risks"]), width="stretch", hide_index=True)
+            else:
+                st.success("No active risks.")
+        with tab_blockers:
+            if report["blockers"]:
+                st.dataframe(pd.DataFrame(report["blockers"]), width="stretch", hide_index=True)
+            else:
+                st.success("No active blockers.")
+        with tab_deps:
+            if report["dependencies"]:
+                st.dataframe(pd.DataFrame(report["dependencies"]), width="stretch", hide_index=True)
+            else:
+                st.success("No dependency follow-ups.")
+        with tab_actions:
+            for action in report["next_actions"]:
+                st.write(f"- {action}")
+
+        insights = report.get("insights", [])
+        if insights:
+            with st.expander("Agent insights", expanded=False):
+                st.json(insights)
+
+
 def render_rag_mode_explainer() -> None:
     st.subheader('GraphRAG With Vector Baseline')
     rag_cols = st.columns(3)
@@ -1426,6 +1482,9 @@ with st.expander("Incident Response Simulation", expanded=True):
 
 with st.expander("Streamflix Status", expanded=True):
     render_streamflix_status_page()
+
+with st.expander("Project Status Agent", expanded=True):
+    render_project_status_agent()
 
 render_project_story(nodes, edges)
 

@@ -60,6 +60,15 @@ class StreamlitUiStaticTests(unittest.TestCase):
         self.assertIn("Current incident:", source)
         self.assertIn("Incident history", source)
 
+    def test_project_status_agent_section_is_wired(self):
+        source = APP_SOURCE.read_text()
+
+        self.assertIn("Project Status Agent", source)
+        self.assertIn("run_project_status(", source)
+        self.assertIn("Weekly report", source)
+        self.assertIn("Risks", source)
+        self.assertIn("Blockers", source)
+
 
 if __name__ == "__main__":
     unittest.main()
