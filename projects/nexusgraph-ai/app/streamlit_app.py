@@ -698,11 +698,33 @@ def render_slack_channel(incident: dict, messages: list[dict], key_suffix: str |
     st.caption(f"{len(visible)} / {len(messages)} messages")
 
 
-def render_agent_flowchart(messages: list[dict], final: dict | None = None, active_phase: str = "") -> None:
+def agent_name_for_message(message: dict) -> str:
+    author = message.get("author", "")
+    phase = message.get("phase", "")
+    if "Observability" in author:
+        return "Observability Agent"
+    if "Commander" in author or phase == "resolve":
+        return "Incident Commander Agent"
+    if "Triage" in author or "Kubernetes" in author or phase == "triage":
+        return "Triage Agent"
+    if "Remediation" in author or "Mitigation" in author or phase == "mitigate":
+        return "Remediation Agent"
+    if "Zoom" in author:
+        return "Zoom Agent"
+    if "Scribe" in author or "ActionItem" in author:
+        return "Scribe Agent"
+    if "Jira" in author:
+        return "Jira Agent"
+    if phase == "postmortem":
+        return "Scribe Agent"
+    if phase == "diagnose":
+        return "Zoom Agent"
+    return ""
+
+
+def render_agent_flowchart(messages: list[dict], final: dict | None = None,
+                           active_phase: str = "", active_agent: str = "") -> None:
     findings = (final or {}).get("findings") or {}
-    phases = {message.get("phase") for message in messages}
-    if final:
-        phases.update(event.get("phase") for event in final.get("timeline", []))
 
     agents = [
         ("Observability Agent", "declare", "Evaluates thresholds and raises alerts."),
@@ -713,12 +735,16 @@ def render_agent_flowchart(messages: list[dict], final: dict | None = None, acti
         ("Scribe Agent", "postmortem", "Summarizes Slack, timeline, and status updates."),
         ("Jira Agent", "postmortem", "Saves the incident and exposes metrics."),
     ]
+    seen_agents = {agent_name_for_message(message) for message in messages}
+    seen_agents.discard("")
+    if final:
+        seen_agents = {name for name, _phase, _detail in agents}
 
     cards = []
     for index, (name, phase, detail) in enumerate(agents):
-        if active_phase == phase:
+        if active_agent == name or (active_phase == phase and not active_agent):
             state = "working"
-        elif phase in phases:
+        elif name in seen_agents:
             state = "done"
         else:
             state = "idle"
@@ -835,7 +861,7 @@ def render_incident_response_simulation() -> None:
         failure_mode = st.selectbox("Failure mode", failure_modes, key="inc_failure_mode")
     demo_pacing = st.toggle(
         "Concept demo pacing",
-        value=False,
+        value=True,
         key="inc_demo_pacing",
         help="Adds synthetic 10 second delays between agent updates so viewers can follow the flow.",
     )
@@ -873,8 +899,8 @@ def render_incident_response_simulation() -> None:
             from src.hybrid_rag import get_llm
             llm = get_llm()
         ctx = GraphContext(use_neo4j=env_flag("INCIDENT_USE_NEO4J", False))
-        feed = st.empty()
         flow = st.empty()
+        feed = st.empty()
         collected: list[dict] = []
         with flow.container():
             render_agent_flowchart(collected)
@@ -882,12 +908,22 @@ def render_incident_response_simulation() -> None:
                                                 use_vector=env_flag("INCIDENT_USE_VECTOR", False),
                                                 approve=lambda phase: True,
                                                 thread_id=f"ui-{state['incident']['id']}"):
-            collected.extend(messages)
-            with flow.container():
-                render_agent_flowchart(collected, active_phase=phase)
-            with feed.container():
-                render_slack_channel(state["incident"], collected, key_suffix=f"{state['incident']['id']}_{phase}")
-            time.sleep(demo_delay_seconds or 0.6)  # timed streaming playback pacing
+            for message in messages:
+                collected.append(message)
+                active_agent = agent_name_for_message(message)
+                with flow.container():
+                    render_agent_flowchart(
+                        collected,
+                        active_phase=phase,
+                        active_agent=active_agent,
+                    )
+                with feed.container():
+                    render_slack_channel(
+                        state["incident"],
+                        collected,
+                        key_suffix=f"{state['incident']['id']}_{phase}_{len(collected)}",
+                    )
+                time.sleep(demo_delay_seconds or 0.6)  # timed streaming playback pacing
         final = run_incident(
             state,
             llm=llm,

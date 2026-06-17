@@ -63,6 +63,7 @@ def test_incident_ui_surfaces_jira_metrics_and_hitl_status_update():
 
 def test_incident_ui_has_agent_flowchart():
     assert "def render_agent_flowchart(" in APP
+    assert "def agent_name_for_message(" in APP
     assert "Agent operations flow" in APP
     assert "agent-flow-vertical" in APP
     assert "agent-arrow" in APP
@@ -75,3 +76,5 @@ def test_incident_ui_has_agent_flowchart():
 def test_incident_ui_has_concept_demo_delay():
     assert "Concept demo pacing" in APP
     assert "demo_delay_seconds = 10" in APP
+    assert "value=True" in APP
+    assert "for message in messages:" in APP
