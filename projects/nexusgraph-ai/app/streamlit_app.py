@@ -57,6 +57,7 @@ from src.incident.scenarios import load_scenarios
 from src.incident.state import new_incident
 from src.incident.graph_lookup import GraphContext
 from src.incident.jira import query_incident_metrics
+from src.incident.kubernetes import available_failure_modes
 from src.incident.supervisor import stream_incident
 from src.project_status.supervisor import run_project_status
 from src.status_page import build_status_summary, incident_history, incident_updates
@@ -1066,7 +1067,7 @@ def render_incident_response_simulation() -> None:
     scenarios = load_scenarios()
     mode = st.radio("Input mode", ["Scripted scenario", "Operator (copilot)"], horizontal=True,
                     key="inc_mode")
-    failure_modes = ["oom_kill", "pod_restart", "disk_iops", "cpu_throttle"]
+    failure_modes = available_failure_modes() or ["oom_kill", "pod_restart", "disk_iops", "cpu_throttle"]
     sim_cols = st.columns([1, 1])
     with sim_cols[0]:
         simulate_failure = st.toggle("Enable Kubernetes failure simulation", value=False,

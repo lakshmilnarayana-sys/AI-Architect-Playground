@@ -51,3 +51,131 @@
   signal: "Playback API CPU throttling ratio is above 70% and p99 start latency is elevated."
   failure_mode: "cpu_throttle"
   recovered: true
+- id: "playback-memory-leak-sev1"
+  incident_id: "incident:playback-memory-leak-sev1"
+  title: "Playback Memory Leak SEV1"
+  severity: "SEV1"
+  affected_services: ["playback-service"]
+  signal: "Playback API RSS grows continuously after the latest deploy; p99 start latency and pod evictions are rising."
+  failure_mode: "memory_leak"
+  recovered: true
+- id: "playback-ingress-5xx-sev1"
+  incident_id: "incident:playback-ingress-5xx-sev1"
+  title: "Playback Ingress 5xx SEV1"
+  severity: "SEV1"
+  affected_services: ["playback-service"]
+  signal: "US-East ingress returns elevated 5xx for playback start requests after an upstream routing change."
+  failure_mode: "ingress_5xx"
+  recovered: true
+- id: "playback-network-loss-sev2"
+  incident_id: "incident:playback-network-loss-sev2"
+  title: "Playback Network Packet Loss SEV2"
+  severity: "SEV2"
+  affected_services: ["playback-service"]
+  signal: "Playback API retransmits spike in use1-az2 and clients see intermittent buffering."
+  failure_mode: "network_packet_loss"
+  recovered: true
+- id: "billing-db-pool-sev1"
+  incident_id: "incident:billing-db-pool-sev1"
+  title: "Billing DB Pool Exhaustion SEV1"
+  severity: "SEV1"
+  affected_services: ["billing-service"]
+  signal: "Billing ledger writes are blocked because DB connection pools are exhausted and payment captures are timing out."
+  failure_mode: "db_connection_pool_exhaustion"
+  recovered: false
+- id: "billing-kafka-lag-sev2"
+  incident_id: "incident:billing-kafka-lag-sev2"
+  title: "Billing Kafka Consumer Lag SEV2"
+  severity: "SEV2"
+  affected_services: ["billing-service"]
+  signal: "Payment capture consumers are 184k messages behind and reconciliation freshness has breached its SLO."
+  failure_mode: "kafka_consumer_lag"
+  recovered: true
+- id: "identity-cert-expiry-sev1"
+  incident_id: "incident:identity-cert-expiry-sev1"
+  title: "Identity mTLS Certificate Expiry SEV1"
+  severity: "SEV1"
+  affected_services: ["identity-service"]
+  signal: "Identity API mTLS handshakes are failing after the service certificate expired."
+  failure_mode: "certificate_expiry"
+  recovered: false
+- id: "identity-redis-hot-key-sev2"
+  incident_id: "incident:identity-redis-hot-key-sev2"
+  title: "Identity Redis Hot Key SEV2"
+  severity: "SEV2"
+  affected_services: ["identity-service"]
+  signal: "Enterprise admin login traffic is concentrated on one Redis session key; Redis p99 latency is elevated."
+  failure_mode: "redis_hot_key"
+  recovered: true
+- id: "recommendation-model-errors-sev1"
+  incident_id: "incident:recommendation-model-errors-sev1"
+  title: "Recommendation Model Serving Errors SEV1"
+  severity: "SEV1"
+  affected_services: ["recommendation-service"]
+  signal: "Ranker v42 inference errors spike after canary promotion; homepage personalization is degraded."
+  failure_mode: "model_serving_errors"
+  recovered: true
+- id: "recommendation-feature-stale-sev2"
+  incident_id: "incident:recommendation-feature-stale-sev2"
+  title: "Recommendation Feature Store Stale Data SEV2"
+  severity: "SEV2"
+  affected_services: ["recommendation-service"]
+  signal: "Online feature freshness lag exceeds 40 minutes and ranking quality metrics are regressing."
+  failure_mode: "feature_store_stale"
+  recovered: false
+- id: "observability-log-backpressure-sev2"
+  incident_id: "incident:observability-log-backpressure-sev2"
+  title: "Observability Log Pipeline Backpressure SEV2"
+  severity: "SEV2"
+  affected_services: ["observability-service"]
+  signal: "Fluent Bit buffers are near capacity and Loki push errors are causing dropped production logs."
+  failure_mode: "log_pipeline_backpressure"
+  recovered: true
+- id: "observability-cardinality-sev2"
+  incident_id: "incident:observability-cardinality-sev2"
+  title: "Observability Metrics Cardinality Explosion SEV2"
+  severity: "SEV2"
+  affected_services: ["observability-service"]
+  signal: "Prometheus active series count grows rapidly after a new request_id label was added to a hot metric."
+  failure_mode: "metrics_cardinality_explosion"
+  recovered: true
+- id: "platform-node-pressure-sev1"
+  incident_id: "incident:platform-node-pressure-sev1"
+  title: "Platform Node Pressure SEV1"
+  severity: "SEV1"
+  affected_services: ["playback-service"]
+  signal: "Multiple playback pods are evicted from pressure nodes; node disk and memory availability are critically low."
+  failure_mode: "node_pressure"
+  recovered: true
+- id: "platform-image-pull-sev2"
+  incident_id: "incident:platform-image-pull-sev2"
+  title: "Platform Image Pull Backoff SEV2"
+  severity: "SEV2"
+  affected_services: ["playback-service"]
+  signal: "New playback rollout cannot pull the hotfix image from the registry and pods are stuck in ImagePullBackOff."
+  failure_mode: "image_pull_backoff"
+  recovered: true
+- id: "platform-hpa-maxed-sev1"
+  incident_id: "incident:platform-hpa-maxed-sev1"
+  title: "Platform HPA Maxed Out SEV1"
+  severity: "SEV1"
+  affected_services: ["playback-service"]
+  signal: "Playback HPA is pinned at max replicas while queue depth keeps rising during a regional traffic spike."
+  failure_mode: "hpa_maxed"
+  recovered: true
+- id: "platform-config-regression-sev1"
+  incident_id: "incident:platform-config-regression-sev1"
+  title: "Platform Config Regression SEV1"
+  severity: "SEV1"
+  affected_services: ["playback-service"]
+  signal: "A config rollout disabled manifest caching and playback start error rate doubled within minutes."
+  failure_mode: "config_regression"
+  recovered: true
+- id: "platform-dependency-timeout-sev1"
+  incident_id: "incident:platform-dependency-timeout-sev1"
+  title: "Platform Dependency Timeout SEV1"
+  severity: "SEV1"
+  affected_services: ["playback-service"]
+  signal: "Playback start requests time out waiting for manifest-service; retry traffic is amplifying load."
+  failure_mode: "dependency_timeout"
+  recovered: false

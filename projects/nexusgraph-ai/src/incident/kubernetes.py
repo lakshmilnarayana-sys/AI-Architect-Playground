@@ -45,6 +45,26 @@ FALLBACK_RESOURCES = [
                 "symptom": "CPUThrottled",
                 "trigger": {"restart_count_delta": 0, "throttling_ratio": 0.42},
             },
+            "memory_leak": {
+                "enabled": False,
+                "symptom": "MemoryPressure",
+                "trigger": {"rss_growth_mb_per_min": 96, "heap_allocated": "1430Mi"},
+            },
+            "node_pressure": {
+                "enabled": False,
+                "symptom": "NodePressure",
+                "trigger": {"node_memory_available_pct": 4, "evicted_pods": 3},
+            },
+            "image_pull_backoff": {
+                "enabled": False,
+                "symptom": "ImagePullBackOff",
+                "trigger": {"image_pull_failures": 7, "registry_status": "401 Unauthorized"},
+            },
+            "hpa_maxed": {
+                "enabled": False,
+                "symptom": "HPAMaxedOut",
+                "trigger": {"desired_replicas": 28, "max_replicas": 18, "cpu_utilization_pct": 91},
+            },
         },
     }
 ]
@@ -86,6 +106,13 @@ def get_service_resource(service: str, path: Path = KUBERNETES_RESOURCES_PATH) -
         if needle in aliases:
             return deepcopy(resource)
     raise KeyError(f"No Kubernetes resource modeled for {service}")
+
+
+def available_failure_modes(path: Path = KUBERNETES_RESOURCES_PATH) -> list[str]:
+    modes = set()
+    for resource in load_kubernetes_resources(path):
+        modes.update((resource.get("failure_modes") or {}).keys())
+    return sorted(modes)
 
 
 def healthy_runtime(resource: dict) -> dict:

@@ -32,7 +32,18 @@ def test_kubernetes_resources_model_failure_modes_as_key_value_pairs():
     assert playback["resources"]["limits"]["memory"] == "1024Mi"
     assert "oom_kill" in playback["failure_modes"]
     assert "cpu_throttle" in playback["failure_modes"]
+    assert len({mode for r in resources for mode in r["failure_modes"]}) >= 16
+    assert "dependency_timeout" in playback["failure_modes"]
+    assert "ingress_5xx" in playback["failure_modes"]
     assert playback["failure_modes"]["oom_kill"]["symptom"] == "OOMKilled"
+
+
+def test_scripted_scenarios_cover_expanded_failure_modes():
+    scenarios = load_yaml("incident_scenarios.yaml")
+    modes = {scenario.get("failure_mode") for scenario in scenarios if scenario.get("failure_mode")}
+
+    assert len(modes) >= 16
+    assert {"certificate_expiry", "model_serving_errors", "metrics_cardinality_explosion"} <= modes
 
 
 def test_logs_and_observability_sources_cover_outage_scenarios():
