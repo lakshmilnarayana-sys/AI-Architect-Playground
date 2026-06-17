@@ -765,9 +765,12 @@ def render_agent_flowchart(messages: list[dict], final: dict | None = None,
 
     nodes = []
     connectors = []
-    node_width = 164
-    node_gap = 52
-    node_y = 36
+    node_width = 168
+    node_gap_x = 52
+    node_gap_y = 98
+    nodes_per_row = 4
+    origin_x = 24
+    origin_y = 28
     for index, (name, phase, detail) in enumerate(agents):
         if active_agent == name or (active_phase == phase and not active_agent):
             state = "working"
@@ -778,18 +781,32 @@ def render_agent_flowchart(messages: list[dict], final: dict | None = None,
         if name == "Scribe Agent" and findings.get("status_update", {}).get("requires_human_approval"):
             state = "waiting for HITL"
         css_state = re.sub(r"[^a-z]+", "-", state.lower()).strip("-")
-        x = 24 + index * (node_width + node_gap)
+        row = index // nodes_per_row
+        col = index % nodes_per_row
+        x = origin_x + col * (node_width + node_gap_x)
+        y = origin_y + row * node_gap_y
         connector_state = "done" if name in seen_agents else "idle"
         if index < len(agents) - 1:
-            next_x = 24 + (index + 1) * (node_width + node_gap)
+            next_row = (index + 1) // nodes_per_row
+            next_col = (index + 1) % nodes_per_row
+            next_x = origin_x + next_col * (node_width + node_gap_x)
+            next_y = origin_y + next_row * node_gap_y
+            if row == next_row:
+                connector = f'<line class="workflow-edge edge-{connector_state}" x1="{x + node_width}" y1="{y + 32}" x2="{next_x}" y2="{next_y + 32}" />'
+            else:
+                mid_y = y + 78
+                connector = (
+                    f'<path class="workflow-edge edge-{connector_state}" '
+                    f'd="M {x + node_width / 2} {y + 64} V {mid_y} H {next_x + node_width / 2} V {next_y}" />'
+                )
             connectors.append(
                 f"""
-                <line class="workflow-edge edge-{connector_state}" x1="{x + node_width}" y1="{node_y + 32}" x2="{next_x}" y2="{node_y + 32}" />
+                {connector}
                 """
             )
         nodes.append(
             f"""
-            <div class="workflow-node agent-state-{css_state}" style="left:{x}px;top:{node_y}px">
+            <div class="workflow-node agent-state-{css_state}" style="left:{x}px;top:{y}px">
               <div class="node-header">
                 <div class="agent-index">{index + 1}</div>
                 <div class="agent-state">{html.escape(state)}</div>
@@ -801,14 +818,16 @@ def render_agent_flowchart(messages: list[dict], final: dict | None = None,
         )
 
     st.markdown("**Agent operations flow**")
-    canvas_width = 48 + len(agents) * node_width + (len(agents) - 1) * node_gap
+    row_count = (len(agents) + nodes_per_row - 1) // nodes_per_row
+    canvas_width = 48 + nodes_per_row * node_width + (nodes_per_row - 1) * node_gap_x
+    canvas_height = origin_y + row_count * 72 + (row_count - 1) * 26
     components.html(
         f"""
         <style>
           body {{ margin:0; background:#090b09; overflow:auto; }}
           .workflow-shell {{
             max-width:100%;
-            overflow:auto;
+            overflow:hidden;
             border:1px solid #24301f;
             border-radius:8px;
             background:
@@ -821,13 +840,14 @@ def render_agent_flowchart(messages: list[dict], final: dict | None = None,
           .agent-flow-compact {{
             position:relative;
             width:{canvas_width}px;
-            height:150px;
+            height:{canvas_height}px;
+            max-width:100%;
           }}
           .workflow-svg {{
             position:absolute;
             inset:0;
             width:{canvas_width}px;
-            height:150px;
+            height:{canvas_height}px;
             pointer-events:none;
           }}
           .workflow-edge {{
@@ -888,7 +908,7 @@ def render_agent_flowchart(messages: list[dict], final: dict | None = None,
         </style>
         <div class="workflow-shell">
           <div class="agent-flow-compact">
-            <svg class="workflow-svg" viewBox="0 0 {canvas_width} 150" preserveAspectRatio="none">
+            <svg class="workflow-svg" viewBox="0 0 {canvas_width} {canvas_height}" preserveAspectRatio="none">
               <defs>
                 <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto" markerUnits="strokeWidth">
                   <path d="M0,0 L8,4 L0,8 z" fill="#b9ff4a"></path>
@@ -904,7 +924,7 @@ def render_agent_flowchart(messages: list[dict], final: dict | None = None,
           <div class="current-text">{html.escape(active_action)}</div>
         </div>
         """,
-        height=245,
+        height=315,
     )
 
 
