@@ -57,7 +57,7 @@ from src.incident.scenarios import load_scenarios
 from src.incident.state import new_incident
 from src.incident.graph_lookup import GraphContext
 from src.incident.jira import query_incident_metrics
-from src.incident.supervisor import run_incident, stream_incident
+from src.incident.supervisor import stream_incident
 from src.project_status.supervisor import run_project_status
 from src.status_page import build_status_summary, incident_history
 from ui_trace import evidence_counts, format_stage_elapsed
@@ -846,6 +846,7 @@ def render_jira_metrics() -> None:
 
 def render_backend_agent_trace(final: dict) -> None:
     findings = final.get("findings") or {}
+    provenance = final.get("_backend_provenance") or {}
     rows = []
     timeline = final["timeline"]
     for index, event in enumerate(timeline):
@@ -863,9 +864,12 @@ def render_backend_agent_trace(final: dict) -> None:
         rows.append(
             {
                 "Step": index + 1,
+                "Run ID": provenance.get("run_id", ""),
+                "Thread ID": provenance.get("thread_id", ""),
                 "Agent": actor,
                 "Phase": phase,
                 "Kind": event.get("kind", ""),
+                "Executor": provenance.get("executor", "LangGraph StateGraph"),
                 "Backend input": final["incident"].get("signal", ""),
                 "Tool or data accessed": tool_or_data,
                 "Output": event.get("text", ""),
@@ -875,6 +879,12 @@ def render_backend_agent_trace(final: dict) -> None:
 
     st.markdown("**Backend agent trace**")
     st.caption("Rendered from LangGraph incident state, not static UI state.")
+    st.caption(
+        f"Provenance: {provenance.get('executor', 'LangGraph StateGraph')} / "
+        f"thread `{provenance.get('thread_id', 'unknown')}` / "
+        f"run `{provenance.get('run_id', 'unknown')}` / "
+        f"{provenance.get('duration_seconds', 0)}s."
+    )
     st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
     artifact_counts = {
@@ -884,6 +894,7 @@ def render_backend_agent_trace(final: dict) -> None:
         "logs": len(final.get("logs") or []),
         "observability": len(final.get("observability") or []),
         "jira_issue": (findings.get("jira_issue") or {}).get("key"),
+        "backend_provenance": provenance,
     }
     st.json(artifact_counts)
     st.download_button(
@@ -953,12 +964,15 @@ def render_incident_response_simulation() -> None:
         flow = st.empty()
         feed = st.empty()
         collected: list[dict] = []
+        final_holder: dict[str, dict] = {}
+        stream_thread_id = f"ui-{state['incident']['id']}"
         with flow.container():
             render_agent_flowchart(collected)
         for phase, messages in stream_incident(state, llm=llm, ctx=ctx,
                                                 use_vector=env_flag("INCIDENT_USE_VECTOR", False),
                                                 approve=lambda phase: True,
-                                                thread_id=f"ui-{state['incident']['id']}"):
+                                                thread_id=stream_thread_id,
+                                                on_final=lambda final: final_holder.update({"state": final})):
             for message in messages:
                 collected.append(message)
                 active_agent = agent_name_for_message(message)
@@ -975,13 +989,10 @@ def render_incident_response_simulation() -> None:
                         key_suffix=f"{state['incident']['id']}_{phase}_{len(collected)}",
                     )
                 time.sleep(demo_delay_seconds or 0.6)  # timed streaming playback pacing
-        final = run_incident(
-            state,
-            llm=llm,
-            ctx=ctx,
-            use_vector=env_flag("INCIDENT_USE_VECTOR", False),
-            thread_id=f"ui-summary-{state['incident']['id']}",
-        )
+        final = final_holder.get("state")
+        if not final:
+            st.error("Incident stream ended before LangGraph returned final state.")
+            return
         with flow.container():
             render_agent_flowchart(collected, final=final)
         st.success("Incident resolved — postmortem generated.")

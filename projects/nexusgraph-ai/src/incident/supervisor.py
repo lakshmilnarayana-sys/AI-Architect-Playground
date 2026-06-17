@@ -1,5 +1,7 @@
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
+import time
+import uuid
 
 from src.incident.state import IncidentState
 from src.incident.graph_lookup import GraphContext
@@ -76,8 +78,30 @@ def run_incident(state: IncidentState, llm=None, ctx: GraphContext | None = None
     return graph.get_state(cfg).values
 
 
+def _with_provenance(values: dict, thread_id: str, run_id: str, started_at: float) -> dict:
+    final = dict(values)
+    final["_backend_provenance"] = {
+        "run_id": run_id,
+        "thread_id": thread_id,
+        "executor": "LangGraph StateGraph",
+        "checkpointer": "MemorySaver",
+        "source": "stream_incident",
+        "duration_seconds": round(time.perf_counter() - started_at, 3),
+        "node_sequence": [
+            "declare",
+            "triage",
+            "diagnose",
+            "mitigate",
+            "resolve",
+            "postmortem",
+        ],
+        "interrupt_before": ["set_mitigate", "set_resolve"],
+    }
+    return final
+
+
 def stream_incident(state, llm=None, ctx=None, use_vector=True,
-                    approve=None, thread_id="incident"):
+                    approve=None, thread_id="incident", on_final=None):
     """Yield (phase, new_messages) as the incident advances.
 
     ``approve(phase)`` is called at each HITL gate; returning False aborts the run.
@@ -85,6 +109,8 @@ def stream_incident(state, llm=None, ctx=None, use_vector=True,
     approve = approve or (lambda phase: True)
     graph = build_incident_graph(llm=llm, ctx=ctx, use_vector=use_vector)
     cfg = {"configurable": {"thread_id": thread_id}}
+    run_id = f"lg-{uuid.uuid4().hex[:12]}"
+    started_at = time.perf_counter()
     emitted = 0
 
     def _drain():
@@ -103,8 +129,12 @@ def stream_incident(state, llm=None, ctx=None, use_vector=True,
     while graph.get_state(cfg).next:
         pending_phase = graph.get_state(cfg).values.get("phase", "")
         if not approve(pending_phase):
+            if on_final:
+                on_final(_with_provenance(graph.get_state(cfg).values, thread_id, run_id, started_at))
             return
         graph.invoke(None, config=cfg)
         phase, new = _drain()
         if new:
             yield phase, new
+    if on_final:
+        on_final(_with_provenance(graph.get_state(cfg).values, thread_id, run_id, started_at))

@@ -80,6 +80,11 @@ def test_incident_ui_exposes_backend_agent_trace_and_json_download():
     assert "Download agent run JSON" in APP
     assert "final[\"timeline\"]" in APP
     assert "json.dumps(final" in APP
+    assert "_backend_provenance" in APP
+    assert "Run ID" in APP
+    assert "Thread ID" in APP
+    assert "on_final=lambda final" in APP
+    assert "ui-summary" not in APP
 
 
 def test_incident_ui_has_concept_demo_delay():
