@@ -1,5 +1,7 @@
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
+import time
+import uuid
 
 from src.incident.state import IncidentState
 from src.incident.graph_lookup import GraphContext
@@ -76,8 +78,80 @@ def run_incident(state: IncidentState, llm=None, ctx: GraphContext | None = None
     return graph.get_state(cfg).values
 
 
+def _with_provenance(values: dict, thread_id: str, run_id: str, started_at: float) -> dict:
+    final = dict(values)
+    final["timeline"] = _dedupe_events(final.get("timeline", []))
+    final["slack_messages"] = _dedupe_events(final.get("slack_messages", []), actor_key="author")
+    final["observability"] = _dedupe_records(final.get("observability", []))
+    final["logs"] = _dedupe_records(final.get("logs", []))
+    final["_backend_provenance"] = {
+        "run_id": run_id,
+        "thread_id": thread_id,
+        "executor": "LangGraph StateGraph",
+        "checkpointer": "MemorySaver",
+        "checkpointer_scope": "in_process_demo_only",
+        "source": "stream_incident",
+        "duration_kind": "backend_compute_seconds",
+        "backend_compute_seconds": round(time.perf_counter() - started_at, 3),
+        "approval_mode": "auto_approved_demo",
+        "approval_note": "HITL gates are modeled in state/UI; stream_incident auto-approves them for deterministic demo playback.",
+        "node_sequence": [
+            "declare",
+            "triage",
+            "set_diagnose",
+            "diagnose",
+            "bump",
+            "set_mitigate",
+            "mitigate",
+            "set_resolve",
+            "resolve",
+            "postmortem",
+        ],
+        "interrupt_before": ["set_mitigate", "set_resolve"],
+    }
+    return final
+
+
+def _record_key(record: dict) -> tuple[tuple[str, str], ...]:
+    return tuple(sorted((str(key), str(value)) for key, value in record.items()))
+
+
+def _dedupe_records(records: list[dict]) -> list[dict]:
+    seen = set()
+    unique = []
+    for record in records:
+        key = _record_key(record)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(record)
+    return unique
+
+
+def _event_key(event: dict, actor_key: str = "actor") -> tuple[str, str, str, str]:
+    return (
+        str(event.get("phase", "")),
+        str(event.get(actor_key, "")),
+        str(event.get("kind", "")),
+        str(event.get("text", "")),
+    )
+
+
+def _dedupe_events(events: list[dict], actor_key: str = "actor",
+                   seen: set[tuple[str, str, str, str]] | None = None) -> list[dict]:
+    seen = seen if seen is not None else set()
+    unique = []
+    for event in events:
+        key = _event_key(event, actor_key=actor_key)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(event)
+    return unique
+
+
 def stream_incident(state, llm=None, ctx=None, use_vector=True,
-                    approve=None, thread_id="incident"):
+                    approve=None, thread_id="incident", on_final=None):
     """Yield (phase, new_messages) as the incident advances.
 
     ``approve(phase)`` is called at each HITL gate; returning False aborts the run.
@@ -85,13 +159,16 @@ def stream_incident(state, llm=None, ctx=None, use_vector=True,
     approve = approve or (lambda phase: True)
     graph = build_incident_graph(llm=llm, ctx=ctx, use_vector=use_vector)
     cfg = {"configurable": {"thread_id": thread_id}}
+    run_id = f"lg-{uuid.uuid4().hex[:12]}"
+    started_at = time.perf_counter()
     emitted = 0
+    seen_message_keys: set[tuple[str, str, str, str]] = set()
 
     def _drain():
         nonlocal emitted
         values = graph.get_state(cfg).values
         msgs = values.get("slack_messages", [])
-        new = msgs[emitted:]
+        new = _dedupe_events(msgs[emitted:], actor_key="author", seen=seen_message_keys)
         emitted = len(msgs)
         return values.get("phase", ""), new
 
@@ -103,8 +180,12 @@ def stream_incident(state, llm=None, ctx=None, use_vector=True,
     while graph.get_state(cfg).next:
         pending_phase = graph.get_state(cfg).values.get("phase", "")
         if not approve(pending_phase):
+            if on_final:
+                on_final(_with_provenance(graph.get_state(cfg).values, thread_id, run_id, started_at))
             return
         graph.invoke(None, config=cfg)
         phase, new = _drain()
         if new:
             yield phase, new
+    if on_final:
+        on_final(_with_provenance(graph.get_state(cfg).values, thread_id, run_id, started_at))

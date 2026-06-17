@@ -43,8 +43,10 @@ class StreamlitCloudDeployStaticTests(unittest.TestCase):
         source = (ROOT / "app" / "streamlit_app.py").read_text()
 
         self.assertIn("def ensure_runtime_data()", source)
-        self.assertIn("ingest_documents()", source)
+        self.assertIn("from seed_runtime_data import seed_all", source)
+        self.assertIn("seed_all(", source)
         self.assertIn("NEXUSGRAPH_AUTO_IMPORT_NEO4J", source)
+        self.assertIn('env_flag("NEXUSGRAPH_FORCE_VECTOR_SEED", True)', source)
 
     def test_neo4j_import_script_loads_dotenv_for_local_aura_checks(self):
         source = (ROOT / "src" / "import_to_neo4j.py").read_text()
@@ -63,6 +65,7 @@ class StreamlitCloudDeployStaticTests(unittest.TestCase):
     def test_docker_entrypoint_binds_streamlit_to_runtime_port(self):
         entrypoint = (ROOT / "scripts" / "entrypoint.sh").read_text()
 
+        self.assertIn("src/seed_runtime_data.py --neo4j --force-vector", entrypoint)
         self.assertIn("PORT:-8501", entrypoint)
         self.assertIn("--server.address=0.0.0.0", entrypoint)
         self.assertIn("--server.port=${APP_PORT}", entrypoint)

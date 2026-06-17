@@ -34,6 +34,10 @@ class IncidentState(TypedDict, total=False):
     slack_messages: Annotated[list[SlackMessage], operator.add]
     findings: Annotated[dict, merge_findings]
     approvals: Annotated[dict, merge_findings]
+    runtime: Annotated[dict, merge_findings]
+    logs: Annotated[list[dict], operator.add]
+    observability: Annotated[list[dict], operator.add]
+    status_page: Annotated[dict, merge_findings]
     trace: Optional[dict]
     token_usage: dict
     route: Optional[str]   # next-phase hint set by supervisor
@@ -59,6 +63,10 @@ def new_incident(
         "slack_messages": [],
         "findings": {},
         "approvals": {},
+        "runtime": {},
+        "logs": [],
+        "observability": [],
+        "status_page": {},
         "trace": None,
         "token_usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
         "route": None,

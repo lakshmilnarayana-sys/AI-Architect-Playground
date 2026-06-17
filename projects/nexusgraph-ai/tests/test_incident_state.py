@@ -14,6 +14,10 @@ def test_new_incident_seeds_core_fields():
     assert state["timeline"] == []
     assert state["slack_messages"] == []
     assert state["findings"] == {}
+    assert state["runtime"] == {}
+    assert state["logs"] == []
+    assert state["observability"] == []
+    assert state["status_page"] == {}
 
 
 def test_merge_findings_is_shallow_update():
