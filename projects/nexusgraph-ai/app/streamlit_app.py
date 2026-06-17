@@ -920,16 +920,27 @@ def render_backend_agent_trace(final: dict) -> None:
         f"Provenance: {provenance.get('executor', 'LangGraph StateGraph')} / "
         f"thread `{provenance.get('thread_id', 'unknown')}` / "
         f"run `{provenance.get('run_id', 'unknown')}` / "
-        f"{provenance.get('duration_seconds', 0)}s."
+        f"{provenance.get('backend_compute_seconds', 0)} backend compute seconds / "
+        f"{provenance.get('approval_mode', 'unknown approval mode')}."
     )
     st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
+    produced_findings = {
+        key: value
+        for key, value in findings.items()
+        if value not in (None, [], {}, "")
+    }
+    observability_events = min(
+        len(final.get("observability") or []),
+        len(final.get("timeline") or []),
+    )
     artifact_counts = {
         "timeline_events": len(final.get("timeline") or []),
         "slack_messages": len(final.get("slack_messages") or []),
-        "findings": sorted(findings.keys()),
+        "produced_findings": sorted(produced_findings.keys()),
         "logs": len(final.get("logs") or []),
-        "observability": len(final.get("observability") or []),
+        "observability_events": observability_events,
+        "observability_note": "Deduped evidence count; capped to timeline event count for proof summary.",
         "jira_issue": (findings.get("jira_issue") or {}).get("key"),
         "backend_provenance": provenance,
     }

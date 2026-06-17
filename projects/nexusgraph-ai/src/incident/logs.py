@@ -68,9 +68,11 @@ def get_logs_for_incident(
     service_key = normalize_service_name(service) if service else None
     severity_key = severity.upper() if severity else None
     results = []
+    scenario_logs = []
     for log in load_service_logs(path):
         if log.get("scenario_id") != scenario_id:
             continue
+        scenario_logs.append(log)
         if service_key and normalize_service_name(log.get("service", "")) != service_key:
             continue
         if severity_key and _severity(log).upper() != severity_key:
@@ -84,4 +86,12 @@ def get_logs_for_incident(
         normalized.setdefault("timestamp", _timestamp(log))
         normalized.setdefault("severity", _severity(log).upper())
         results.append(normalized)
+    if not results and service_key and scenario_logs:
+        for log in scenario_logs:
+            normalized = dict(log)
+            normalized.setdefault("timestamp", _timestamp(log))
+            normalized.setdefault("severity", _severity(log).upper())
+            normalized["fallback_match"] = True
+            normalized["requested_service"] = service
+            results.append(normalized)
     return sorted(results, key=_timestamp)

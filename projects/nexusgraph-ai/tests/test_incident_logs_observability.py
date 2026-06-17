@@ -18,10 +18,18 @@ def test_get_logs_for_incident_filters_by_severity():
     assert all(log["severity"] == "ERROR" for log in logs)
 
 
+def test_get_logs_for_incident_falls_back_to_scenario_logs_for_inferred_service_gap():
+    logs = get_logs_for_incident("playback-oom-sev1", "billing-service")
+    assert logs
+    assert all(log.get("fallback_match") is True for log in logs)
+
+
 def test_observability_evidence_includes_dashboards_alerts_and_traces():
     evidence = get_observability_evidence("playback-service", "oom_kill")
     kinds = {item["kind"] for item in evidence}
     assert {"dashboard", "alert", "trace"} <= kinds
+    keys = {(item.get("kind"), item.get("name"), item.get("query")) for item in evidence}
+    assert len(keys) == len(evidence)
 
 
 def test_external_recommendations_include_logging_and_observability():

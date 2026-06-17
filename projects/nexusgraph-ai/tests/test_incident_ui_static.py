@@ -85,6 +85,9 @@ def test_incident_ui_exposes_backend_agent_trace_and_json_download():
     assert "_backend_provenance" in APP
     assert "Run ID" in APP
     assert "Thread ID" in APP
+    assert "backend compute seconds" in APP
+    assert "produced_findings" in APP
+    assert "observability_events" in APP
     assert "on_final=lambda final" in APP
     assert "ui-summary" not in APP
 

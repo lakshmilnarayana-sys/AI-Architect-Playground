@@ -42,7 +42,7 @@ def _write(issues: list[dict], path: Path | None = None) -> None:
 
 
 def _issue_key(incident_id: str) -> str:
-    suffix = hashlib.sha1(incident_id.encode("utf-8")).hexdigest()[:6].upper()
+    suffix = int(hashlib.sha1(incident_id.encode("utf-8")).hexdigest()[:8], 16) % 900000 + 100000
     return f"INC-{suffix}"
 
 

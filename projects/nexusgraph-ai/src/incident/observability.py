@@ -98,7 +98,15 @@ def get_observability_evidence(
         {"kind": "trace", "name": "Checkout/playback trace exemplar", "query": f"service.name={service}"},
     ]
     evidence.extend(item for item in defaults if item["kind"] not in kinds)
-    return evidence
+    seen = set()
+    unique = []
+    for item in evidence:
+        key = (item.get("kind"), item.get("name"), item.get("query"))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(item)
+    return unique
 
 
 def external_recommendations(path: Path = OBSERVABILITY_SOURCES_PATH) -> list[dict]:

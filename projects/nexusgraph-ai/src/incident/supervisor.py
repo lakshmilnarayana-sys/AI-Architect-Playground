@@ -82,24 +82,50 @@ def _with_provenance(values: dict, thread_id: str, run_id: str, started_at: floa
     final = dict(values)
     final["timeline"] = _dedupe_events(final.get("timeline", []))
     final["slack_messages"] = _dedupe_events(final.get("slack_messages", []), actor_key="author")
+    final["observability"] = _dedupe_records(final.get("observability", []))
+    final["logs"] = _dedupe_records(final.get("logs", []))
     final["_backend_provenance"] = {
         "run_id": run_id,
         "thread_id": thread_id,
         "executor": "LangGraph StateGraph",
         "checkpointer": "MemorySaver",
+        "checkpointer_scope": "in_process_demo_only",
         "source": "stream_incident",
-        "duration_seconds": round(time.perf_counter() - started_at, 3),
+        "duration_kind": "backend_compute_seconds",
+        "backend_compute_seconds": round(time.perf_counter() - started_at, 3),
+        "approval_mode": "auto_approved_demo",
+        "approval_note": "HITL gates are modeled in state/UI; stream_incident auto-approves them for deterministic demo playback.",
         "node_sequence": [
             "declare",
             "triage",
+            "set_diagnose",
             "diagnose",
+            "bump",
+            "set_mitigate",
             "mitigate",
+            "set_resolve",
             "resolve",
             "postmortem",
         ],
         "interrupt_before": ["set_mitigate", "set_resolve"],
     }
     return final
+
+
+def _record_key(record: dict) -> tuple[tuple[str, str], ...]:
+    return tuple(sorted((str(key), str(value)) for key, value in record.items()))
+
+
+def _dedupe_records(records: list[dict]) -> list[dict]:
+    seen = set()
+    unique = []
+    for record in records:
+        key = _record_key(record)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(record)
+    return unique
 
 
 def _event_key(event: dict, actor_key: str = "actor") -> tuple[str, str, str, str]:
