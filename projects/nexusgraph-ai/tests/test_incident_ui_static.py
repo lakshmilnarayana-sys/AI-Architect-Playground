@@ -73,6 +73,15 @@ def test_incident_ui_has_agent_flowchart():
     assert "Scribe Agent" in APP
 
 
+def test_incident_ui_exposes_backend_agent_trace_and_json_download():
+    assert "def render_backend_agent_trace(" in APP
+    assert "Backend agent trace" in APP
+    assert "Rendered from LangGraph incident state" in APP
+    assert "Download agent run JSON" in APP
+    assert "final[\"timeline\"]" in APP
+    assert "json.dumps(final" in APP
+
+
 def test_incident_ui_has_concept_demo_delay():
     assert "Concept demo pacing" in APP
     assert "demo_delay_seconds = 10" in APP

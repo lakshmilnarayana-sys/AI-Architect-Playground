@@ -844,6 +844,57 @@ def render_jira_metrics() -> None:
         st.info("No simulated Jira incidents saved yet.")
 
 
+def render_backend_agent_trace(final: dict) -> None:
+    findings = final.get("findings") or {}
+    rows = []
+    timeline = final["timeline"]
+    for index, event in enumerate(timeline):
+        actor = event.get("actor", "")
+        handoff = timeline[index + 1].get("actor", "END") if index + 1 < len(timeline) else "END"
+        phase = event.get("phase", "")
+        tool_or_data = {
+            "declare": "alerting.evaluate_alert / incident input",
+            "triage": "GraphContext / Kubernetes resources / automation rules",
+            "diagnose": "runbooks / static logs / observability evidence / Zoom bridge",
+            "mitigate": "service runbook / escalation policy",
+            "resolve": "SLO recovery check / Kubernetes runtime",
+            "postmortem": "timeline / approvals / Jira store",
+        }.get(phase, "incident state")
+        rows.append(
+            {
+                "Step": index + 1,
+                "Agent": actor,
+                "Phase": phase,
+                "Kind": event.get("kind", ""),
+                "Backend input": final["incident"].get("signal", ""),
+                "Tool or data accessed": tool_or_data,
+                "Output": event.get("text", ""),
+                "Handoff to": handoff,
+            }
+        )
+
+    st.markdown("**Backend agent trace**")
+    st.caption("Rendered from LangGraph incident state, not static UI state.")
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+
+    artifact_counts = {
+        "timeline_events": len(final.get("timeline") or []),
+        "slack_messages": len(final.get("slack_messages") or []),
+        "findings": sorted(findings.keys()),
+        "logs": len(final.get("logs") or []),
+        "observability": len(final.get("observability") or []),
+        "jira_issue": (findings.get("jira_issue") or {}).get("key"),
+    }
+    st.json(artifact_counts)
+    st.download_button(
+        "Download agent run JSON",
+        data=json.dumps(final, indent=2, default=str),
+        file_name=f"{final['incident']['id'].replace(':', '-')}-agent-run.json",
+        mime="application/json",
+        key=f"download_agent_run_{final['incident']['id']}",
+    )
+
+
 def render_incident_response_simulation() -> None:
     st.caption("Hierarchical multi-agent incident simulation grounded in the knowledge graph.")
     st.markdown(
@@ -934,6 +985,9 @@ def render_incident_response_simulation() -> None:
         with flow.container():
             render_agent_flowchart(collected, final=final)
         st.success("Incident resolved — postmortem generated.")
+        with st.expander("Backend agent trace", expanded=True):
+            render_backend_agent_trace(final)
+
         automation = (final.get("findings") or {}).get("automation") or {}
         with st.expander("Runbook automation", expanded=True):
             st.caption("FireHydrant-style simulation: channel, ticket, roles, task timeline, stakeholder update, and retro summary.")
