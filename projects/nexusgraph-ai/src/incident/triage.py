@@ -38,14 +38,108 @@ def _impact(state: IncidentState, ctx: GraphContext) -> dict:
     return update
 
 
+def _kubernetes_context(state: IncidentState) -> dict:
+    from src.incident.kubernetes import clear_failure, get_service_resource, inject_failure
+
+    svc = _primary_service(state)
+    try:
+        resource = get_service_resource(svc)
+    except KeyError:
+        signal = f"{state['incident'].get('title', '')} {state['incident'].get('signal', '')}".lower()
+        fallback_service = "billing-service" if "billing" in signal else "playback-service"
+        resource = get_service_resource(fallback_service)
+        svc = fallback_service
+    failure_mode = state["incident"].get("failure_mode")
+    simulate = bool(state["incident"].get("simulate_failure"))
+    runtime = (
+        inject_failure(resource, failure_mode)
+        if simulate and failure_mode
+        else clear_failure(resource)
+    )
+    update = emit(
+        "triage",
+        "KubernetesAgent",
+        "triage",
+        "finding",
+        (
+            f"Kubernetes context: {resource['cluster']}/{resource['namespace']} "
+            f"{resource['workload']['name']} status={runtime['pod_status']}"
+        ),
+    )
+    update["findings"] = {
+        "kubernetes_resource": resource,
+        "kubernetes_runtime": runtime,
+    }
+    update["runtime"] = runtime
+    return update
+
+
+def _automation_kickoff(state: IncidentState) -> dict:
+    from src.incident.automations import execute_automation, select_automation
+
+    incident = state["incident"]
+    findings = state.get("findings") or {}
+    try:
+        automation = select_automation(
+            incident.get("severity", "SEV3"),
+            incident.get("affected_services", []),
+        )
+    except KeyError:
+        return emit(
+            "triage",
+            "RunbookAutomationAgent",
+            "commander",
+            "action",
+            "No FireHydrant-style automation matched this incident.",
+        )
+    result = execute_automation(
+        automation,
+        incident_id=incident["id"],
+        title=incident["title"],
+    )
+    oncall = findings.get("oncall") or {}
+    owner = findings.get("owner") or {}
+    commander = findings.get("incident_commander") or {"name": "Incident Commander Agent"}
+    slack_channel = {
+        "channel": result["channel"],
+        "details": f"{incident['severity']} {incident['title']}",
+        "oncall_engineers": [oncall.get("name", "Primary on-call engineer")],
+        "incident_commanders": [commander.get("name", "Incident Commander Agent")],
+        "incident_observers": [
+            "Scribe Agent",
+            "Support Communications Observer",
+            owner.get("name", "Service owner observer"),
+        ],
+    }
+    update = emit(
+        "triage",
+        "FireHydrant Runbook Automation",
+        "commander",
+        "action",
+        (
+            f"Incident Commander triggered the Incident Management runbook; "
+            f"FireHydrant created Slack channel {result['channel']} with incident details, "
+            f"on-call engineers, incident commanders, and incident observers, and "
+            f"tracking ticket {result['ticket']} opened."
+        ),
+    )
+    result["slack_channel"] = slack_channel
+    update["findings"] = {"automation": result, "slack_channel": slack_channel}
+    return update
+
+
 def build_triage_subgraph(llm=None, ctx: GraphContext | None = None):
     ctx = ctx or GraphContext()
     g = StateGraph(IncidentState)
     g.add_node("ownership", partial(_ownership, ctx=ctx))
     g.add_node("oncall", partial(_oncall, ctx=ctx))
     g.add_node("impact", partial(_impact, ctx=ctx))
+    g.add_node("kubernetes_context", _kubernetes_context)
+    g.add_node("automation_kickoff", _automation_kickoff)
     g.add_edge(START, "ownership")
     g.add_edge("ownership", "oncall")
     g.add_edge("oncall", "impact")
-    g.add_edge("impact", END)
+    g.add_edge("impact", "kubernetes_context")
+    g.add_edge("kubernetes_context", "automation_kickoff")
+    g.add_edge("automation_kickoff", END)
     return g.compile()

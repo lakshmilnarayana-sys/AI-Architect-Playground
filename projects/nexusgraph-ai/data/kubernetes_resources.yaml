@@ -1,0 +1,345 @@
+- service: "playback-service"
+  namespace: "streamflix-prod"
+  cluster: "streamflix-us-east-1"
+  workload:
+    kind: "Deployment"
+    name: "playback-api"
+    replicas: 12
+    image: "registry.streamflix.local/playback-api:2026.06.17"
+  resources:
+    requests: {cpu: "500m", memory: "512Mi"}
+    limits: {cpu: "2000m", memory: "1024Mi"}
+  storage:
+    pvc: "playback-cache-pvc"
+    class: "gp3"
+    iops: "3000"
+  kv:
+    env: "prod"
+    tier: "edge-api"
+    owner: "streaming-platform"
+    pager: "playback-primary"
+  failure_modes:
+    oom_kill:
+      enabled: false
+      symptom: "OOMKilled"
+      trigger: {memory_working_set: "1180Mi", restart_count_delta: 4}
+    pod_restart:
+      enabled: false
+      symptom: "CrashLoopBackOff"
+      trigger: {restart_count_delta: 9, exit_code: 137}
+    disk_iops:
+      enabled: false
+      symptom: "DiskIOPSSaturation"
+      trigger: {read_iops: 9500, write_iops: 8700, pvc_latency_ms: 420}
+    cpu_throttle:
+      enabled: false
+      symptom: "CPUThrottlingHigh"
+      trigger: {cpu_throttled_ratio: 0.72, p99_latency_ms: 3800}
+    memory_leak:
+      enabled: false
+      symptom: "MemoryPressure"
+      trigger: {rss_growth_mb_per_min: 144, heap_allocated: "1340Mi", gc_pause_ms: 980}
+    node_pressure:
+      enabled: false
+      symptom: "NodePressure"
+      trigger: {node_memory_available_pct: 3, node_disk_available_pct: 6, evicted_pods: 5}
+    image_pull_backoff:
+      enabled: false
+      symptom: "ImagePullBackOff"
+      trigger: {image_pull_failures: 12, registry_status: "429 Too Many Requests", bad_image_tag: "2026.06.17-hotfix"}
+    hpa_maxed:
+      enabled: false
+      symptom: "HPAMaxedOut"
+      trigger: {desired_replicas: 32, max_replicas: 18, cpu_utilization_pct: 94, queue_depth: 4200}
+    config_regression:
+      enabled: false
+      symptom: "ConfigRegression"
+      trigger: {config_key: "manifest.cache_ttl_seconds", previous: 120, current: 0, error_rate_pct: 18.4}
+    dependency_timeout:
+      enabled: false
+      symptom: "DependencyTimeout"
+      trigger: {dependency: "manifest-service", timeout_ms: 2500, timeout_rate_pct: 22.7}
+    ingress_5xx:
+      enabled: false
+      symptom: "Ingress5xxSpike"
+      trigger: {ingress_5xx_rate_pct: 12.2, upstream_reset_count: 1840, region: "us-east-1"}
+    network_packet_loss:
+      enabled: false
+      symptom: "NetworkPacketLoss"
+      trigger: {packet_loss_pct: 8.5, retransmits_per_second: 1200, affected_az: "use1-az2"}
+- service: "billing-service"
+  namespace: "streamflix-prod"
+  cluster: "streamflix-us-east-1"
+  workload:
+    kind: "Deployment"
+    name: "billing-api"
+    replicas: 8
+    image: "registry.streamflix.local/billing-api:2026.06.12"
+  resources:
+    requests: {cpu: "400m", memory: "512Mi"}
+    limits: {cpu: "1500m", memory: "1024Mi"}
+  storage:
+    pvc: "billing-ledger-pvc"
+    class: "io2"
+    iops: "6000"
+  kv:
+    env: "prod"
+    tier: "revenue-api"
+    owner: "revenue-systems"
+    pager: "billing-primary"
+  failure_modes:
+    oom_kill:
+      enabled: false
+      symptom: "OOMKilled"
+      trigger: {memory_working_set: "1105Mi", restart_count_delta: 3}
+    pod_restart:
+      enabled: false
+      symptom: "CrashLoopBackOff"
+      trigger: {restart_count_delta: 6, exit_code: 1}
+    disk_iops:
+      enabled: false
+      symptom: "DiskIOPSSaturation"
+      trigger: {read_iops: 12000, write_iops: 13500, pvc_latency_ms: 610}
+    cpu_throttle:
+      enabled: false
+      symptom: "CPUThrottlingHigh"
+      trigger: {cpu_throttled_ratio: 0.58, capture_latency_ms: 2100}
+    memory_leak:
+      enabled: false
+      symptom: "MemoryPressure"
+      trigger: {rss_growth_mb_per_min: 88, heap_allocated: "1220Mi", worker_pool: "capture-workers"}
+    node_pressure:
+      enabled: false
+      symptom: "NodePressure"
+      trigger: {node_memory_available_pct: 5, node_disk_available_pct: 7, evicted_pods: 2}
+    image_pull_backoff:
+      enabled: false
+      symptom: "ImagePullBackOff"
+      trigger: {image_pull_failures: 9, registry_status: "manifest unknown", bad_image_tag: "2026.06.18-ledger"}
+    hpa_maxed:
+      enabled: false
+      symptom: "HPAMaxedOut"
+      trigger: {desired_replicas: 20, max_replicas: 12, cpu_utilization_pct: 89, capture_queue_depth: 11800}
+    config_regression:
+      enabled: false
+      symptom: "ConfigRegression"
+      trigger: {config_key: "payments.idempotency.window_minutes", previous: 60, current: 5, duplicate_capture_count: 218}
+    dependency_timeout:
+      enabled: false
+      symptom: "DependencyTimeout"
+      trigger: {dependency: "payment-gateway", timeout_ms: 3000, timeout_rate_pct: 16.8}
+    db_connection_pool_exhaustion:
+      enabled: false
+      symptom: "DBConnectionPoolExhausted"
+      trigger: {db: "billing-ledger", pool_used_pct: 100, wait_queue: 640}
+    kafka_consumer_lag:
+      enabled: false
+      symptom: "KafkaConsumerLag"
+      trigger: {topic: "payment-captures", consumer_lag: 184000, oldest_lag_minutes: 37}
+- service: "identity-service"
+  namespace: "streamflix-prod"
+  cluster: "streamflix-us-east-1"
+  workload:
+    kind: "Deployment"
+    name: "identity-api"
+    replicas: 10
+    image: "registry.streamflix.local/identity-api:2026.06.10"
+  resources:
+    requests: {cpu: "300m", memory: "384Mi"}
+    limits: {cpu: "1200m", memory: "768Mi"}
+  storage:
+    pvc: "identity-session-pvc"
+    class: "gp3"
+    iops: "3000"
+  kv:
+    env: "prod"
+    tier: "auth-api"
+    owner: "identity-platform"
+    pager: "identity-primary"
+  failure_modes:
+    oom_kill:
+      enabled: false
+      symptom: "OOMKilled"
+      trigger: {memory_working_set: "840Mi", restart_count_delta: 2}
+    pod_restart:
+      enabled: false
+      symptom: "CrashLoopBackOff"
+      trigger: {restart_count_delta: 8, exit_code: 2}
+    disk_iops:
+      enabled: false
+      symptom: "DiskIOPSSaturation"
+      trigger: {read_iops: 6400, write_iops: 7100, pvc_latency_ms: 330}
+    cpu_throttle:
+      enabled: false
+      symptom: "CPUThrottlingHigh"
+      trigger: {cpu_throttled_ratio: 0.49, mfa_latency_ms: 1600}
+    memory_leak:
+      enabled: false
+      symptom: "MemoryPressure"
+      trigger: {rss_growth_mb_per_min: 72, heap_allocated: "900Mi", session_cache_entries: 1800000}
+    node_pressure:
+      enabled: false
+      symptom: "NodePressure"
+      trigger: {node_memory_available_pct: 4, node_disk_available_pct: 8, evicted_pods: 3}
+    image_pull_backoff:
+      enabled: false
+      symptom: "ImagePullBackOff"
+      trigger: {image_pull_failures: 6, registry_status: "TLS handshake timeout", bad_image_tag: "2026.06.17-mfa"}
+    hpa_maxed:
+      enabled: false
+      symptom: "HPAMaxedOut"
+      trigger: {desired_replicas: 24, max_replicas: 16, cpu_utilization_pct: 86, login_queue_depth: 9300}
+    config_regression:
+      enabled: false
+      symptom: "ConfigRegression"
+      trigger: {config_key: "mfa.policy.enforcement_mode", previous: "gradual", current: "strict", lockout_count: 74}
+    dependency_timeout:
+      enabled: false
+      symptom: "DependencyTimeout"
+      trigger: {dependency: "northstar-mfa", timeout_ms: 2000, timeout_rate_pct: 19.3}
+    redis_hot_key:
+      enabled: false
+      symptom: "RedisHotKey"
+      trigger: {redis_key: "session:tenant:enterprise-admins", ops_per_second: 92000, p99_ms: 480}
+    certificate_expiry:
+      enabled: false
+      symptom: "CertificateExpired"
+      trigger: {secret: "identity-api-mtls", cert_not_after: "2026-06-17T13:20:00Z", handshake_failures: 3200}
+- service: "recommendation-service"
+  namespace: "streamflix-prod"
+  cluster: "streamflix-us-east-1"
+  workload:
+    kind: "Deployment"
+    name: "recommendation-api"
+    replicas: 14
+    image: "registry.streamflix.local/recommendation-api:2026.06.15"
+  resources:
+    requests: {cpu: "700m", memory: "768Mi"}
+    limits: {cpu: "2500m", memory: "1536Mi"}
+  storage:
+    pvc: "recommendation-cache-pvc"
+    class: "gp3"
+    iops: "5000"
+  kv:
+    env: "prod"
+    tier: "ml-serving"
+    owner: "personalization"
+    pager: "recommendation-primary"
+  failure_modes:
+    oom_kill:
+      enabled: false
+      symptom: "OOMKilled"
+      trigger: {memory_working_set: "1690Mi", restart_count_delta: 5}
+    pod_restart:
+      enabled: false
+      symptom: "CrashLoopBackOff"
+      trigger: {restart_count_delta: 7, exit_code: 137}
+    disk_iops:
+      enabled: false
+      symptom: "DiskIOPSSaturation"
+      trigger: {read_iops: 11300, write_iops: 9000, pvc_latency_ms: 500}
+    cpu_throttle:
+      enabled: false
+      symptom: "CPUThrottlingHigh"
+      trigger: {cpu_throttled_ratio: 0.66, ranking_latency_ms: 2400}
+    memory_leak:
+      enabled: false
+      symptom: "MemoryPressure"
+      trigger: {rss_growth_mb_per_min: 160, heap_allocated: "1790Mi", model_cache_mb: 940}
+    node_pressure:
+      enabled: false
+      symptom: "NodePressure"
+      trigger: {node_memory_available_pct: 4, gpu_memory_available_pct: 6, evicted_pods: 4}
+    image_pull_backoff:
+      enabled: false
+      symptom: "ImagePullBackOff"
+      trigger: {image_pull_failures: 11, registry_status: "blob unknown", bad_image_tag: "2026.06.17-rank-v2"}
+    hpa_maxed:
+      enabled: false
+      symptom: "HPAMaxedOut"
+      trigger: {desired_replicas: 38, max_replicas: 22, cpu_utilization_pct: 92, ranking_queue_depth: 6800}
+    config_regression:
+      enabled: false
+      symptom: "ConfigRegression"
+      trigger: {config_key: "ranker.model_variant", previous: "ranker-v41", current: "ranker-v42-canary", error_rate_pct: 9.8}
+    dependency_timeout:
+      enabled: false
+      symptom: "DependencyTimeout"
+      trigger: {dependency: "feature-store", timeout_ms: 1800, timeout_rate_pct: 21.4}
+    model_serving_errors:
+      enabled: false
+      symptom: "ModelServingErrors"
+      trigger: {model: "ranker-v42", inference_error_pct: 14.6, p99_inference_ms: 3100}
+    feature_store_stale:
+      enabled: false
+      symptom: "FeatureStoreStaleData"
+      trigger: {feature_freshness_lag_minutes: 43, stale_feature_pct: 31.2, online_store: "redis-feature-online"}
+- service: "observability-service"
+  namespace: "observability"
+  cluster: "streamflix-us-east-1"
+  workload:
+    kind: "Deployment"
+    name: "otel-collector"
+    replicas: 6
+    image: "registry.streamflix.local/otel-collector:2026.06.08"
+  resources:
+    requests: {cpu: "500m", memory: "512Mi"}
+    limits: {cpu: "2000m", memory: "2048Mi"}
+  storage:
+    pvc: "otel-buffer-pvc"
+    class: "gp3"
+    iops: "6000"
+  kv:
+    env: "prod"
+    tier: "platform-telemetry"
+    owner: "platform-operations"
+    pager: "observability-primary"
+  failure_modes:
+    oom_kill:
+      enabled: false
+      symptom: "OOMKilled"
+      trigger: {memory_working_set: "2300Mi", restart_count_delta: 3}
+    pod_restart:
+      enabled: false
+      symptom: "CrashLoopBackOff"
+      trigger: {restart_count_delta: 5, exit_code: 137}
+    disk_iops:
+      enabled: false
+      symptom: "DiskIOPSSaturation"
+      trigger: {read_iops: 15000, write_iops: 17200, pvc_latency_ms: 740}
+    cpu_throttle:
+      enabled: false
+      symptom: "CPUThrottlingHigh"
+      trigger: {cpu_throttled_ratio: 0.81, ingest_lag_seconds: 180}
+    memory_leak:
+      enabled: false
+      symptom: "MemoryPressure"
+      trigger: {rss_growth_mb_per_min: 132, heap_allocated: "2320Mi", span_queue_depth: 210000}
+    node_pressure:
+      enabled: false
+      symptom: "NodePressure"
+      trigger: {node_memory_available_pct: 2, node_disk_available_pct: 4, evicted_pods: 6}
+    image_pull_backoff:
+      enabled: false
+      symptom: "ImagePullBackOff"
+      trigger: {image_pull_failures: 10, registry_status: "x509 certificate expired", bad_image_tag: "2026.06.17-otel"}
+    hpa_maxed:
+      enabled: false
+      symptom: "HPAMaxedOut"
+      trigger: {desired_replicas: 18, max_replicas: 10, cpu_utilization_pct: 97, ingest_lag_seconds: 420}
+    config_regression:
+      enabled: false
+      symptom: "ConfigRegression"
+      trigger: {config_key: "tail_sampling.error_rate_policy", previous: "enabled", current: "disabled", dropped_trace_pct: 42.0}
+    dependency_timeout:
+      enabled: false
+      symptom: "DependencyTimeout"
+      trigger: {dependency: "tempo-distributor", timeout_ms: 2500, timeout_rate_pct: 26.5}
+    log_pipeline_backpressure:
+      enabled: false
+      symptom: "LogPipelineBackpressure"
+      trigger: {loki_push_errors_per_min: 2400, fluentbit_buffer_pct: 96, dropped_log_pct: 17.5}
+    metrics_cardinality_explosion:
+      enabled: false
+      symptom: "MetricsCardinalityExplosion"
+      trigger: {active_series: 14500000, churn_rate_per_min: 820000, prometheus_head_memory_gb: 42}

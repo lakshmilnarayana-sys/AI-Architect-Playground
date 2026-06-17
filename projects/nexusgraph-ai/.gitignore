@@ -7,3 +7,4 @@ vector_store/
 .DS_Store
 .ruflo/
 lib/
+var/

@@ -1,0 +1,95 @@
+- id: "fh:auto:sev1-streaming"
+  name: "SEV1 Streaming Incident Automation"
+  trigger:
+    severity: "SEV1"
+    services: ["playback-service", "Playback Service", "manifest-service", "cdn-routing-service"]
+  actions:
+    - "create_incident_channel"
+    - "create_tracking_ticket"
+    - "assign_roles"
+    - "start_video_bridge"
+    - "post_status_update"
+    - "notify_stakeholders"
+    - "capture_timeline"
+    - "assign_tasks"
+    - "escalate_by_severity"
+    - "generate_retro_summary"
+  role_assignments:
+    commander: "on-call incident commander"
+    communications: "support lead"
+    engineering: "service owner"
+    executive: "duty executive"
+  simulated_outputs:
+    channel: "#inc-playback-api-sev1"
+    ticket_prefix: "INC"
+    status_template: "We are investigating elevated playback start latency affecting a subset of Streamflix users."
+- id: "fh:auto:sev2-streaming"
+  name: "SEV2 Streaming Degradation Automation"
+  trigger:
+    severity: "SEV2"
+    services: ["playback-service", "Playback Service", "manifest-service", "cdn-routing-service"]
+  actions:
+    - "create_incident_channel"
+    - "create_tracking_ticket"
+    - "assign_roles"
+    - "post_status_update"
+    - "capture_timeline"
+    - "assign_tasks"
+    - "generate_retro_summary"
+  role_assignments:
+    commander: "streaming platform on-call"
+    communications: "support lead"
+    engineering: "playback service owner"
+  simulated_outputs:
+    channel: "#inc-playback-degradation"
+    ticket_prefix: "INC"
+    status_template: "We are monitoring degraded playback performance and applying mitigation."
+- id: "fh:auto:sev2-revenue"
+  name: "SEV2 Revenue Systems Automation"
+  trigger:
+    severity: "SEV2"
+    services: ["billing-service", "Billing Service", "payment-gateway-service"]
+  actions:
+    - "create_incident_channel"
+    - "create_tracking_ticket"
+    - "assign_roles"
+    - "post_status_update"
+    - "notify_stakeholders"
+    - "capture_timeline"
+    - "assign_tasks"
+    - "escalate_by_severity"
+    - "generate_retro_summary"
+  role_assignments:
+    commander: "revenue systems incident commander"
+    communications: "customer support lead"
+    engineering: "billing service owner"
+    finance: "finance operations liaison"
+  simulated_outputs:
+    channel: "#inc-billing-sev2"
+    ticket_prefix: "INC"
+    status_template: "We have identified a billing processing issue and are validating affected transactions."
+- id: "fh:auto:sev1-identity"
+  name: "SEV1 Identity Lockout Automation"
+  trigger:
+    severity: "SEV1"
+    services: ["identity-service", "Identity Service"]
+  actions:
+    - "create_incident_channel"
+    - "create_tracking_ticket"
+    - "assign_roles"
+    - "start_video_bridge"
+    - "post_status_update"
+    - "notify_stakeholders"
+    - "capture_timeline"
+    - "assign_tasks"
+    - "escalate_by_severity"
+    - "generate_retro_summary"
+  role_assignments:
+    commander: "security incident commander"
+    communications: "support lead"
+    engineering: "identity platform owner"
+    security: "security duty officer"
+  simulated_outputs:
+    channel: "#inc-identity-lockout-sev1"
+    ticket_prefix: "INC"
+    status_template: "We are investigating elevated admin lockouts affecting internal access workflows."

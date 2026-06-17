@@ -34,10 +34,6 @@ def hydrate_streamlit_secrets() -> None:
         "NEO4J_USERNAME",
         "NEO4J_PASSWORD",
         "NEXUSGRAPH_AUTO_IMPORT_NEO4J",
-        "INCIDENT_SIM_ENABLED",
-        "INCIDENT_USE_LLM",
-        "INCIDENT_USE_NEO4J",
-        "INCIDENT_USE_VECTOR",
     ]
     try:
         secrets = st.secrets
@@ -60,7 +56,11 @@ from src.incident.slack import filter_messages, channel_name
 from src.incident.scenarios import load_scenarios
 from src.incident.state import new_incident
 from src.incident.graph_lookup import GraphContext
+from src.incident.jira import query_incident_metrics
+from src.incident.kubernetes import available_failure_modes
 from src.incident.supervisor import stream_incident
+from src.project_status.supervisor import run_project_status
+from src.status_page import build_status_summary, incident_history, incident_updates
 from ui_trace import evidence_counts, format_stage_elapsed
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -116,18 +116,254 @@ NODE_COLORS = {
 DESIGN_TOKENS_CSS = """
 <style>
   :root {
-    --bg-panel: rgba(15, 23, 42, 0.86);
-    --bg-card: #0b1220;
-    --border: #334155;
-    --text-primary: #f8fafc;
-    --text-muted: #94a3b8;
-    --accent-indigo: #312e81;
-    --accent-emerald: #064e3b;
-    --accent-amber: #7c2d12;
-    --accent-hybrid: #1d4ed8;
+    --bg-panel: rgba(12, 13, 12, 0.94);
+    --bg-card: #111211;
+    --border: #2c332a;
+    --text-primary: #f5f7ef;
+    --text-muted: #9da69b;
+    --accent-lime: #b9ff4a;
+    --accent-green: #3ce37a;
+    --accent-cyan: #6be7ff;
+    --accent-amber: #ffcf5a;
+    --accent-indigo: #172411;
+    --accent-emerald: #10291a;
+    --accent-hybrid: #102235;
   }
 </style>
 """
+
+
+def render_page_chrome() -> None:
+    st.markdown(
+        """
+        <style>
+          :root {
+            --ng-bg: #050605;
+            --ng-panel: #0c0d0c;
+            --ng-card: #111211;
+            --ng-border: #2c332a;
+            --ng-border-soft: #1d231b;
+            --ng-text: #f5f7ef;
+            --ng-muted: #9da69b;
+            --ng-lime: #b9ff4a;
+            --ng-green: #3ce37a;
+            --ng-cyan: #6be7ff;
+          }
+          .stApp {
+            background:
+              radial-gradient(circle at 18% 12%, rgba(185, 255, 74, 0.10), transparent 32rem),
+              linear-gradient(180deg, #050605 0%, #080908 45%, #050605 100%);
+            color: var(--ng-text);
+          }
+          [data-testid="stHeader"] { background: transparent; }
+          .block-container {
+            max-width: 1180px;
+            padding-top: 2rem;
+            padding-bottom: 4rem;
+          }
+          [data-testid="stExpander"] {
+            background: rgba(12, 13, 12, 0.82);
+            border: 1px solid var(--ng-border-soft);
+            border-radius: 8px;
+            box-shadow: none;
+          }
+          [data-testid="stExpander"] details {
+            border-radius: 8px;
+          }
+          [data-testid="stExpander"] summary {
+            color: var(--ng-text);
+            font-weight: 700;
+          }
+          [data-testid="stMetric"] {
+            background: #101110;
+            border: 1px solid var(--ng-border-soft);
+            border-radius: 8px;
+            padding: 12px;
+          }
+          div[data-testid="stButton"] > button {
+            background: #b9ff4a;
+            border: 1px solid #d6ff86;
+            border-radius: 8px;
+            color: #10140d;
+            font-weight: 800;
+            box-shadow: none;
+          }
+          div[data-testid="stButton"] > button:hover {
+            background: #d0ff75;
+            border-color: #edffbf;
+            color: #10140d;
+          }
+          .stTextInput input, .stTextArea textarea {
+            background: #0b0c0b;
+            border: 1px solid var(--ng-border);
+            border-radius: 8px;
+            color: var(--ng-text);
+          }
+          div[data-baseweb="select"] > div, div[data-baseweb="popover"] {
+            background: #0b0c0b;
+          }
+          .stTabs [data-baseweb="tab-list"] {
+            gap: 8px;
+          }
+          .stTabs [data-baseweb="tab"] {
+            border: 1px solid var(--ng-border-soft);
+            border-radius: 8px;
+            background: #0f100f;
+            color: var(--ng-muted);
+            height: 38px;
+          }
+          .stTabs [aria-selected="true"] {
+            color: #10140d;
+            background: var(--ng-lime);
+          }
+          hr { border-color: var(--ng-border-soft); }
+          .ng-hero {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+            gap: 18px;
+            align-items: stretch;
+            margin: 0 0 18px;
+          }
+          .ng-hero-main, .ng-demo-panel {
+            border: 1px solid var(--ng-border);
+            background: rgba(10, 11, 10, 0.86);
+            border-radius: 8px;
+            padding: 22px;
+          }
+          .ng-brand-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            margin-bottom: 22px;
+          }
+          .ng-mark {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--ng-text);
+            font-weight: 900;
+            letter-spacing: 0;
+          }
+          .ng-mark-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            display: grid;
+            place-items: center;
+            background: var(--ng-lime);
+            color: #11140d;
+            font-weight: 950;
+          }
+          .ng-pill {
+            border: 1px solid var(--ng-border);
+            border-radius: 999px;
+            color: var(--ng-muted);
+            padding: 7px 10px;
+            font-size: 12px;
+            background: #0d0e0d;
+          }
+          .ng-hero h1 {
+            margin: 0;
+            color: var(--ng-text);
+            font-size: 56px;
+            line-height: 0.95;
+            letter-spacing: 0;
+          }
+          .ng-hero-subtitle {
+            color: var(--ng-muted);
+            font-size: 18px;
+            margin: 12px 0 20px;
+            max-width: 620px;
+          }
+          .ng-command {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            border: 1px solid var(--ng-border);
+            background: #080908;
+            color: var(--ng-lime);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 13px;
+          }
+          .ng-demo-panel {
+            display: grid;
+            grid-template-rows: auto auto 1fr;
+            gap: 12px;
+          }
+          .ng-demo-tabs {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+          }
+          .ng-demo-tab {
+            border: 1px solid var(--ng-border);
+            border-radius: 8px;
+            padding: 7px 9px;
+            color: var(--ng-muted);
+            font-size: 12px;
+          }
+          .ng-demo-tab-active {
+            background: var(--ng-lime);
+            color: #10140d;
+            border-color: var(--ng-lime);
+            font-weight: 800;
+          }
+          .ng-code-window {
+            border: 1px solid var(--ng-border-soft);
+            border-radius: 8px;
+            background: #070807;
+            padding: 14px;
+            color: var(--ng-muted);
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 12px;
+            line-height: 1.55;
+          }
+          .ng-code-window b { color: var(--ng-lime); font-weight: 700; }
+          @media (max-width: 860px) {
+            .ng-hero { grid-template-columns: 1fr; }
+            .ng-hero h1 { font-size: 42px; }
+            .ng-brand-row { align-items: flex-start; flex-direction: column; }
+          }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_ag2_style_header() -> None:
+    st.markdown(
+        """
+        <section class="ng-hero">
+          <div class="ng-hero-main">
+            <div class="ng-brand-row">
+              <div class="ng-mark"><span class="ng-mark-icon">NG</span><span>NexusGraph</span></div>
+              <span class="ng-pill">GraphRAG playground</span>
+            </div>
+            <h1>nexusgraph-ai</h1>
+            <p class="ng-hero-subtitle">Multi-agent operational knowledge at play: ask graph questions, compare vector retrieval, and simulate incident response over a connected service catalog.</p>
+            <div class="ng-command"><span>$</span><span>streamlit run app/streamlit_app.py</span></div>
+          </div>
+          <aside class="ng-demo-panel">
+            <div class="ng-demo-tabs">
+              <span class="ng-demo-tab ng-demo-tab-active">Pattern</span>
+              <span class="ng-demo-tab">Links</span>
+              <span class="ng-demo-tab">Demo Code</span>
+            </div>
+            <div class="ng-pill">Graph -> runbook -> on-call -> answer</div>
+            <div class="ng-code-window">
+              <b>agent</b>.route("playback-service")<br/>
+              graph.match("HAS_ONCALL_SCHEDULE")<br/>
+              evidence.attach("runbook", "slo", "dashboard")<br/>
+              response.compare("GraphRAG", "Vector RAG")
+            </div>
+          </aside>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def env_flag(name: str, default: bool = False) -> bool:
@@ -178,29 +414,12 @@ def load_rag_runners() -> dict:
 
 @st.cache_resource(show_spinner=False)
 def ensure_runtime_data() -> dict:
-    from config import DEFAULT_CHROMA_PATH, DEFAULT_COLLECTION
-    from vector_ingest import ingest_documents
+    from seed_runtime_data import seed_all
 
-    status = {"vector_store": "existing", "neo4j_import": "skipped"}
-    vector_store_ready = False
-    if DEFAULT_CHROMA_PATH.exists():
-        try:
-            chromadb.PersistentClient(path=str(DEFAULT_CHROMA_PATH)).get_collection(DEFAULT_COLLECTION)
-            vector_store_ready = True
-        except Exception:
-            vector_store_ready = False
-
-    if not vector_store_ready:
-        ingest_documents()
-        status["vector_store"] = "created"
-
-    if env_flag("NEXUSGRAPH_AUTO_IMPORT_NEO4J"):
-        from import_to_neo4j import main as import_to_neo4j
-
-        import_to_neo4j()
-        status["neo4j_import"] = "completed"
-
-    return status
+    return seed_all(
+        seed_neo4j=env_flag("NEXUSGRAPH_AUTO_IMPORT_NEO4J"),
+        force_vector=env_flag("NEXUSGRAPH_FORCE_VECTOR_SEED", True),
+    )
 
 
 def load_csv(name: str) -> pd.DataFrame:
@@ -239,8 +458,8 @@ def render_graph_view(nodes_df: pd.DataFrame, edges_df: pd.DataFrame) -> None:
     net = Network(
         height='600px',
         width='100%',
-        bgcolor='#0e1117',
-        font_color='#fafafa',
+        bgcolor='#080908',
+        font_color='#f5f7ef',
         directed=True,
         cdn_resources='remote',
     )
@@ -263,15 +482,15 @@ def render_graph_view(nodes_df: pd.DataFrame, edges_df: pd.DataFrame) -> None:
             label=row['name'],
             title=tooltip,
             color=NODE_COLORS.get(row['label'], '#9aa0a6'),
-            font={'size': 12, 'color': '#fafafa'},
+            font={'size': 12, 'color': '#f5f7ef'},
         )
     for _, row in filtered_edges.iterrows():
         net.add_edge(
             row['source'], row['target'],
             label=row['relationship'],
             title=row['relationship'],
-            color='#5f6368',
-            font={'size': 9, 'color': '#aaaaaa', 'align': 'middle'},
+            color='#4b5548',
+            font={'size': 9, 'color': '#aab5a6', 'align': 'middle'},
         )
 
     components.html(net.generate_html(notebook=False), height=620, scrolling=True)
@@ -387,24 +606,24 @@ def render_incident_command_center() -> None:
         DESIGN_TOKENS_CSS + """
         <style>
           .ng-wrap {font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            background: linear-gradient(135deg, #07111f 0%, #0c1220 48%, #111827 100%);
-            border: 1px solid #263244; border-radius: 14px; padding: 18px; color: #e5e7eb; overflow: hidden;}
+            background: #080908;
+            border: 1px solid var(--border); border-radius: 8px; padding: 18px; color: var(--text-primary); overflow: hidden;}
           .ng-grid {display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px;}
           .ng-title {font-size: 24px; font-weight: 800; margin: 0 0 4px;}
-          .ng-sub {color: #9ca3af; font-size: 13px; margin-bottom: 16px;}
-          .ng-panel {background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px;}
-          .ng-pulse {display:inline-block; width:9px; height:9px; background:#fb923c; border-radius:50%;
-            box-shadow:0 0 0 rgba(251,146,60,.75); animation:pulse 1.4s infinite;}
+          .ng-sub {color: var(--text-muted); font-size: 13px; margin-bottom: 16px;}
+          .ng-panel {background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px;}
+          .ng-pulse {display:inline-block; width:9px; height:9px; background:var(--accent-lime); border-radius:50%;
+            box-shadow:0 0 0 rgba(185,255,74,.75); animation:pulse 1.4s infinite;}
           .ng-metrics {display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; margin-top: 14px;}
-          .ng-card {background: var(--bg-card); border:1px solid #1f2937; border-radius:10px; padding:10px; min-height:74px;}
-          .ng-label {font-size:11px; color: var(--text-muted); text-transform:uppercase; letter-spacing:.08em;}
+          .ng-card {background: var(--bg-card); border:1px solid #1d231b; border-radius:8px; padding:10px; min-height:74px;}
+          .ng-label {font-size:11px; color: var(--text-muted); text-transform:uppercase; letter-spacing:0;}
           .ng-value {font-size:16px; font-weight:700; color: var(--text-primary); margin-top:6px;}
           .ng-flow {display:grid; gap:10px; margin-top: 8px;}
-          .ng-step {display:flex; align-items:center; gap:10px; background:#0b1220; border:1px solid #1f2937; border-radius:10px; padding:9px;}
-          .ng-dot {width:24px; height:24px; border-radius:50%; display:grid; place-items:center; font-weight:800; font-size:12px;}
-          .ng-line {height:8px; background:#1f2937; border-radius:999px; overflow:hidden; margin-top:12px;}
-          .ng-fill {height:100%; width:72%; background:linear-gradient(90deg,#22c55e,#14b8a6,#38bdf8); animation:fill 2.6s ease-in-out infinite alternate;}
-          @keyframes pulse {0%{box-shadow:0 0 0 0 rgba(251,146,60,.75)} 70%{box-shadow:0 0 0 12px rgba(251,146,60,0)} 100%{box-shadow:0 0 0 0 rgba(251,146,60,0)}}
+          .ng-step {display:flex; align-items:center; gap:10px; background:#101110; border:1px solid #1d231b; border-radius:8px; padding:9px;}
+          .ng-dot {width:24px; height:24px; border-radius:8px; display:grid; place-items:center; font-weight:800; font-size:12px; color:#10140d;}
+          .ng-line {height:8px; background:#1d231b; border-radius:999px; overflow:hidden; margin-top:12px;}
+          .ng-fill {height:100%; width:72%; background:linear-gradient(90deg,var(--accent-lime),var(--accent-green),var(--accent-cyan)); animation:fill 2.6s ease-in-out infinite alternate;}
+          @keyframes pulse {0%{box-shadow:0 0 0 0 rgba(185,255,74,.75)} 70%{box-shadow:0 0 0 12px rgba(185,255,74,0)} 100%{box-shadow:0 0 0 0 rgba(185,255,74,0)}}
           @keyframes fill {from{width:42%} to{width:92%}}
           @media (max-width: 780px) {.ng-grid,.ng-metrics{grid-template-columns:1fr}.ng-title{font-size:20px}}
         </style>
@@ -424,10 +643,10 @@ def render_incident_command_center() -> None:
             <div class="ng-panel">
               <div class="ng-label">Behind the scenes</div>
               <div class="ng-flow">
-                <div class="ng-step"><div class="ng-dot" style="background:#2563eb">1</div><div>Resolve service and intent</div></div>
-                <div class="ng-step"><div class="ng-dot" style="background:#0f766e">2</div><div>Select a graph query pattern</div></div>
-                <div class="ng-step"><div class="ng-dot" style="background:#7c3aed">3</div><div>Traverse graph relationships</div></div>
-                <div class="ng-step"><div class="ng-dot" style="background:#15803d">4</div><div>Answer with graph evidence and gaps</div></div>
+                <div class="ng-step"><div class="ng-dot" style="background:#ffcf5a">1</div><div>Resolve service and intent</div></div>
+                <div class="ng-step"><div class="ng-dot" style="background:#b9ff4a">2</div><div>Select a graph query pattern</div></div>
+                <div class="ng-step"><div class="ng-dot" style="background:#6be7ff">3</div><div>Traverse graph relationships</div></div>
+                <div class="ng-step"><div class="ng-dot" style="background:#3ce37a">4</div><div>Answer with graph evidence and gaps</div></div>
               </div>
             </div>
           </div>
@@ -437,7 +656,7 @@ def render_incident_command_center() -> None:
     )
 
 
-def render_slack_channel(incident: dict, messages: list[dict]) -> None:
+def render_slack_channel(incident: dict, messages: list[dict], key_suffix: str | None = None) -> None:
     import base64
     logo_path = ROOT / "app" / "assets" / "slack-logo.svg"
     logo_tag = ""
@@ -446,46 +665,422 @@ def render_slack_channel(incident: dict, messages: list[dict]) -> None:
         logo_tag = f'<img src="data:image/svg+xml;base64,{b64}" width="22" style="vertical-align:middle"/>'
 
     header_cols = st.columns([3, 2])
+    channel_key = re.sub(r"[^a-zA-Z0-9_]+", "_", key_suffix or incident.get("id", "incident"))
     with header_cols[0]:
         st.markdown(f"{logo_tag} **{channel_name(incident)}**", unsafe_allow_html=True)
     with header_cols[1]:
-        search = st.text_input("Search messages", key="slack_search",
+        search = st.text_input("Search messages", key=f"slack_search_{channel_key}",
                                placeholder="Search messages (text, author, phase)")
 
-    visible = filter_messages(messages, search)
+    visible = filter_messages(unique_slack_messages(messages), search)
     with st.container(height=420):  # fixed-height scrollable feed
         for m in visible:
             st.markdown(
                 f"{m.get('avatar','💬')} **{m.get('author','')}** "
                 f"`{m.get('phase','')}` · {m.get('ts','')}  \n{m.get('text','')}"
             )
-    st.caption(f"{len(visible)} / {len(messages)} messages")
+    st.caption(f"{len(visible)} / {len(unique_slack_messages(messages))} messages")
 
 
-def render_slack_feed(incident: dict, messages: list[dict]) -> None:
-    """Header + scrollable feed only — no input widgets, safe to call repeatedly
-    during streaming playback (avoids duplicate widget keys)."""
-    import base64
-    logo_path = ROOT / "app" / "assets" / "slack-logo.svg"
-    logo_tag = ""
-    if logo_path.exists():
-        b64 = base64.b64encode(logo_path.read_bytes()).decode("ascii")
-        logo_tag = f'<img src="data:image/svg+xml;base64,{b64}" width="22" style="vertical-align:middle"/>'
-    st.markdown(f"{logo_tag} **{channel_name(incident)}**", unsafe_allow_html=True)
-    with st.container(height=420):  # fixed-height scrollable feed
-        for m in messages:
-            st.markdown(
-                f"{m.get('avatar','💬')} **{m.get('author','')}** "
-                f"`{m.get('phase','')}` · {m.get('ts','')}  \n{m.get('text','')}"
+def slack_message_key(message: dict) -> tuple[str, str, str, str]:
+    return (
+        str(message.get("phase", "")),
+        str(message.get("author", "")),
+        str(message.get("role", "")),
+        str(message.get("text", "")),
+    )
+
+
+def unique_slack_messages(messages: list[dict]) -> list[dict]:
+    seen = set()
+    unique = []
+    for message in messages:
+        key = slack_message_key(message)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(message)
+    return unique
+
+
+def infer_incident_service(text: str) -> str:
+    lowered = text.lower()
+    if "billing" in lowered or "invoice" in lowered or "payment" in lowered:
+        return "billing-service"
+    if "identity" in lowered or "auth" in lowered or "login" in lowered:
+        return "identity-service"
+    if "recommendation" in lowered or "ranking" in lowered:
+        return "recommendation-service"
+    if "observability" in lowered or "otel" in lowered or "telemetry" in lowered:
+        return "observability-service"
+    return "playback-service"
+
+
+def agent_name_for_message(message: dict) -> str:
+    author = message.get("author", "")
+    phase = message.get("phase", "")
+    if "Observability" in author:
+        return "Observability Agent"
+    if "FireHydrant" in author:
+        return "FireHydrant Automation"
+    if "Commander" in author or phase == "resolve":
+        return "Incident Commander Agent"
+    if "Triage" in author or "Kubernetes" in author or phase == "triage":
+        return "Triage Agent"
+    if "Remediation" in author or "Mitigation" in author or phase == "mitigate":
+        return "Remediation Agent"
+    if "Zoom" in author:
+        return "Zoom Agent"
+    if "Scribe" in author or "ActionItem" in author:
+        return "Scribe Agent"
+    if "Jira" in author:
+        return "Jira Agent"
+    if phase == "postmortem":
+        return "Scribe Agent"
+    if phase == "diagnose":
+        return "Zoom Agent"
+    return ""
+
+
+def render_agent_flowchart(messages: list[dict], final: dict | None = None,
+                           active_phase: str = "", active_agent: str = "",
+                           incident: dict | None = None) -> None:
+    findings = (final or {}).get("findings") or {}
+    unique_messages = unique_slack_messages(messages)
+    final_messages = unique_slack_messages((final or {}).get("slack_messages") or [])
+    workflow_events = final_messages or unique_messages
+    latest_message = unique_messages[-1] if unique_messages else {}
+    active_action = latest_message.get("text", "Waiting for the first backend agent event.")
+    incident_context = incident or (final or {}).get("incident") or {}
+    service_label = ", ".join(incident_context.get("affected_services") or []) or "service pending"
+    phase_labels = {
+        "declare": "Declare",
+        "triage": "Triage",
+        "diagnose": "Diagnose",
+        "mitigate": "Mitigate",
+        "resolve": "Resolve",
+        "postmortem": "Review",
+    }
+    fallback_events = [
+        {"author": "Observability Agent", "phase": "declare", "text": "Alert waiting for backend trigger."},
+        {"author": "Incident Commander Agent", "phase": "declare", "text": "Incident declaration pending."},
+        {"author": "Severity Classifier", "phase": "declare", "text": "Severity validation pending."},
+        {"author": "TriageAgent", "phase": "triage", "text": "Owner, on-call, and impact lookup pending."},
+        {"author": "KubernetesAgent", "phase": "triage", "text": "Cluster resource context pending."},
+        {"author": "FireHydrant Runbook Automation", "phase": "triage", "text": "Incident management runbook pending."},
+        {"author": "Remediation Agent", "phase": "mitigate", "text": "Mitigation plan pending."},
+        {"author": "Scribe Agent", "phase": "postmortem", "text": "Status update and timeline pending."},
+    ]
+    if not workflow_events:
+        workflow_events = fallback_events
+
+    nodes = []
+    connectors = []
+    node_width = 150
+    node_gap_x = 26
+    node_gap_y = 82
+    nodes_per_row = 6
+    origin_x = 24
+    origin_y = 28
+    visible_count = len(workflow_events)
+    for index, event in enumerate(workflow_events):
+        name = str(event.get("author") or event.get("actor") or "Incident Agent")
+        phase = str(event.get("phase") or active_phase or "")
+        detail = phase_labels.get(phase, phase.title() or "Action")
+        text = str(event.get("text") or event.get("message") or "")
+        is_latest_event = not final and bool(unique_messages) and slack_message_key(event) == slack_message_key(unique_messages[-1])
+        if is_latest_event or (not unique_messages and not final and (active_agent == name or active_phase == phase)):
+            state = "working"
+        elif workflow_events is fallback_events:
+            state = "idle"
+        elif final or index < visible_count - 1:
+            state = "done"
+        else:
+            state = "idle"
+        if "Scribe" in name and findings.get("status_update", {}).get("requires_human_approval"):
+            state = "waiting for HITL"
+        css_state = re.sub(r"[^a-z]+", "-", state.lower()).strip("-")
+        row = index // nodes_per_row
+        col = index % nodes_per_row
+        x = origin_x + col * (node_width + node_gap_x)
+        y = origin_y + row * node_gap_y
+        connector_state = "done" if state in {"done", "working", "waiting for HITL"} else "idle"
+        if index < len(workflow_events) - 1:
+            next_row = (index + 1) // nodes_per_row
+            next_col = (index + 1) % nodes_per_row
+            next_x = origin_x + next_col * (node_width + node_gap_x)
+            next_y = origin_y + next_row * node_gap_y
+            if row == next_row:
+                connector = f'<line class="workflow-edge edge-{connector_state}" x1="{x + node_width}" y1="{y + 31}" x2="{next_x}" y2="{next_y + 31}" />'
+            else:
+                mid_y = y + 68
+                connector = (
+                    f'<path class="workflow-edge edge-{connector_state}" '
+                    f'd="M {x + node_width / 2} {y + 62} V {mid_y} H {next_x + node_width / 2} V {next_y}" />'
+                )
+            connectors.append(
+                f"""
+                {connector}
+                """
             )
-    st.caption(f"{len(messages)} messages")
+        nodes.append(
+            f"""
+            <div class="workflow-node agent-state-{css_state}" style="left:{x}px;top:{y}px">
+              <div class="node-header">
+                <div class="agent-index">{index + 1}</div>
+                <div class="agent-state">{html.escape(state)}</div>
+              </div>
+              <div class="agent-name" title="{html.escape(name)}">{html.escape(name)}</div>
+              <div class="agent-detail">{html.escape(detail)} · {html.escape(service_label)}</div>
+              <div class="agent-action" title="{html.escape(text)}">{html.escape(text)}</div>
+            </div>
+            """
+        )
+
+    st.markdown("**Agent operations flow**")
+    row_count = (len(workflow_events) + nodes_per_row - 1) // nodes_per_row
+    canvas_width = 48 + nodes_per_row * node_width + (nodes_per_row - 1) * node_gap_x
+    canvas_height = origin_y + row_count * 64 + (row_count - 1) * 18
+    components.html(
+        f"""
+        <style>
+          body {{ margin:0; background:#090b09; overflow:auto; }}
+          .workflow-shell {{
+            max-width:100%;
+            overflow:auto;
+            border:1px solid #24301f;
+            border-radius:8px;
+            background:
+              linear-gradient(rgba(185,255,74,.045) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(185,255,74,.045) 1px, transparent 1px),
+              #090b09;
+            background-size:22px 22px;
+            padding:10px;
+          }}
+          .agent-flow-compact {{
+            position:relative;
+            width:{canvas_width}px;
+            height:{canvas_height}px;
+            max-width:100%;
+          }}
+          .workflow-svg {{
+            position:absolute;
+            inset:0;
+            width:{canvas_width}px;
+            height:{canvas_height}px;
+            pointer-events:none;
+          }}
+          .workflow-edge {{
+            stroke:#596052;
+            stroke-width:2;
+            marker-end:url(#arrow);
+          }}
+          .edge-done {{stroke:#3ce37a}}
+          .workflow-node {{
+            position:absolute;
+            width:{node_width}px;
+            height:62px;
+            border:1px solid #2c332a;
+            border-radius:8px;
+            padding:7px;
+            background:#101110;
+            box-sizing:border-box;
+          }}
+          .node-header {{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px}}
+          .agent-index {{
+            width:20px;
+            height:20px;
+            border-radius:6px;
+            background:#b9ff4a;
+            color:#10140d;
+            display:grid;
+            place-items:center;
+            font-weight:900;
+            font-size:11px;
+          }}
+          .agent-name {{font-weight:800;color:#f5f7ef;font-size:12px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+          .agent-state {{font-size:10px;color:#10140d;background:#9da69b;border-radius:999px;padding:2px 7px;white-space:nowrap}}
+          .agent-detail {{font-size:10px;line-height:1.15;color:#b9ff4a;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+          .agent-action {{font-size:10px;line-height:1.15;color:#9da69b;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+          .agent-state-working {{
+            border-color:#b9ff4a;
+            box-shadow:0 0 0 0 rgba(185,255,74,.55);
+            animation:agentPulse 1.6s ease-in-out infinite;
+          }}
+          .agent-state-working .agent-state {{background:#b9ff4a}}
+          .agent-state-done .agent-state {{background:#3ce37a}}
+          .agent-state-done {{border-color:#315b38}}
+          .agent-state-waiting-for-hitl {{border-color:#ffcf5a}}
+          .agent-state-waiting-for-hitl .agent-state {{background:#ffcf5a}}
+          .current-action {{
+            margin:10px 0 0;
+            border:1px solid #32412a;
+            border-radius:8px;
+            background:#111511;
+            padding:9px 10px;
+          }}
+          .current-label {{font-size:11px;text-transform:uppercase;color:#b9ff4a;font-weight:900;letter-spacing:.04em}}
+          .current-text {{font-size:13px;color:#f5f7ef;line-height:1.35;margin-top:4px}}
+          @keyframes agentPulse {{
+            0% {{box-shadow:0 0 0 0 rgba(185,255,74,.55)}}
+            70% {{box-shadow:0 0 0 10px rgba(185,255,74,0)}}
+            100% {{box-shadow:0 0 0 0 rgba(185,255,74,0)}}
+          }}
+        </style>
+        <div class="workflow-shell">
+          <div class="agent-flow-compact">
+            <svg class="workflow-svg" viewBox="0 0 {canvas_width} {canvas_height}" preserveAspectRatio="none">
+              <defs>
+                <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto" markerUnits="strokeWidth">
+                  <path d="M0,0 L8,4 L0,8 z" fill="#b9ff4a"></path>
+                </marker>
+              </defs>
+              {''.join(connectors)}
+            </svg>
+            {''.join(nodes)}
+          </div>
+        </div>
+        <div class="current-action">
+          <div class="current-label">Current backend action</div>
+          <div class="current-text">{html.escape(active_action)}</div>
+        </div>
+        """,
+        height=min(430, max(210, canvas_height + 95)),
+    )
+
+
+def render_jira_metrics() -> None:
+    metrics = query_incident_metrics()
+    st.markdown("**Jira incident metrics**")
+    cols = st.columns(4)
+    cols[0].metric("Saved incidents", metrics["total_incidents"])
+    cols[1].metric("Open incidents", metrics["open_incidents"])
+    cols[2].metric("Mean TTM", f"{metrics['mean_time_to_mitigate_minutes']}m")
+    sev_count = sum(metrics["by_severity"].values())
+    cols[3].metric("Severity buckets", sev_count)
+    if metrics["issues"]:
+        st.dataframe(pd.DataFrame(metrics["issues"]), width="stretch", hide_index=True)
+    else:
+        st.info("No simulated Jira incidents saved yet.")
+
+
+def render_backend_agent_trace(final: dict) -> None:
+    findings = final.get("findings") or {}
+    provenance = final.get("_backend_provenance") or {}
+    rows = []
+    timeline = final["timeline"]
+    for index, event in enumerate(timeline):
+        actor = event.get("actor", "")
+        handoff = timeline[index + 1].get("actor", "END") if index + 1 < len(timeline) else "END"
+        phase = event.get("phase", "")
+        tool_or_data = {
+            "declare": "alerting.evaluate_alert / incident input",
+            "triage": "GraphContext / Kubernetes resources / automation rules",
+            "diagnose": "runbooks / static logs / observability evidence / Zoom bridge",
+            "mitigate": "service runbook / escalation policy",
+            "resolve": "SLO recovery check / Kubernetes runtime",
+            "postmortem": "timeline / approvals / Jira store",
+        }.get(phase, "incident state")
+        rows.append(
+            {
+                "Step": index + 1,
+                "Run ID": provenance.get("run_id", ""),
+                "Thread ID": provenance.get("thread_id", ""),
+                "Agent": actor,
+                "Phase": phase,
+                "Kind": event.get("kind", ""),
+                "Executor": provenance.get("executor", "LangGraph StateGraph"),
+                "Backend input": final["incident"].get("signal", ""),
+                "Tool or data accessed": tool_or_data,
+                "Output": event.get("text", ""),
+                "Handoff to": handoff,
+            }
+        )
+
+    st.markdown("**Backend agent trace**")
+    st.caption("Rendered from LangGraph incident state, not static UI state.")
+    st.caption(
+        f"Provenance: {provenance.get('executor', 'LangGraph StateGraph')} / "
+        f"thread `{provenance.get('thread_id', 'unknown')}` / "
+        f"run `{provenance.get('run_id', 'unknown')}` / "
+        f"{provenance.get('backend_compute_seconds', 0)} backend compute seconds / "
+        f"{provenance.get('approval_mode', 'unknown approval mode')}."
+    )
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+
+    produced_findings = {
+        key: value
+        for key, value in findings.items()
+        if value not in (None, [], {}, "")
+    }
+    observability_events = min(
+        len(final.get("observability") or []),
+        len(final.get("timeline") or []),
+    )
+    artifact_counts = {
+        "timeline_events": len(final.get("timeline") or []),
+        "slack_messages": len(final.get("slack_messages") or []),
+        "produced_findings": sorted(produced_findings.keys()),
+        "logs": len(final.get("logs") or []),
+        "observability_events": observability_events,
+        "observability_note": "Deduped evidence count; capped to timeline event count for proof summary.",
+        "jira_issue": (findings.get("jira_issue") or {}).get("key"),
+        "backend_provenance": provenance,
+    }
+    st.json(artifact_counts)
+    st.download_button(
+        "Download agent run JSON",
+        data=json.dumps(final, indent=2, default=str),
+        file_name=f"{final['incident']['id'].replace(':', '-')}-agent-run.json",
+        mime="application/json",
+        key=f"download_agent_run_{final['incident']['id']}",
+    )
+
+
+def render_streaming_backend_agent_trace(messages: list[dict], thread_id: str) -> None:
+    rows = []
+    for index, message in enumerate(unique_slack_messages(messages)):
+        rows.append(
+            {
+                "Step": index + 1,
+                "Thread ID": thread_id,
+                "Agent": message.get("author", ""),
+                "Phase": message.get("phase", ""),
+                "Kind": message.get("role", ""),
+                "Output": message.get("text", ""),
+                "Trace source": "stream_incident live event",
+            }
+        )
+    st.markdown("**Backend agent trace**")
+    st.caption("Live stream from LangGraph incident state. Final run JSON appears when the workflow completes.")
+    if rows:
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+    else:
+        st.info("Trace will populate as backend agents emit events.")
 
 
 def render_incident_response_simulation() -> None:
     st.caption("Hierarchical multi-agent incident simulation grounded in the knowledge graph.")
+    st.markdown(
+        "**Lifecycle:** identify -> log -> categorize -> prioritize -> respond -> recover -> close -> review."
+    )
     scenarios = load_scenarios()
     mode = st.radio("Input mode", ["Scripted scenario", "Operator (copilot)"], horizontal=True,
                     key="inc_mode")
+    failure_modes = available_failure_modes() or ["oom_kill", "pod_restart", "disk_iops", "cpu_throttle"]
+    sim_cols = st.columns([1, 1])
+    with sim_cols[0]:
+        simulate_failure = st.toggle("Enable Kubernetes failure simulation", value=False,
+                                     key="inc_sim_k8s")
+    with sim_cols[1]:
+        failure_mode = st.selectbox("Failure mode", failure_modes, key="inc_failure_mode")
+    demo_pacing = st.toggle(
+        "Concept demo pacing",
+        value=True,
+        key="inc_demo_pacing",
+        help="Adds synthetic 10 second delays between agent updates so viewers can follow the flow.",
+    )
+    demo_delay_seconds = 10 if demo_pacing else 0
 
     if mode == "Scripted scenario":
         labels = [f"{s['title']} ({s['severity']})" for s in scenarios]
@@ -495,17 +1090,23 @@ def render_incident_response_simulation() -> None:
         state = new_incident(chosen["incident_id"], chosen["title"], chosen["severity"],
                              chosen["affected_services"], chosen["signal"])
         state["incident"]["recovered"] = chosen.get("recovered", True)
+        state["incident"]["scenario_id"] = chosen.get("id")
+        state["incident"]["failure_mode"] = chosen.get("failure_mode")
     else:
         signal = st.text_area("Describe the incident", key="inc_signal",
                               placeholder="e.g. Billing service returning 500s after deploy")
         severity = st.selectbox("Severity", ["SEV1", "SEV2", "SEV3"], key="inc_sev")
         service = st.text_input("Primary affected service", key="inc_service",
                                 placeholder="Billing Service")
+        inferred_service = service or infer_incident_service(f"{signal} {failure_mode}")
         state = new_incident("incident:adhoc", signal[:60] or "Ad-hoc Incident",
-                             severity, [service] if service else [], signal)
+                             severity, [inferred_service], signal)
         state["incident"]["recovered"] = True
+        state["incident"]["scenario_id"] = "adhoc"
 
-    feed = st.empty()
+    state["incident"]["simulate_failure"] = simulate_failure
+    if simulate_failure:
+        state["incident"]["failure_mode"] = failure_mode
 
     if st.button("Run incident simulation", key="inc_run"):
         use_real_llm = env_flag("INCIDENT_USE_LLM", False)
@@ -514,23 +1115,241 @@ def render_incident_response_simulation() -> None:
             from src.hybrid_rag import get_llm
             llm = get_llm()
         ctx = GraphContext(use_neo4j=env_flag("INCIDENT_USE_NEO4J", False))
+        flow = st.empty()
+        trace = st.empty()
+        feed = st.empty()
         collected: list[dict] = []
+        final_holder: dict[str, dict] = {}
+        stream_thread_id = f"ui-{state['incident']['id']}"
+        with flow.container():
+            render_agent_flowchart(collected, incident=state["incident"])
+        with trace.container():
+            with st.expander("Backend agent trace", expanded=True):
+                render_streaming_backend_agent_trace(collected, stream_thread_id)
         for phase, messages in stream_incident(state, llm=llm, ctx=ctx,
                                                 use_vector=env_flag("INCIDENT_USE_VECTOR", False),
                                                 approve=lambda phase: True,
-                                                thread_id=f"ui-{state['incident']['id']}"):
-            collected.extend(messages)
-            with feed.container():
-                render_slack_feed(state["incident"], collected)  # no widgets in the loop
-            time.sleep(0.6)  # timed streaming playback pacing
-        st.session_state["inc_result"] = {"incident": state["incident"], "messages": collected}
-        st.success("Incident resolved — postmortem generated.")
+                                                thread_id=stream_thread_id,
+                                                on_final=lambda final: final_holder.update({"state": final})):
+            for message in messages:
+                if slack_message_key(message) in {slack_message_key(item) for item in collected}:
+                    continue
+                collected.append(message)
+                active_agent = agent_name_for_message(message)
+                with flow.container():
+                    render_agent_flowchart(
+                        collected,
+                        active_phase=phase,
+                        active_agent=active_agent,
+                        incident=state["incident"],
+                    )
+                with feed.container():
+                    render_slack_channel(
+                        state["incident"],
+                        collected,
+                        key_suffix=f"{state['incident']['id']}_{phase}_{len(collected)}",
+                    )
+                with trace.container():
+                    with st.expander("Backend agent trace", expanded=True):
+                        render_streaming_backend_agent_trace(collected, stream_thread_id)
+                time.sleep(demo_delay_seconds or 0.6)  # timed streaming playback pacing
+        final = final_holder.get("state")
+        if not final:
+            st.error("Incident stream ended before LangGraph returned final state.")
+            return
+        with flow.container():
+            render_agent_flowchart(collected, final=final, incident=final.get("incident"))
+        with trace.container():
+            with st.expander("Backend agent trace", expanded=True):
+                render_backend_agent_trace(final)
 
-    # Persistent, searchable render — exactly one search widget per run.
-    result = st.session_state.get("inc_result")
-    if result:
-        with feed.container():
-            render_slack_channel(result["incident"], result["messages"])
+        st.success("Incident resolved — postmortem generated.")
+        automation = (final.get("findings") or {}).get("automation") or {}
+        with st.expander("Runbook automation", expanded=True):
+            st.caption("FireHydrant-style simulation: channel, ticket, roles, task timeline, stakeholder update, and retro summary.")
+            a_cols = st.columns(3)
+            a_cols[0].metric("Incident channel", automation.get("channel", "Not created"))
+            a_cols[1].metric("Tracking ticket", automation.get("ticket", "Not created"))
+            a_cols[2].metric("Automation", automation.get("automation_id", "Not matched"))
+            st.markdown("**Status update draft**")
+            st.info(automation.get("status_update", "No status update drafted."))
+            role_rows = [
+                {"Role": role, "Assignment": assignment}
+                for role, assignment in automation.get("role_assignments", {}).items()
+            ]
+            if role_rows:
+                st.dataframe(pd.DataFrame(role_rows), width="stretch", hide_index=True)
+            timeline = automation.get("timeline", [])
+            if timeline:
+                st.dataframe(pd.DataFrame(timeline), width="stretch", hide_index=True)
+
+        status_update = (final.get("findings") or {}).get("status_update") or {}
+        with st.expander("Human approval required", expanded=True):
+            st.caption("Publish to Slack and status page only after operator approval.")
+            st.markdown("**Publish to Slack and status page**")
+            st.info(status_update.get("text", "No status update drafted."))
+            decision_key = f"status_publish_decision_{final['incident']['id']}"
+            button_cols = st.columns([1, 1, 4])
+            with button_cols[0]:
+                if st.button("Approve publish", key=f"approve_{decision_key}"):
+                    st.session_state[decision_key] = "approved"
+            with button_cols[1]:
+                if st.button("Reject publish", key=f"reject_{decision_key}"):
+                    st.session_state[decision_key] = "rejected"
+
+            decision = st.session_state.get(decision_key)
+            if decision == "approved":
+                status_updates_key = "streamflix_status_updates"
+                approved_update = {
+                    "incident_id": final["incident"]["id"],
+                    "timestamp": "now",
+                    "status": "Monitoring" if status_update else "Update",
+                    "message": status_update.get("text", "No status update drafted."),
+                    "source": "Scribe Agent HITL approval",
+                }
+                existing_updates = st.session_state.setdefault(status_updates_key, [])
+                if approved_update not in existing_updates:
+                    existing_updates.insert(0, approved_update)
+                st.success("Approved. Simulated update posted to Slack and Streamflix Status.")
+                st.markdown("**Slack post**")
+                st.write(status_update.get("text", "No status update drafted."))
+                st.markdown("**Status page update**")
+                st.write(status_update.get("text", "No status update drafted."))
+            elif decision == "rejected":
+                st.warning("Rejected. Status update remains unpublished; revise the draft before publishing.")
+            else:
+                st.json((final.get("approvals") or {}).get("status_update", {}))
+
+        with st.expander("Static production logs", expanded=False):
+            logs = final.get("logs") or []
+            if logs:
+                st.dataframe(pd.DataFrame(logs), width="stretch", hide_index=True)
+            else:
+                st.info("No static logs matched this scenario.")
+
+        with st.expander("Observability evidence", expanded=False):
+            st.caption("Recommended external logging: OpenSearch. Recommended observability: Grafana Cloud with Prometheus, Loki, and Tempo.")
+            evidence = final.get("observability") or []
+            if evidence:
+                st.dataframe(pd.DataFrame(evidence), width="stretch", hide_index=True)
+            else:
+                st.info("No observability evidence selected.")
+
+        with st.expander("Jira incident metrics", expanded=False):
+            render_jira_metrics()
+
+
+def render_streamflix_status_page() -> None:
+    summary = build_status_summary()
+    history = incident_history()
+    active_incidents = [item for item in history if item["status"] != "Resolved"]
+    session_updates = st.session_state.get("streamflix_status_updates", [])
+    updates = list(session_updates) + incident_updates()
+
+    st.subheader(summary["brand"])
+    st.caption(summary["headline"])
+    st.button("Subscribe to updates", key="status_subscribe", disabled=True)
+
+    if active_incidents:
+        current = active_incidents[0]
+        st.warning("We're currently experiencing issues")
+        st.markdown(f"**Current incident:** {current['title']}")
+        st.caption(
+            f"{current['status']} · Affects {', '.join(current['affected'])} · "
+            f"Duration {current['duration']}"
+        )
+        current_updates = [
+            update for update in updates
+            if update.get("incident_id") in {current["id"], current.get("source_incident_id")}
+        ] or updates[:4]
+        st.markdown("**Incident updates**")
+        for update in current_updates[:5]:
+            st.markdown(
+                f"""
+                <div style="border-left:3px solid #b9ff4a;padding:8px 0 8px 12px;margin:8px 0">
+                  <div style="font-weight:800;color:#f5f7ef">{html.escape(update.get('status', 'Update'))}</div>
+                  <div style="font-size:12px;color:#9da69b">{html.escape(update.get('timestamp', ''))}</div>
+                  <div style="color:#d9ded2;margin-top:4px">{html.escape(update.get('message', ''))}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+    else:
+        st.success("All Streamflix production systems are operational.")
+
+    st.markdown("**System status**")
+    group_cols = st.columns(4)
+    for index, group in enumerate(summary["groups"]):
+        with group_cols[index % len(group_cols)]:
+            st.metric(group["name"], "Operational", group["uptime"])
+            st.caption("Components: " + ", ".join(group["components"]))
+
+    history_rows = [
+        {
+            "Incident": item["title"],
+            "Status": item["status"],
+            "Affected components": ", ".join(item["affected"]),
+            "Duration": item["duration"],
+        }
+        for item in history
+    ]
+    st.markdown("**Incident history**")
+    st.dataframe(pd.DataFrame(history_rows), width="stretch", hide_index=True)
+
+
+def render_project_status_agent() -> None:
+    st.subheader("Project Status Agent")
+    st.caption("Weekly multi-agent status synthesis over synthetic Jira, GitHub, dependency, and decision snapshots.")
+
+    project = st.selectbox(
+        "Project",
+        [
+            "Playback Resiliency 2026",
+            "Observability Unification",
+            "Billing Platform Modernization",
+        ],
+        key="project_status_project",
+    )
+
+    if st.button("Generate weekly report", key="project_status_report"):
+        report = run_project_status(project)
+        st.markdown("**Weekly report**")
+
+        metric_cols = st.columns(4)
+        metric_cols[0].metric("Status", report["overall_status"])
+        metric_cols[1].metric("Risks", len(report["risks"]))
+        metric_cols[2].metric("Blockers", len(report["blockers"]))
+        metric_cols[3].metric("Dependencies", len(report["dependencies"]))
+
+        st.info(report["executive_summary"])
+        st.caption(f"Owner: {report['owner']} | Reporting week: {report['week']}")
+
+        tab_risks, tab_blockers, tab_deps, tab_actions = st.tabs(
+            ["Risks", "Blockers", "Dependencies", "Next actions"]
+        )
+        with tab_risks:
+            if report["risks"]:
+                st.dataframe(pd.DataFrame(report["risks"]), width="stretch", hide_index=True)
+            else:
+                st.success("No active risks.")
+        with tab_blockers:
+            if report["blockers"]:
+                st.dataframe(pd.DataFrame(report["blockers"]), width="stretch", hide_index=True)
+            else:
+                st.success("No active blockers.")
+        with tab_deps:
+            if report["dependencies"]:
+                st.dataframe(pd.DataFrame(report["dependencies"]), width="stretch", hide_index=True)
+            else:
+                st.success("No dependency follow-ups.")
+        with tab_actions:
+            for action in report["next_actions"]:
+                st.write(f"- {action}")
+
+        insights = report.get("insights", [])
+        if insights:
+            with st.expander("Agent insights", expanded=False):
+                st.json(insights)
 
 
 def render_rag_mode_explainer() -> None:
@@ -585,12 +1404,12 @@ def render_tech_stack() -> None:
         with stack_cols[index % len(stack_cols)]:
             st.markdown(
                 f"""
-                <div style="border:1px solid #263244;border-radius:8px;padding:12px;background:#0f172a;min-height:112px;margin-bottom:10px">
+                <div style="border:1px solid #2c332a;border-radius:8px;padding:12px;background:#101110;min-height:112px;margin-bottom:10px">
                   <div style="display:flex;align-items:center;gap:10px">
-                    <div style="width:34px;height:34px;border-radius:8px;background:#1d4ed8;color:#dbeafe;display:grid;place-items:center;font-size:12px;font-weight:900">{html.escape(icon)}</div>
-                    <div style="font-weight:800;color:#f8fafc">{html.escape(name)}</div>
+                    <div style="width:34px;height:34px;border-radius:8px;background:#b9ff4a;color:#10140d;display:grid;place-items:center;font-size:12px;font-weight:900">{html.escape(icon)}</div>
+                    <div style="font-weight:800;color:#f5f7ef">{html.escape(name)}</div>
                   </div>
-                  <div style="font-size:13px;color:#94a3b8;margin-top:6px">{html.escape(description)}</div>
+                  <div style="font-size:13px;color:#9da69b;margin-top:6px">{html.escape(description)}</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -619,12 +1438,12 @@ def render_store_overview(nodes_count: int, relationships_count: int, query_coun
         DESIGN_TOKENS_CSS + f"""
         <style>
           .store-grid {{font-family: ui-sans-serif, system-ui; display:grid; grid-template-columns:repeat(3,1fr); gap:14px;}}
-          .store-card {{border:1px solid var(--border); border-radius:12px; padding:16px; color: var(--text-primary); display:flex; gap:14px; align-items:center; min-height:112px; position:relative; overflow:hidden;}}
-          .store-card:after {{content:""; position:absolute; inset:auto -20% 0 -20%; height:2px; background:linear-gradient(90deg,transparent,#fff,transparent); animation:sweep 3s linear infinite; opacity:.35;}}
-          .store-icon {{width:44px; height:44px; border-radius:10px; background:rgba(255,255,255,.12); display:grid; place-items:center; font-weight:900; letter-spacing:.04em;}}
-          .store-title {{font-size:15px; font-weight:800; color:#f8fafc;}}
+          .store-card {{border:1px solid var(--border); border-radius:8px; padding:16px; color: var(--text-primary); display:flex; gap:14px; align-items:center; min-height:112px; position:relative; overflow:hidden;}}
+          .store-card:after {{content:""; position:absolute; inset:auto -20% 0 -20%; height:2px; background:linear-gradient(90deg,transparent,var(--accent-lime),transparent); animation:sweep 3s linear infinite; opacity:.45;}}
+          .store-icon {{width:44px; height:44px; border-radius:8px; background:var(--accent-lime); color:#10140d; display:grid; place-items:center; font-weight:900; letter-spacing:0;}}
+          .store-title {{font-size:15px; font-weight:800; color:#f5f7ef;}}
           .store-primary {{font-size:26px; font-weight:900; margin-top:4px;}}
-          .store-secondary {{font-size:12px; color:#cbd5e1; margin-top:2px;}}
+          .store-secondary {{font-size:12px; color:#9da69b; margin-top:2px;}}
           @keyframes sweep {{from{{transform:translateX(-40%)}} to{{transform:translateX(40%)}}}}
           @media (max-width: 860px) {{.store-grid{{grid-template-columns:1fr}}}}
         </style>
@@ -662,11 +1481,11 @@ def render_trace_evidence(trace: dict | None) -> None:
         DESIGN_TOKENS_CSS + f"""
         <style>
           .ev-flow {{font-family: ui-sans-serif, system-ui; display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;}}
-          .ev-card {{border-radius:10px; padding:12px; min-height:86px; color:#e5e7eb; border:1px solid var(--border); position:relative; overflow:hidden;}}
-          .ev-card:after {{content:""; position:absolute; inset:auto -30% 0 -30%; height:2px; background:linear-gradient(90deg,transparent,#fff,transparent); animation:sweep 2.8s linear infinite; opacity:.45;}}
+          .ev-card {{border-radius:8px; padding:12px; min-height:86px; color:#f5f7ef; border:1px solid var(--border); position:relative; overflow:hidden;}}
+          .ev-card:after {{content:""; position:absolute; inset:auto -30% 0 -30%; height:2px; background:linear-gradient(90deg,transparent,var(--accent-lime),transparent); animation:sweep 2.8s linear infinite; opacity:.45;}}
           .ev-title {{font-weight:800; margin-bottom:8px;}}
           .ev-count {{font-size:28px; font-weight:900;}}
-          .ev-note {{font-size:12px; color:#cbd5e1;}}
+          .ev-note {{font-size:12px; color:#9da69b;}}
           @keyframes sweep {{from{{transform:translateX(-40%)}} to{{transform:translateX(40%)}}}}
           @media (max-width: 480px) {{.ev-flow{{grid-template-columns:1fr}}}}
         </style>
@@ -742,9 +1561,9 @@ def readiness_score(row: pd.Series) -> int:
 
 
 def render_badge(label: str, ready: bool) -> str:
-    bg = "#064e3b" if ready else "#3f1d1d"
-    border = "#10b981" if ready else "#ef4444"
-    color = "#d1fae5" if ready else "#fecaca"
+    bg = "#10291a" if ready else "#251816"
+    border = "#3ce37a" if ready else "#ff8a6b"
+    color = "#d9ffd8" if ready else "#ffd6ca"
     symbol = "OK" if ready else "Gap"
     return (
         f"<span style='display:inline-block;margin:0 6px 6px 0;padding:4px 8px;"
@@ -755,7 +1574,7 @@ def render_badge(label: str, ready: bool) -> str:
 
 def render_service_card(row: pd.Series) -> None:
     score = readiness_score(row)
-    score_color = "#22c55e" if score >= 80 else "#f59e0b" if score >= 50 else "#ef4444"
+    score_color = "#b9ff4a" if score >= 80 else "#ffcf5a" if score >= 50 else "#ff8a6b"
     badges = "".join(render_badge(label, ready) for label, ready in readiness_items(row))
     service = html.escape(str(row["Service"]))
     description = html.escape(str(row["Description"]))
@@ -763,19 +1582,19 @@ def render_service_card(row: pd.Series) -> None:
     dependency_count = int(row["Dependency Count"])
     st.markdown(
         f"""
-        <div style="border:1px solid #263244;border-radius:8px;padding:14px;background:#0f172a;margin-bottom:12px;min-height:220px">
+        <div style="border:1px solid #2c332a;border-radius:8px;padding:14px;background:#101110;margin-bottom:12px;min-height:220px">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
             <div>
-              <div style="font-size:18px;font-weight:800;color:#f8fafc">{service}</div>
-              <div style="font-size:13px;color:#94a3b8;margin-top:2px">{description}</div>
+              <div style="font-size:18px;font-weight:800;color:#f5f7ef">{service}</div>
+              <div style="font-size:13px;color:#9da69b;margin-top:2px">{description}</div>
             </div>
             <div style="min-width:58px;text-align:center;border:1px solid {score_color};border-radius:8px;padding:6px;color:{score_color};font-weight:900">
               {score}%
-              <div style="font-size:10px;color:#94a3b8;font-weight:600">ready</div>
+              <div style="font-size:10px;color:#9da69b;font-weight:600">ready</div>
             </div>
           </div>
-          <div style="margin-top:12px;color:#cbd5e1;font-size:13px"><b>Owner:</b> {owner}</div>
-          <div style="margin-top:8px;color:#cbd5e1;font-size:13px"><b>Dependencies:</b> {dependency_count}</div>
+          <div style="margin-top:12px;color:#cfd8ca;font-size:13px"><b>Owner:</b> {owner}</div>
+          <div style="margin-top:8px;color:#cfd8ca;font-size:13px"><b>Dependencies:</b> {dependency_count}</div>
           <div style="margin-top:12px">{badges}</div>
         </div>
         """,
@@ -991,8 +1810,8 @@ def render_project_story(nodes_df: pd.DataFrame, edges_df: pd.DataFrame) -> None
 # Page
 # ---------------------------------------------------------------------------
 st.set_page_config(page_title='nexusgraph-ai', layout='wide')
-st.title('nexusgraph-ai')
-st.caption('GraphRAG for Organizational Knowledge and Decision Intelligence')
+render_page_chrome()
+render_ag2_style_header()
 
 with st.spinner("Preparing local retrieval stores..."):
     ensure_runtime_data()
@@ -1100,13 +1919,16 @@ with st.expander("GraphRAG Demo Queries", expanded=True):
             with col:
                 st.markdown(
                     f"""
-                    <div style="border:1px solid #263244;border-radius:8px;padding:12px;background:#0f172a;min-height:128px;margin-bottom:8px">
-                      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-                        <div style="width:34px;height:34px;border-radius:8px;background:#312e81;color:#ddd6fe;display:grid;place-items:center;font-size:12px;font-weight:900">{html.escape(item['icon'])}</div>
-                        <div style="font-weight:800;color:#f8fafc">Query {i + 1}</div>
+                    <div style="border:1px solid #2c332a;border-radius:8px;padding:12px;background:#101110;min-height:142px;margin-bottom:8px">
+                      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px">
+                        <div style="display:flex;align-items:center;gap:10px">
+                          <div style="width:34px;height:34px;border-radius:8px;background:#b9ff4a;color:#10140d;display:grid;place-items:center;font-size:12px;font-weight:900">{html.escape(item['icon'])}</div>
+                          <div style="font-weight:800;color:#f5f7ef">Pattern {i + 1}</div>
+                        </div>
+                        <div style="border:1px solid #2c332a;border-radius:999px;color:#9da69b;padding:3px 7px;font-size:11px">Graph</div>
                       </div>
-                      <div style="font-size:14px;color:#e5e7eb;line-height:1.35">{html.escape(item['query'])}</div>
-                      <div style="font-size:12px;color:#94a3b8;margin-top:8px">{html.escape(item['insight'])}</div>
+                      <div style="font-size:14px;color:#f5f7ef;line-height:1.35">{html.escape(item['query'])}</div>
+                      <div style="font-size:12px;color:#9da69b;margin-top:8px">{html.escape(item['insight'])}</div>
                     </div>
                     """,
                     unsafe_allow_html=True,
@@ -1115,9 +1937,14 @@ with st.expander("GraphRAG Demo Queries", expanded=True):
                     st.session_state.pending_query = item['query']
                     st.rerun()
 
-if env_flag("INCIDENT_SIM_ENABLED", False):
-    with st.expander("Incident Response Simulation", expanded=True):
-        render_incident_response_simulation()
+with st.expander("Incident Response Simulation", expanded=True):
+    render_incident_response_simulation()
+
+with st.expander("Streamflix Status", expanded=True):
+    render_streamflix_status_page()
+
+with st.expander("Project Status Agent", expanded=True):
+    render_project_status_agent()
 
 render_project_story(nodes, edges)
 

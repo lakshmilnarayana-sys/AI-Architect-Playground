@@ -52,6 +52,26 @@ class StreamlitUiStaticTests(unittest.TestCase):
         self.assertIn("query_cols = st.columns(3)", source)
         self.assertNotIn("with query_cols[i]:", source)
 
+    def test_streamflix_status_page_section_is_rendered(self):
+        source = APP_SOURCE.read_text()
+
+        self.assertIn("from src.status_page import build_status_summary, incident_history, incident_updates", source)
+        self.assertIn('with st.expander("Streamflix Status", expanded=True):', source)
+        self.assertIn("Current incident:", source)
+        self.assertIn("Subscribe to updates", source)
+        self.assertIn("Incident updates", source)
+        self.assertIn("streamflix_status_updates", source)
+        self.assertIn("Incident history", source)
+
+    def test_project_status_agent_section_is_wired(self):
+        source = APP_SOURCE.read_text()
+
+        self.assertIn("Project Status Agent", source)
+        self.assertIn("run_project_status(", source)
+        self.assertIn("Weekly report", source)
+        self.assertIn("Risks", source)
+        self.assertIn("Blockers", source)
+
 
 if __name__ == "__main__":
     unittest.main()
