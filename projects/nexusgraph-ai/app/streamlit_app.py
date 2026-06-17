@@ -744,18 +744,21 @@ def agent_name_for_message(message: dict) -> str:
 def render_agent_flowchart(messages: list[dict], final: dict | None = None,
                            active_phase: str = "", active_agent: str = "") -> None:
     findings = (final or {}).get("findings") or {}
+    unique_messages = unique_slack_messages(messages)
+    latest_message = unique_messages[-1] if unique_messages else {}
+    active_action = latest_message.get("text", "Waiting for the first backend agent event.")
 
     agents = [
-        ("Observability Agent", "declare", "Evaluates thresholds and raises alerts."),
-        ("Incident Commander Agent", "declare", "Declares, routes, approves, and closes the loop."),
-        ("Triage Agent", "triage", "Finds owner, on-call, impact, and responders."),
-        ("FireHydrant Automation", "triage", "Runs the incident management runbook, creates Slack channel, ticket, and roles."),
-        ("Remediation Agent", "mitigate", "Pulls runbooks and prepares mitigation."),
-        ("Zoom Agent", "diagnose", "Collects bridge decisions and action items."),
-        ("Scribe Agent", "postmortem", "Summarizes Slack, timeline, and status updates."),
-        ("Jira Agent", "postmortem", "Saves the incident and exposes metrics."),
+        ("Observability Agent", "declare", "Alert"),
+        ("Incident Commander Agent", "declare", "Declare"),
+        ("Triage Agent", "triage", "Triage"),
+        ("FireHydrant Automation", "triage", "Runbook"),
+        ("Remediation Agent", "mitigate", "Mitigate"),
+        ("Zoom Agent", "diagnose", "Bridge"),
+        ("Scribe Agent", "postmortem", "Comms"),
+        ("Jira Agent", "postmortem", "Record"),
     ]
-    seen_agents = {agent_name_for_message(message) for message in unique_slack_messages(messages)}
+    seen_agents = {agent_name_for_message(message) for message in unique_messages}
     seen_agents.discard("")
     if final:
         seen_agents = {name for name, _phase, _detail in agents}
@@ -773,18 +776,13 @@ def render_agent_flowchart(messages: list[dict], final: dict | None = None,
         css_state = re.sub(r"[^a-z]+", "-", state.lower()).strip("-")
         cards.append(
             f"""
-            <div class="agent-step">
-              <div class="agent-node agent-state-{css_state}">
-                <div class="agent-index">{index + 1}</div>
-                <div class="agent-body">
-                  <div class="agent-top">
-                    <div class="agent-name">{html.escape(name)}</div>
-                    <div class="agent-state">{html.escape(state)}</div>
-                  </div>
-                  <div class="agent-detail">{html.escape(detail)}</div>
-                </div>
+            <div class="agent-node agent-state-{css_state}">
+              <div class="agent-index">{index + 1}</div>
+              <div class="agent-main">
+                <div class="agent-name">{html.escape(name)}</div>
+                <div class="agent-detail">{html.escape(detail)}</div>
               </div>
-              {'<div class="agent-arrow">↓</div>' if index < len(agents) - 1 else ''}
+              <div class="agent-state">{html.escape(state)}</div>
             </div>
             """
         )
@@ -793,41 +791,40 @@ def render_agent_flowchart(messages: list[dict], final: dict | None = None,
     components.html(
         f"""
         <style>
-          .agent-flow-vertical {{
+          body {{ margin:0; background:#090b09; overflow:auto; }}
+          .agent-flow-compact {{
             display:flex;
             flex-direction:column;
-            gap:0;
-            margin:8px 0 14px;
-            max-width:760px;
+            gap:6px;
+            margin:0;
+            max-width:980px;
           }}
-          .agent-step {{display:flex;flex-direction:column;align-items:stretch}}
           .agent-node {{
-            min-height:82px;
+            min-height:42px;
             border:1px solid #2c332a;
             border-radius:8px;
-            padding:12px;
+            padding:8px 10px;
             background:#101110;
             display:flex;
-            align-items:flex-start;
-            gap:12px;
+            align-items:center;
+            gap:10px;
           }}
           .agent-index {{
-            width:30px;
-            height:30px;
-            border-radius:8px;
+            width:26px;
+            height:26px;
+            border-radius:7px;
             background:#b9ff4a;
             color:#10140d;
             display:grid;
             place-items:center;
             font-weight:900;
+            font-size:13px;
             flex:0 0 auto;
           }}
-          .agent-body {{flex:1}}
-          .agent-top {{display:flex;justify-content:space-between;gap:8px;align-items:center}}
+          .agent-main {{flex:1; min-width:0; display:flex; align-items:baseline; gap:10px}}
           .agent-name {{font-weight:800;color:#f5f7ef;font-size:13px}}
-          .agent-state {{font-size:11px;color:#10140d;background:#9da69b;border-radius:999px;padding:3px 7px;white-space:nowrap}}
-          .agent-detail {{font-size:12px;line-height:1.35;color:#9da69b;margin-top:10px}}
-          .agent-arrow {{color:#b9ff4a;font-size:20px;line-height:28px;text-align:left;margin-left:15px}}
+          .agent-state {{font-size:11px;color:#10140d;background:#9da69b;border-radius:999px;padding:3px 8px;white-space:nowrap}}
+          .agent-detail {{font-size:12px;line-height:1.2;color:#9da69b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
           .agent-state-working {{
             border-color:#b9ff4a;
             box-shadow:0 0 0 0 rgba(185,255,74,.55);
@@ -837,15 +834,28 @@ def render_agent_flowchart(messages: list[dict], final: dict | None = None,
           .agent-state-done .agent-state {{background:#3ce37a}}
           .agent-state-waiting-for-hitl {{border-color:#ffcf5a}}
           .agent-state-waiting-for-hitl .agent-state {{background:#ffcf5a}}
+          .current-action {{
+            margin:10px 0 0;
+            border:1px solid #32412a;
+            border-radius:8px;
+            background:#111511;
+            padding:9px 10px;
+          }}
+          .current-label {{font-size:11px;text-transform:uppercase;color:#b9ff4a;font-weight:900;letter-spacing:.04em}}
+          .current-text {{font-size:13px;color:#f5f7ef;line-height:1.35;margin-top:4px}}
           @keyframes agentPulse {{
             0% {{box-shadow:0 0 0 0 rgba(185,255,74,.55)}}
             70% {{box-shadow:0 0 0 10px rgba(185,255,74,0)}}
             100% {{box-shadow:0 0 0 0 rgba(185,255,74,0)}}
           }}
         </style>
-        <div class="agent-flow-vertical">{''.join(cards)}</div>
+        <div class="agent-flow-compact">{''.join(cards)}</div>
+        <div class="current-action">
+          <div class="current-label">Current backend action</div>
+          <div class="current-text">{html.escape(active_action)}</div>
+        </div>
         """,
-        height=760,
+        height=470,
     )
 
 

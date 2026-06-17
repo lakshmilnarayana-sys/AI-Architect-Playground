@@ -66,8 +66,9 @@ def test_incident_ui_has_agent_flowchart():
     assert "def render_agent_flowchart(" in APP
     assert "def agent_name_for_message(" in APP
     assert "Agent operations flow" in APP
-    assert "agent-flow-vertical" in APP
-    assert "agent-arrow" in APP
+    assert "agent-flow-compact" in APP
+    assert "Current backend action" in APP
+    assert "active_action" in APP
     assert "agent-state-working" in APP
     assert "Observability Agent" in APP
     assert "Incident Commander Agent" in APP
