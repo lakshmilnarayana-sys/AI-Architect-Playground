@@ -98,3 +98,40 @@ def query_incident_metrics(path: Path | None = None) -> dict:
         "open_incidents": len([issue for issue in issues if issue.get("status") != "Mitigated"]),
         "issues": deepcopy(issues),
     }
+
+
+def seed_incident_history(scenarios: list[dict], path: Path | None = None) -> dict:
+    """Seed deterministic Jira-like incident history without deleting runtime issues."""
+    existing = _load(path)
+    seeded = []
+    for scenario in scenarios:
+        incident_id = scenario.get("incident_id") or f"incident:{scenario['id']}"
+        issue = {
+            "key": _issue_key(incident_id),
+            "incident_id": incident_id,
+            "summary": scenario.get("title"),
+            "severity": scenario.get("severity"),
+            "services": scenario.get("affected_services") or [],
+            "status": "Mitigated" if scenario.get("recovered", True) else "Investigating",
+            "failure_mode": scenario.get("failure_mode"),
+            "commander": "Incident Commander Agent",
+            "channel": f"#inc-{scenario.get('id', 'seeded-incident')}",
+            "runbook": None,
+            "status_page_update": None,
+            "action_items": [],
+            "timeline_events": 8,
+            "duration_minutes": 42 if scenario.get("severity") == "SEV1" else 24,
+            "time_to_mitigate_minutes": 28 if scenario.get("severity") == "SEV1" else 16,
+            "seeded": True,
+        }
+        seeded.append(issue)
+
+    by_incident_id = {issue.get("incident_id"): issue for issue in existing}
+    for issue in seeded:
+        current = by_incident_id.get(issue["incident_id"])
+        if not current or current.get("seeded"):
+            by_incident_id[issue["incident_id"]] = issue
+
+    merged = list(by_incident_id.values())
+    _write(merged, path)
+    return {"seeded": len(seeded), "total": len(merged), "path": str(path or store_path())}

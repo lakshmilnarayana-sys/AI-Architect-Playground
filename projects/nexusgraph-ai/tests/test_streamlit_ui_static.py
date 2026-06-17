@@ -55,9 +55,12 @@ class StreamlitUiStaticTests(unittest.TestCase):
     def test_streamflix_status_page_section_is_rendered(self):
         source = APP_SOURCE.read_text()
 
-        self.assertIn("from src.status_page import build_status_summary, incident_history", source)
+        self.assertIn("from src.status_page import build_status_summary, incident_history, incident_updates", source)
         self.assertIn('with st.expander("Streamflix Status", expanded=True):', source)
         self.assertIn("Current incident:", source)
+        self.assertIn("Subscribe to updates", source)
+        self.assertIn("Incident updates", source)
+        self.assertIn("streamflix_status_updates", source)
         self.assertIn("Incident history", source)
 
     def test_project_status_agent_section_is_wired(self):

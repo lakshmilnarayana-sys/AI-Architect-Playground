@@ -157,6 +157,14 @@ The incident simulation uses local deterministic data rather than touching a liv
 
 Recommended production integrations are modeled in `data/observability_sources.yaml`: OpenSearch with Fluent Bit for external log collection, and Grafana Cloud with Prometheus, Loki, Tempo, and Alertmanager for observability. The Streamlit UI also includes a Streamflix status-history surface inspired by public SaaS status pages.
 
+### Deploy-Time Seeding
+
+Every app startup runs the shared seeder in `src/seed_runtime_data.py`:
+
+- Docker/Railway entrypoint seeds Neo4j from `graph/*.csv`, recreates the Chroma vector store from graph/data/docs/evaluation artifacts, and seeds fallback simulation stores.
+- Streamlit startup runs the same seeder. It recreates Chroma by default, optionally imports Neo4j when `NEXUSGRAPH_AUTO_IMPORT_NEO4J=true`, and seeds the simulated Jira incident history under `var/`.
+- Set `NEXUSGRAPH_FORCE_VECTOR_SEED=false` only when you intentionally want to reuse an existing Chroma store during local iteration.
+
 ## Deliverables
 
 ```text

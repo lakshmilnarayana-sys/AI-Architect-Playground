@@ -74,3 +74,53 @@ def incident_history() -> list[dict]:
         }
         for scenario in scenarios
     ]
+
+
+def incident_updates(incident_id: str | None = None) -> list[dict]:
+    updates = [
+        {
+            "incident_id": "hist-1",
+            "timestamp": "2026-06-17 13:04 UTC",
+            "status": "Investigating",
+            "message": "We are investigating elevated playback start latency in US-East. Customers may see buffering or delayed stream starts.",
+        },
+        {
+            "incident_id": "hist-1",
+            "timestamp": "2026-06-17 13:12 UTC",
+            "status": "Identified",
+            "message": "The issue has been traced to playback-api pods being OOMKilled after memory exceeded the configured limit.",
+        },
+        {
+            "incident_id": "hist-1",
+            "timestamp": "2026-06-17 13:31 UTC",
+            "status": "Monitoring",
+            "message": "Mitigation has been applied. Playback start latency is recovering and the team is monitoring for recurrence.",
+        },
+        {
+            "incident_id": "hist-1",
+            "timestamp": "2026-06-17 13:46 UTC",
+            "status": "Resolved",
+            "message": "Playback latency has returned to normal levels. A post-incident review will identify follow-up actions.",
+        },
+        {
+            "incident_id": "hist-2",
+            "timestamp": "2026-06-17 14:02 UTC",
+            "status": "Monitoring",
+            "message": "CPU throttling mitigation is in place for playback-api. We are watching saturation and p99 start latency.",
+        },
+        {
+            "incident_id": "hist-3",
+            "timestamp": "2026-06-17 14:12 UTC",
+            "status": "Identified",
+            "message": "Billing duplicate capture protection is active while reconciliation checks complete.",
+        },
+        {
+            "incident_id": "hist-4",
+            "timestamp": "2026-06-17 14:24 UTC",
+            "status": "Investigating",
+            "message": "Identity engineers are investigating admin lockouts after an MFA provider policy refresh.",
+        },
+    ]
+    if incident_id:
+        return [update for update in updates if update["incident_id"] == incident_id]
+    return updates

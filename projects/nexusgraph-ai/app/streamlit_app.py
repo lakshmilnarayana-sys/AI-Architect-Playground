@@ -59,7 +59,7 @@ from src.incident.graph_lookup import GraphContext
 from src.incident.jira import query_incident_metrics
 from src.incident.supervisor import stream_incident
 from src.project_status.supervisor import run_project_status
-from src.status_page import build_status_summary, incident_history
+from src.status_page import build_status_summary, incident_history, incident_updates
 from ui_trace import evidence_counts, format_stage_elapsed
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -413,29 +413,12 @@ def load_rag_runners() -> dict:
 
 @st.cache_resource(show_spinner=False)
 def ensure_runtime_data() -> dict:
-    from config import DEFAULT_CHROMA_PATH, DEFAULT_COLLECTION
-    from vector_ingest import ingest_documents
+    from seed_runtime_data import seed_all
 
-    status = {"vector_store": "existing", "neo4j_import": "skipped"}
-    vector_store_ready = False
-    if DEFAULT_CHROMA_PATH.exists():
-        try:
-            chromadb.PersistentClient(path=str(DEFAULT_CHROMA_PATH)).get_collection(DEFAULT_COLLECTION)
-            vector_store_ready = True
-        except Exception:
-            vector_store_ready = False
-
-    if not vector_store_ready:
-        ingest_documents()
-        status["vector_store"] = "created"
-
-    if env_flag("NEXUSGRAPH_AUTO_IMPORT_NEO4J"):
-        from import_to_neo4j import main as import_to_neo4j
-
-        import_to_neo4j()
-        status["neo4j_import"] = "completed"
-
-    return status
+    return seed_all(
+        seed_neo4j=env_flag("NEXUSGRAPH_AUTO_IMPORT_NEO4J"),
+        force_vector=env_flag("NEXUSGRAPH_FORCE_VECTOR_SEED", True),
+    )
 
 
 def load_csv(name: str) -> pd.DataFrame:
@@ -1115,6 +1098,17 @@ def render_incident_response_simulation() -> None:
 
             decision = st.session_state.get(decision_key)
             if decision == "approved":
+                status_updates_key = "streamflix_status_updates"
+                approved_update = {
+                    "incident_id": final["incident"]["id"],
+                    "timestamp": "now",
+                    "status": "Monitoring" if status_update else "Update",
+                    "message": status_update.get("text", "No status update drafted."),
+                    "source": "Scribe Agent HITL approval",
+                }
+                existing_updates = st.session_state.setdefault(status_updates_key, [])
+                if approved_update not in existing_updates:
+                    existing_updates.insert(0, approved_update)
                 st.success("Approved. Simulated update posted to Slack and Streamflix Status.")
                 st.markdown("**Slack post**")
                 st.write(status_update.get("text", "No status update drafted."))
@@ -1148,23 +1142,41 @@ def render_streamflix_status_page() -> None:
     summary = build_status_summary()
     history = incident_history()
     active_incidents = [item for item in history if item["status"] != "Resolved"]
+    session_updates = st.session_state.get("streamflix_status_updates", [])
+    updates = list(session_updates) + incident_updates()
 
     st.subheader(summary["brand"])
     st.caption(summary["headline"])
-    st.info(
-        "Synthetic status surface inspired by public SaaS status pages; uptime, "
-        "component health, and incidents are generated for the Streamflix demo."
-    )
+    st.button("Subscribe to updates", key="status_subscribe", disabled=True)
 
     if active_incidents:
         current = active_incidents[0]
-        st.warning(
-            f"Current incident: {current['title']} is {current['status'].lower()} "
-            f"for {', '.join(current['affected'])}."
+        st.warning("We're currently experiencing issues")
+        st.markdown(f"**Current incident:** {current['title']}")
+        st.caption(
+            f"{current['status']} · Affects {', '.join(current['affected'])} · "
+            f"Duration {current['duration']}"
         )
+        current_updates = [
+            update for update in updates
+            if update.get("incident_id") in {current["id"], current.get("source_incident_id")}
+        ] or updates[:4]
+        st.markdown("**Incident updates**")
+        for update in current_updates[:5]:
+            st.markdown(
+                f"""
+                <div style="border-left:3px solid #b9ff4a;padding:8px 0 8px 12px;margin:8px 0">
+                  <div style="font-weight:800;color:#f5f7ef">{html.escape(update.get('status', 'Update'))}</div>
+                  <div style="font-size:12px;color:#9da69b">{html.escape(update.get('timestamp', ''))}</div>
+                  <div style="color:#d9ded2;margin-top:4px">{html.escape(update.get('message', ''))}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
     else:
         st.success("All Streamflix production systems are operational.")
 
+    st.markdown("**System status**")
     group_cols = st.columns(4)
     for index, group in enumerate(summary["groups"]):
         with group_cols[index % len(group_cols)]:
