@@ -688,14 +688,48 @@ def render_slack_channel(incident: dict, messages: list[dict], key_suffix: str |
         search = st.text_input("Search messages", key=f"slack_search_{channel_key}",
                                placeholder="Search messages (text, author, phase)")
 
-    visible = filter_messages(messages, search)
+    visible = filter_messages(unique_slack_messages(messages), search)
     with st.container(height=420):  # fixed-height scrollable feed
         for m in visible:
             st.markdown(
                 f"{m.get('avatar','💬')} **{m.get('author','')}** "
                 f"`{m.get('phase','')}` · {m.get('ts','')}  \n{m.get('text','')}"
             )
-    st.caption(f"{len(visible)} / {len(messages)} messages")
+    st.caption(f"{len(visible)} / {len(unique_slack_messages(messages))} messages")
+
+
+def slack_message_key(message: dict) -> tuple[str, str, str, str]:
+    return (
+        str(message.get("phase", "")),
+        str(message.get("author", "")),
+        str(message.get("role", "")),
+        str(message.get("text", "")),
+    )
+
+
+def unique_slack_messages(messages: list[dict]) -> list[dict]:
+    seen = set()
+    unique = []
+    for message in messages:
+        key = slack_message_key(message)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(message)
+    return unique
+
+
+def infer_incident_service(text: str) -> str:
+    lowered = text.lower()
+    if "billing" in lowered or "invoice" in lowered or "payment" in lowered:
+        return "billing-service"
+    if "identity" in lowered or "auth" in lowered or "login" in lowered:
+        return "identity-service"
+    if "recommendation" in lowered or "ranking" in lowered:
+        return "recommendation-service"
+    if "observability" in lowered or "otel" in lowered or "telemetry" in lowered:
+        return "observability-service"
+    return "playback-service"
 
 
 def agent_name_for_message(message: dict) -> str:
@@ -703,6 +737,8 @@ def agent_name_for_message(message: dict) -> str:
     phase = message.get("phase", "")
     if "Observability" in author:
         return "Observability Agent"
+    if "FireHydrant" in author:
+        return "FireHydrant Automation"
     if "Commander" in author or phase == "resolve":
         return "Incident Commander Agent"
     if "Triage" in author or "Kubernetes" in author or phase == "triage":
@@ -730,12 +766,13 @@ def render_agent_flowchart(messages: list[dict], final: dict | None = None,
         ("Observability Agent", "declare", "Evaluates thresholds and raises alerts."),
         ("Incident Commander Agent", "declare", "Declares, routes, approves, and closes the loop."),
         ("Triage Agent", "triage", "Finds owner, on-call, impact, and responders."),
+        ("FireHydrant Automation", "triage", "Runs the incident management runbook, creates Slack channel, ticket, and roles."),
         ("Remediation Agent", "mitigate", "Pulls runbooks and prepares mitigation."),
         ("Zoom Agent", "diagnose", "Collects bridge decisions and action items."),
         ("Scribe Agent", "postmortem", "Summarizes Slack, timeline, and status updates."),
         ("Jira Agent", "postmortem", "Saves the incident and exposes metrics."),
     ]
-    seen_agents = {agent_name_for_message(message) for message in messages}
+    seen_agents = {agent_name_for_message(message) for message in unique_slack_messages(messages)}
     seen_agents.discard("")
     if final:
         seen_agents = {name for name, _phase, _detail in agents}
@@ -906,6 +943,28 @@ def render_backend_agent_trace(final: dict) -> None:
     )
 
 
+def render_streaming_backend_agent_trace(messages: list[dict], thread_id: str) -> None:
+    rows = []
+    for index, message in enumerate(unique_slack_messages(messages)):
+        rows.append(
+            {
+                "Step": index + 1,
+                "Thread ID": thread_id,
+                "Agent": message.get("author", ""),
+                "Phase": message.get("phase", ""),
+                "Kind": message.get("role", ""),
+                "Output": message.get("text", ""),
+                "Trace source": "stream_incident live event",
+            }
+        )
+    st.markdown("**Backend agent trace**")
+    st.caption("Live stream from LangGraph incident state. Final run JSON appears when the workflow completes.")
+    if rows:
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+    else:
+        st.info("Trace will populate as backend agents emit events.")
+
+
 def render_incident_response_simulation() -> None:
     st.caption("Hierarchical multi-agent incident simulation grounded in the knowledge graph.")
     st.markdown(
@@ -945,8 +1004,9 @@ def render_incident_response_simulation() -> None:
         severity = st.selectbox("Severity", ["SEV1", "SEV2", "SEV3"], key="inc_sev")
         service = st.text_input("Primary affected service", key="inc_service",
                                 placeholder="Billing Service")
+        inferred_service = service or infer_incident_service(f"{signal} {failure_mode}")
         state = new_incident("incident:adhoc", signal[:60] or "Ad-hoc Incident",
-                             severity, [service] if service else [], signal)
+                             severity, [inferred_service], signal)
         state["incident"]["recovered"] = True
         state["incident"]["scenario_id"] = "adhoc"
 
@@ -962,18 +1022,24 @@ def render_incident_response_simulation() -> None:
             llm = get_llm()
         ctx = GraphContext(use_neo4j=env_flag("INCIDENT_USE_NEO4J", False))
         flow = st.empty()
+        trace = st.empty()
         feed = st.empty()
         collected: list[dict] = []
         final_holder: dict[str, dict] = {}
         stream_thread_id = f"ui-{state['incident']['id']}"
         with flow.container():
             render_agent_flowchart(collected)
+        with trace.container():
+            with st.expander("Backend agent trace", expanded=True):
+                render_streaming_backend_agent_trace(collected, stream_thread_id)
         for phase, messages in stream_incident(state, llm=llm, ctx=ctx,
                                                 use_vector=env_flag("INCIDENT_USE_VECTOR", False),
                                                 approve=lambda phase: True,
                                                 thread_id=stream_thread_id,
                                                 on_final=lambda final: final_holder.update({"state": final})):
             for message in messages:
+                if slack_message_key(message) in {slack_message_key(item) for item in collected}:
+                    continue
                 collected.append(message)
                 active_agent = agent_name_for_message(message)
                 with flow.container():
@@ -988,6 +1054,9 @@ def render_incident_response_simulation() -> None:
                         collected,
                         key_suffix=f"{state['incident']['id']}_{phase}_{len(collected)}",
                     )
+                with trace.container():
+                    with st.expander("Backend agent trace", expanded=True):
+                        render_streaming_backend_agent_trace(collected, stream_thread_id)
                 time.sleep(demo_delay_seconds or 0.6)  # timed streaming playback pacing
         final = final_holder.get("state")
         if not final:
@@ -995,10 +1064,11 @@ def render_incident_response_simulation() -> None:
             return
         with flow.container():
             render_agent_flowchart(collected, final=final)
-        st.success("Incident resolved — postmortem generated.")
-        with st.expander("Backend agent trace", expanded=True):
-            render_backend_agent_trace(final)
+        with trace.container():
+            with st.expander("Backend agent trace", expanded=True):
+                render_backend_agent_trace(final)
 
+        st.success("Incident resolved — postmortem generated.")
         automation = (final.get("findings") or {}).get("automation") or {}
         with st.expander("Runbook automation", expanded=True):
             st.caption("FireHydrant-style simulation: channel, ticket, roles, task timeline, stakeholder update, and retro summary.")

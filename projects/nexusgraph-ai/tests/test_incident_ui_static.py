@@ -15,6 +15,7 @@ def test_render_slack_channel_defined():
 
 def test_slack_channel_has_search_and_scroll():
     assert "filter_messages(" in APP        # search wired in
+    assert "unique_slack_messages(" in APP
     assert "st.text_input" in APP and "Search messages" in APP
     assert 'key=f"slack_search_{channel_key}"' in APP
     assert "height=" in APP                  # scrollable fixed-height container
@@ -70,6 +71,7 @@ def test_incident_ui_has_agent_flowchart():
     assert "agent-state-working" in APP
     assert "Observability Agent" in APP
     assert "Incident Commander Agent" in APP
+    assert "FireHydrant Automation" in APP
     assert "Scribe Agent" in APP
 
 
@@ -92,3 +94,9 @@ def test_incident_ui_has_concept_demo_delay():
     assert "demo_delay_seconds = 10" in APP
     assert "value=True" in APP
     assert "for message in messages:" in APP
+
+
+def test_operator_mode_infers_service_for_automation():
+    assert "def infer_incident_service(" in APP
+    assert "inferred_service = service or infer_incident_service" in APP
+    assert 'return "playback-service"' in APP

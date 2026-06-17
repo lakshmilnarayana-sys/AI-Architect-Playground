@@ -113,12 +113,13 @@ def _automation_kickoff(state: IncidentState) -> dict:
     }
     update = emit(
         "triage",
-        "Incident Commander Agent",
+        "FireHydrant Runbook Automation",
         "commander",
         "action",
         (
-            f"Created Slack channel {result['channel']} with incident details, "
-            f"on-call engineers, incident commanders, and incident observers; "
+            f"Incident Commander triggered the Incident Management runbook; "
+            f"FireHydrant created Slack channel {result['channel']} with incident details, "
+            f"on-call engineers, incident commanders, and incident observers, and "
             f"tracking ticket {result['ticket']} opened."
         ),
     )

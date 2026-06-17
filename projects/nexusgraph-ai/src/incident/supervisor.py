@@ -80,6 +80,8 @@ def run_incident(state: IncidentState, llm=None, ctx: GraphContext | None = None
 
 def _with_provenance(values: dict, thread_id: str, run_id: str, started_at: float) -> dict:
     final = dict(values)
+    final["timeline"] = _dedupe_events(final.get("timeline", []))
+    final["slack_messages"] = _dedupe_events(final.get("slack_messages", []), actor_key="author")
     final["_backend_provenance"] = {
         "run_id": run_id,
         "thread_id": thread_id,
@@ -100,6 +102,28 @@ def _with_provenance(values: dict, thread_id: str, run_id: str, started_at: floa
     return final
 
 
+def _event_key(event: dict, actor_key: str = "actor") -> tuple[str, str, str, str]:
+    return (
+        str(event.get("phase", "")),
+        str(event.get(actor_key, "")),
+        str(event.get("kind", "")),
+        str(event.get("text", "")),
+    )
+
+
+def _dedupe_events(events: list[dict], actor_key: str = "actor",
+                   seen: set[tuple[str, str, str, str]] | None = None) -> list[dict]:
+    seen = seen if seen is not None else set()
+    unique = []
+    for event in events:
+        key = _event_key(event, actor_key=actor_key)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(event)
+    return unique
+
+
 def stream_incident(state, llm=None, ctx=None, use_vector=True,
                     approve=None, thread_id="incident", on_final=None):
     """Yield (phase, new_messages) as the incident advances.
@@ -112,12 +136,13 @@ def stream_incident(state, llm=None, ctx=None, use_vector=True,
     run_id = f"lg-{uuid.uuid4().hex[:12]}"
     started_at = time.perf_counter()
     emitted = 0
+    seen_message_keys: set[tuple[str, str, str, str]] = set()
 
     def _drain():
         nonlocal emitted
         values = graph.get_state(cfg).values
         msgs = values.get("slack_messages", [])
-        new = msgs[emitted:]
+        new = _dedupe_events(msgs[emitted:], actor_key="author", seen=seen_message_keys)
         emitted = len(msgs)
         return values.get("phase", ""), new
 

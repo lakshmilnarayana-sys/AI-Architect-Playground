@@ -69,13 +69,18 @@ def select_automation(
 ) -> dict:
     severity_key = str(severity or "").upper()
     service_set = {normalize_service_name(service) for service in services}
+    service_match = None
     for automation in load_automations(path):
         trigger = automation.get("trigger", {})
         trigger_services = {
             normalize_service_name(service) for service in trigger.get("services", [])
         }
+        if service_set & trigger_services and service_match is None:
+            service_match = automation
         if str(trigger.get("severity", "")).upper() == severity_key and service_set & trigger_services:
             return automation
+    if service_match:
+        return service_match
     raise KeyError(f"No automation for {severity} {services}")
 
 
