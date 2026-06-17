@@ -7,11 +7,19 @@ from src.incident.agents import emit
 def _verify(state: IncidentState) -> dict:
     recovered = bool(state["incident"].get("recovered", True))
     svc = (state["incident"].get("affected_services") or ["service"])[0]
+    runtime = dict(state.get("runtime") or {})
+    if recovered and runtime:
+        runtime["health"] = "healthy"
+        runtime["pod_status"] = "Running"
+        runtime["restart_count_delta"] = 0
     text = (f"SLO verification: {svc} recovered within target."
             if recovered else
             f"SLO verification: {svc} has NOT recovered — recommend re-diagnose.")
     update = emit("resolve", "SLOVerification", "resolve", "finding", text)
     update["findings"] = {"slo_recovered": recovered}
+    if runtime:
+        update["findings"]["recovery_runtime"] = runtime
+        update["runtime"] = runtime
     return update
 
 

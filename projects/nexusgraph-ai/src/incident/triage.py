@@ -38,14 +38,84 @@ def _impact(state: IncidentState, ctx: GraphContext) -> dict:
     return update
 
 
+def _kubernetes_context(state: IncidentState) -> dict:
+    from src.incident.kubernetes import clear_failure, get_service_resource, inject_failure
+
+    svc = _primary_service(state)
+    resource = get_service_resource(svc)
+    failure_mode = state["incident"].get("failure_mode")
+    simulate = bool(state["incident"].get("simulate_failure"))
+    runtime = (
+        inject_failure(resource, failure_mode)
+        if simulate and failure_mode
+        else clear_failure(resource)
+    )
+    update = emit(
+        "triage",
+        "KubernetesAgent",
+        "triage",
+        "finding",
+        (
+            f"Kubernetes context: {resource['cluster']}/{resource['namespace']} "
+            f"{resource['workload']['name']} status={runtime['pod_status']}"
+        ),
+    )
+    update["findings"] = {
+        "kubernetes_resource": resource,
+        "kubernetes_runtime": runtime,
+    }
+    update["runtime"] = runtime
+    return update
+
+
+def _automation_kickoff(state: IncidentState) -> dict:
+    from src.incident.automations import execute_automation, select_automation
+
+    incident = state["incident"]
+    try:
+        automation = select_automation(
+            incident.get("severity", "SEV3"),
+            incident.get("affected_services", []),
+        )
+    except KeyError:
+        return emit(
+            "triage",
+            "RunbookAutomationAgent",
+            "commander",
+            "action",
+            "No FireHydrant-style automation matched this incident.",
+        )
+    result = execute_automation(
+        automation,
+        incident_id=incident["id"],
+        title=incident["title"],
+    )
+    update = emit(
+        "triage",
+        "RunbookAutomationAgent",
+        "commander",
+        "action",
+        (
+            f"FireHydrant-style automation created {result['channel']} and "
+            f"{result['ticket']}; roles assigned and status update drafted."
+        ),
+    )
+    update["findings"] = {"automation": result}
+    return update
+
+
 def build_triage_subgraph(llm=None, ctx: GraphContext | None = None):
     ctx = ctx or GraphContext()
     g = StateGraph(IncidentState)
     g.add_node("ownership", partial(_ownership, ctx=ctx))
     g.add_node("oncall", partial(_oncall, ctx=ctx))
     g.add_node("impact", partial(_impact, ctx=ctx))
+    g.add_node("kubernetes_context", _kubernetes_context)
+    g.add_node("automation_kickoff", _automation_kickoff)
     g.add_edge(START, "ownership")
     g.add_edge("ownership", "oncall")
     g.add_edge("oncall", "impact")
-    g.add_edge("impact", END)
+    g.add_edge("impact", "kubernetes_context")
+    g.add_edge("kubernetes_context", "automation_kickoff")
+    g.add_edge("automation_kickoff", END)
     return g.compile()
