@@ -57,6 +57,7 @@ from src.incident.scenarios import load_scenarios
 from src.incident.state import new_incident
 from src.incident.graph_lookup import GraphContext
 from src.incident.supervisor import stream_incident
+from src.status_page import build_status_summary, incident_history
 from ui_trace import evidence_counts, format_stage_elapsed
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -738,6 +739,46 @@ def render_incident_response_simulation() -> None:
         st.success("Incident resolved — postmortem generated.")
 
 
+def render_streamflix_status_page() -> None:
+    summary = build_status_summary()
+    history = incident_history()
+    active_incidents = [item for item in history if item["status"] != "Resolved"]
+
+    st.subheader(summary["brand"])
+    st.caption(summary["headline"])
+    st.info(
+        "Synthetic status surface inspired by public SaaS status pages; uptime, "
+        "component health, and incidents are generated for the Streamflix demo."
+    )
+
+    if active_incidents:
+        current = active_incidents[0]
+        st.warning(
+            f"Current incident: {current['title']} is {current['status'].lower()} "
+            f"for {', '.join(current['affected'])}."
+        )
+    else:
+        st.success("All Streamflix production systems are operational.")
+
+    group_cols = st.columns(4)
+    for index, group in enumerate(summary["groups"]):
+        with group_cols[index % len(group_cols)]:
+            st.metric(group["name"], "Operational", group["uptime"])
+            st.caption("Components: " + ", ".join(group["components"]))
+
+    history_rows = [
+        {
+            "Incident": item["title"],
+            "Status": item["status"],
+            "Affected components": ", ".join(item["affected"]),
+            "Duration": item["duration"],
+        }
+        for item in history
+    ]
+    st.markdown("**Incident history**")
+    st.dataframe(pd.DataFrame(history_rows), width="stretch", hide_index=True)
+
+
 def render_rag_mode_explainer() -> None:
     st.subheader('GraphRAG With Vector Baseline')
     rag_cols = st.columns(3)
@@ -1325,6 +1366,9 @@ with st.expander("GraphRAG Demo Queries", expanded=True):
 
 with st.expander("Incident Response Simulation", expanded=True):
     render_incident_response_simulation()
+
+with st.expander("Streamflix Status", expanded=True):
+    render_streamflix_status_page()
 
 render_project_story(nodes, edges)
 
