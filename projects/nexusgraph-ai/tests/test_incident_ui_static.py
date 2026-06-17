@@ -26,3 +26,26 @@ def test_incident_section_wired():
     assert "stream_incident(" in APP                        # timed playback driver
     assert "load_scenarios(" in APP                         # scenario picker
     assert "time.sleep(" in APP                             # timed streaming pacing
+
+
+def test_incident_ui_has_failure_injection_controls():
+    assert "Enable Kubernetes failure simulation" in APP
+    assert "Failure mode" in APP
+    assert "oom_kill" in APP
+    assert "pod_restart" in APP
+    assert "disk_iops" in APP
+    assert "cpu_throttle" in APP
+
+
+def test_incident_ui_surfaces_logs_and_observability():
+    assert "Static production logs" in APP
+    assert "Observability evidence" in APP
+    assert "OpenSearch" in APP
+    assert "Grafana Cloud" in APP
+
+
+def test_incident_ui_surfaces_firehydrant_style_automation():
+    assert "Runbook automation" in APP
+    assert "Incident channel" in APP
+    assert "Tracking ticket" in APP
+    assert "Status update draft" in APP

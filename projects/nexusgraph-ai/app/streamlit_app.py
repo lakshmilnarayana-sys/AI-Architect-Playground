@@ -56,7 +56,7 @@ from src.incident.slack import filter_messages, channel_name
 from src.incident.scenarios import load_scenarios
 from src.incident.state import new_incident
 from src.incident.graph_lookup import GraphContext
-from src.incident.supervisor import stream_incident
+from src.incident.supervisor import run_incident, stream_incident
 from src.status_page import build_status_summary, incident_history
 from ui_trace import evidence_counts, format_stage_elapsed
 
@@ -697,9 +697,19 @@ def render_slack_channel(incident: dict, messages: list[dict]) -> None:
 
 def render_incident_response_simulation() -> None:
     st.caption("Hierarchical multi-agent incident simulation grounded in the knowledge graph.")
+    st.markdown(
+        "**Lifecycle:** identify -> log -> categorize -> prioritize -> respond -> recover -> close -> review."
+    )
     scenarios = load_scenarios()
     mode = st.radio("Input mode", ["Scripted scenario", "Operator (copilot)"], horizontal=True,
                     key="inc_mode")
+    failure_modes = ["oom_kill", "pod_restart", "disk_iops", "cpu_throttle"]
+    sim_cols = st.columns([1, 1])
+    with sim_cols[0]:
+        simulate_failure = st.toggle("Enable Kubernetes failure simulation", value=False,
+                                     key="inc_sim_k8s")
+    with sim_cols[1]:
+        failure_mode = st.selectbox("Failure mode", failure_modes, key="inc_failure_mode")
 
     if mode == "Scripted scenario":
         labels = [f"{s['title']} ({s['severity']})" for s in scenarios]
@@ -709,6 +719,8 @@ def render_incident_response_simulation() -> None:
         state = new_incident(chosen["incident_id"], chosen["title"], chosen["severity"],
                              chosen["affected_services"], chosen["signal"])
         state["incident"]["recovered"] = chosen.get("recovered", True)
+        state["incident"]["scenario_id"] = chosen.get("id")
+        state["incident"]["failure_mode"] = chosen.get("failure_mode")
     else:
         signal = st.text_area("Describe the incident", key="inc_signal",
                               placeholder="e.g. Billing service returning 500s after deploy")
@@ -718,6 +730,11 @@ def render_incident_response_simulation() -> None:
         state = new_incident("incident:adhoc", signal[:60] or "Ad-hoc Incident",
                              severity, [service] if service else [], signal)
         state["incident"]["recovered"] = True
+        state["incident"]["scenario_id"] = "adhoc"
+
+    state["incident"]["simulate_failure"] = simulate_failure
+    if simulate_failure:
+        state["incident"]["failure_mode"] = failure_mode
 
     if st.button("Run incident simulation", key="inc_run"):
         use_real_llm = env_flag("INCIDENT_USE_LLM", False)
@@ -736,7 +753,47 @@ def render_incident_response_simulation() -> None:
             with feed.container():
                 render_slack_channel(state["incident"], collected)
             time.sleep(0.6)  # timed streaming playback pacing
+        final = run_incident(
+            state,
+            llm=llm,
+            ctx=ctx,
+            use_vector=env_flag("INCIDENT_USE_VECTOR", False),
+            thread_id=f"ui-summary-{state['incident']['id']}",
+        )
         st.success("Incident resolved — postmortem generated.")
+        automation = (final.get("findings") or {}).get("automation") or {}
+        with st.expander("Runbook automation", expanded=True):
+            st.caption("FireHydrant-style simulation: channel, ticket, roles, task timeline, stakeholder update, and retro summary.")
+            a_cols = st.columns(3)
+            a_cols[0].metric("Incident channel", automation.get("channel", "Not created"))
+            a_cols[1].metric("Tracking ticket", automation.get("ticket", "Not created"))
+            a_cols[2].metric("Automation", automation.get("automation_id", "Not matched"))
+            st.markdown("**Status update draft**")
+            st.info(automation.get("status_update", "No status update drafted."))
+            role_rows = [
+                {"Role": role, "Assignment": assignment}
+                for role, assignment in automation.get("role_assignments", {}).items()
+            ]
+            if role_rows:
+                st.dataframe(pd.DataFrame(role_rows), width="stretch", hide_index=True)
+            timeline = automation.get("timeline", [])
+            if timeline:
+                st.dataframe(pd.DataFrame(timeline), width="stretch", hide_index=True)
+
+        with st.expander("Static production logs", expanded=False):
+            logs = final.get("logs") or []
+            if logs:
+                st.dataframe(pd.DataFrame(logs), width="stretch", hide_index=True)
+            else:
+                st.info("No static logs matched this scenario.")
+
+        with st.expander("Observability evidence", expanded=False):
+            st.caption("Recommended external logging: OpenSearch. Recommended observability: Grafana Cloud with Prometheus, Loki, and Tempo.")
+            evidence = final.get("observability") or []
+            if evidence:
+                st.dataframe(pd.DataFrame(evidence), width="stretch", hide_index=True)
+            else:
+                st.info("No observability evidence selected.")
 
 
 def render_streamflix_status_page() -> None:
