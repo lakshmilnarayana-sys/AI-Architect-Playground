@@ -715,7 +715,7 @@ def render_agent_flowchart(messages: list[dict], final: dict | None = None, acti
     ]
 
     cards = []
-    for name, phase, detail in agents:
+    for index, (name, phase, detail) in enumerate(agents):
         if active_phase == phase:
             state = "working"
         elif phase in phases:
@@ -727,12 +727,18 @@ def render_agent_flowchart(messages: list[dict], final: dict | None = None, acti
         css_state = re.sub(r"[^a-z]+", "-", state.lower()).strip("-")
         cards.append(
             f"""
-            <div class="agent-card agent-state-{css_state}">
-              <div class="agent-top">
-                <div class="agent-name">{html.escape(name)}</div>
-                <div class="agent-state">{html.escape(state)}</div>
+            <div class="agent-step">
+              <div class="agent-node agent-state-{css_state}">
+                <div class="agent-index">{index + 1}</div>
+                <div class="agent-body">
+                  <div class="agent-top">
+                    <div class="agent-name">{html.escape(name)}</div>
+                    <div class="agent-state">{html.escape(state)}</div>
+                  </div>
+                  <div class="agent-detail">{html.escape(detail)}</div>
+                </div>
               </div>
-              <div class="agent-detail">{html.escape(detail)}</div>
+              {'<div class="agent-arrow">↓</div>' if index < len(agents) - 1 else ''}
             </div>
             """
         )
@@ -741,23 +747,41 @@ def render_agent_flowchart(messages: list[dict], final: dict | None = None, acti
     components.html(
         f"""
         <style>
-          .agent-flow {{
-            display:grid;
-            grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
-            gap:10px;
+          .agent-flow-vertical {{
+            display:flex;
+            flex-direction:column;
+            gap:0;
             margin:8px 0 14px;
+            max-width:760px;
           }}
-          .agent-card {{
-            min-height:104px;
+          .agent-step {{display:flex;flex-direction:column;align-items:stretch}}
+          .agent-node {{
+            min-height:82px;
             border:1px solid #2c332a;
             border-radius:8px;
             padding:12px;
             background:#101110;
+            display:flex;
+            align-items:flex-start;
+            gap:12px;
           }}
+          .agent-index {{
+            width:30px;
+            height:30px;
+            border-radius:8px;
+            background:#b9ff4a;
+            color:#10140d;
+            display:grid;
+            place-items:center;
+            font-weight:900;
+            flex:0 0 auto;
+          }}
+          .agent-body {{flex:1}}
           .agent-top {{display:flex;justify-content:space-between;gap:8px;align-items:center}}
           .agent-name {{font-weight:800;color:#f5f7ef;font-size:13px}}
           .agent-state {{font-size:11px;color:#10140d;background:#9da69b;border-radius:999px;padding:3px 7px;white-space:nowrap}}
           .agent-detail {{font-size:12px;line-height:1.35;color:#9da69b;margin-top:10px}}
+          .agent-arrow {{color:#b9ff4a;font-size:20px;line-height:28px;text-align:left;margin-left:15px}}
           .agent-state-working {{
             border-color:#b9ff4a;
             box-shadow:0 0 0 0 rgba(185,255,74,.55);
@@ -773,9 +797,9 @@ def render_agent_flowchart(messages: list[dict], final: dict | None = None, acti
             100% {{box-shadow:0 0 0 0 rgba(185,255,74,0)}}
           }}
         </style>
-        <div class="agent-flow">{''.join(cards)}</div>
+        <div class="agent-flow-vertical">{''.join(cards)}</div>
         """,
-        height=260,
+        height=760,
     )
 
 
@@ -852,7 +876,8 @@ def render_incident_response_simulation() -> None:
         feed = st.empty()
         flow = st.empty()
         collected: list[dict] = []
-        render_agent_flowchart(collected)
+        with flow.container():
+            render_agent_flowchart(collected)
         for phase, messages in stream_incident(state, llm=llm, ctx=ctx,
                                                 use_vector=env_flag("INCIDENT_USE_VECTOR", False),
                                                 approve=lambda phase: True,
@@ -897,7 +922,26 @@ def render_incident_response_simulation() -> None:
             st.caption("Publish to Slack and status page only after operator approval.")
             st.markdown("**Publish to Slack and status page**")
             st.info(status_update.get("text", "No status update drafted."))
-            st.json((final.get("approvals") or {}).get("status_update", {}))
+            decision_key = f"status_publish_decision_{final['incident']['id']}"
+            button_cols = st.columns([1, 1, 4])
+            with button_cols[0]:
+                if st.button("Approve publish", key=f"approve_{decision_key}"):
+                    st.session_state[decision_key] = "approved"
+            with button_cols[1]:
+                if st.button("Reject publish", key=f"reject_{decision_key}"):
+                    st.session_state[decision_key] = "rejected"
+
+            decision = st.session_state.get(decision_key)
+            if decision == "approved":
+                st.success("Approved. Simulated update posted to Slack and Streamflix Status.")
+                st.markdown("**Slack post**")
+                st.write(status_update.get("text", "No status update drafted."))
+                st.markdown("**Status page update**")
+                st.write(status_update.get("text", "No status update drafted."))
+            elif decision == "rejected":
+                st.warning("Rejected. Status update remains unpublished; revise the draft before publishing.")
+            else:
+                st.json((final.get("approvals") or {}).get("status_update", {}))
 
         with st.expander("Static production logs", expanded=False):
             logs = final.get("logs") or []
