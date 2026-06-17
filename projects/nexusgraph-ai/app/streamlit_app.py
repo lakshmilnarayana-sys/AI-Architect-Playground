@@ -742,62 +742,80 @@ def agent_name_for_message(message: dict) -> str:
 
 
 def render_agent_flowchart(messages: list[dict], final: dict | None = None,
-                           active_phase: str = "", active_agent: str = "") -> None:
+                           active_phase: str = "", active_agent: str = "",
+                           incident: dict | None = None) -> None:
     findings = (final or {}).get("findings") or {}
     unique_messages = unique_slack_messages(messages)
+    final_messages = unique_slack_messages((final or {}).get("slack_messages") or [])
+    workflow_events = final_messages or unique_messages
     latest_message = unique_messages[-1] if unique_messages else {}
     active_action = latest_message.get("text", "Waiting for the first backend agent event.")
-
-    agents = [
-        ("Observability Agent", "declare", "Alert"),
-        ("Incident Commander Agent", "declare", "Declare"),
-        ("Triage Agent", "triage", "Triage"),
-        ("FireHydrant Automation", "triage", "Runbook"),
-        ("Remediation Agent", "mitigate", "Mitigate"),
-        ("Zoom Agent", "diagnose", "Bridge"),
-        ("Scribe Agent", "postmortem", "Comms"),
-        ("Jira Agent", "postmortem", "Record"),
+    incident_context = incident or (final or {}).get("incident") or {}
+    service_label = ", ".join(incident_context.get("affected_services") or []) or "service pending"
+    phase_labels = {
+        "declare": "Declare",
+        "triage": "Triage",
+        "diagnose": "Diagnose",
+        "mitigate": "Mitigate",
+        "resolve": "Resolve",
+        "postmortem": "Review",
+    }
+    fallback_events = [
+        {"author": "Observability Agent", "phase": "declare", "text": "Alert waiting for backend trigger."},
+        {"author": "Incident Commander Agent", "phase": "declare", "text": "Incident declaration pending."},
+        {"author": "Severity Classifier", "phase": "declare", "text": "Severity validation pending."},
+        {"author": "TriageAgent", "phase": "triage", "text": "Owner, on-call, and impact lookup pending."},
+        {"author": "KubernetesAgent", "phase": "triage", "text": "Cluster resource context pending."},
+        {"author": "FireHydrant Runbook Automation", "phase": "triage", "text": "Incident management runbook pending."},
+        {"author": "Remediation Agent", "phase": "mitigate", "text": "Mitigation plan pending."},
+        {"author": "Scribe Agent", "phase": "postmortem", "text": "Status update and timeline pending."},
     ]
-    seen_agents = {agent_name_for_message(message) for message in unique_messages}
-    seen_agents.discard("")
-    if final:
-        seen_agents = {name for name, _phase, _detail in agents}
+    if not workflow_events:
+        workflow_events = fallback_events
 
     nodes = []
     connectors = []
-    node_width = 168
-    node_gap_x = 52
-    node_gap_y = 98
-    nodes_per_row = 4
+    node_width = 150
+    node_gap_x = 26
+    node_gap_y = 82
+    nodes_per_row = 6
     origin_x = 24
     origin_y = 28
-    for index, (name, phase, detail) in enumerate(agents):
-        if active_agent == name or (active_phase == phase and not active_agent):
+    visible_count = len(workflow_events)
+    for index, event in enumerate(workflow_events):
+        name = str(event.get("author") or event.get("actor") or "Incident Agent")
+        phase = str(event.get("phase") or active_phase or "")
+        detail = phase_labels.get(phase, phase.title() or "Action")
+        text = str(event.get("text") or event.get("message") or "")
+        is_latest_event = not final and bool(unique_messages) and slack_message_key(event) == slack_message_key(unique_messages[-1])
+        if is_latest_event or (not unique_messages and not final and (active_agent == name or active_phase == phase)):
             state = "working"
-        elif name in seen_agents:
+        elif workflow_events is fallback_events:
+            state = "idle"
+        elif final or index < visible_count - 1:
             state = "done"
         else:
             state = "idle"
-        if name == "Scribe Agent" and findings.get("status_update", {}).get("requires_human_approval"):
+        if "Scribe" in name and findings.get("status_update", {}).get("requires_human_approval"):
             state = "waiting for HITL"
         css_state = re.sub(r"[^a-z]+", "-", state.lower()).strip("-")
         row = index // nodes_per_row
         col = index % nodes_per_row
         x = origin_x + col * (node_width + node_gap_x)
         y = origin_y + row * node_gap_y
-        connector_state = "done" if name in seen_agents else "idle"
-        if index < len(agents) - 1:
+        connector_state = "done" if state in {"done", "working", "waiting for HITL"} else "idle"
+        if index < len(workflow_events) - 1:
             next_row = (index + 1) // nodes_per_row
             next_col = (index + 1) % nodes_per_row
             next_x = origin_x + next_col * (node_width + node_gap_x)
             next_y = origin_y + next_row * node_gap_y
             if row == next_row:
-                connector = f'<line class="workflow-edge edge-{connector_state}" x1="{x + node_width}" y1="{y + 32}" x2="{next_x}" y2="{next_y + 32}" />'
+                connector = f'<line class="workflow-edge edge-{connector_state}" x1="{x + node_width}" y1="{y + 31}" x2="{next_x}" y2="{next_y + 31}" />'
             else:
-                mid_y = y + 78
+                mid_y = y + 68
                 connector = (
                     f'<path class="workflow-edge edge-{connector_state}" '
-                    f'd="M {x + node_width / 2} {y + 64} V {mid_y} H {next_x + node_width / 2} V {next_y}" />'
+                    f'd="M {x + node_width / 2} {y + 62} V {mid_y} H {next_x + node_width / 2} V {next_y}" />'
                 )
             connectors.append(
                 f"""
@@ -811,23 +829,24 @@ def render_agent_flowchart(messages: list[dict], final: dict | None = None,
                 <div class="agent-index">{index + 1}</div>
                 <div class="agent-state">{html.escape(state)}</div>
               </div>
-              <div class="agent-name">{html.escape(name)}</div>
-              <div class="agent-detail">{html.escape(detail)}</div>
+              <div class="agent-name" title="{html.escape(name)}">{html.escape(name)}</div>
+              <div class="agent-detail">{html.escape(detail)} · {html.escape(service_label)}</div>
+              <div class="agent-action" title="{html.escape(text)}">{html.escape(text)}</div>
             </div>
             """
         )
 
     st.markdown("**Agent operations flow**")
-    row_count = (len(agents) + nodes_per_row - 1) // nodes_per_row
+    row_count = (len(workflow_events) + nodes_per_row - 1) // nodes_per_row
     canvas_width = 48 + nodes_per_row * node_width + (nodes_per_row - 1) * node_gap_x
-    canvas_height = origin_y + row_count * 72 + (row_count - 1) * 26
+    canvas_height = origin_y + row_count * 64 + (row_count - 1) * 18
     components.html(
         f"""
         <style>
           body {{ margin:0; background:#090b09; overflow:auto; }}
           .workflow-shell {{
             max-width:100%;
-            overflow:hidden;
+            overflow:auto;
             border:1px solid #24301f;
             border-radius:8px;
             background:
@@ -859,28 +878,29 @@ def render_agent_flowchart(messages: list[dict], final: dict | None = None,
           .workflow-node {{
             position:absolute;
             width:{node_width}px;
-            min-height:64px;
+            height:62px;
             border:1px solid #2c332a;
             border-radius:8px;
-            padding:8px;
+            padding:7px;
             background:#101110;
             box-sizing:border-box;
           }}
-          .node-header {{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}}
+          .node-header {{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px}}
           .agent-index {{
-            width:22px;
-            height:22px;
+            width:20px;
+            height:20px;
             border-radius:6px;
             background:#b9ff4a;
             color:#10140d;
             display:grid;
             place-items:center;
             font-weight:900;
-            font-size:12px;
+            font-size:11px;
           }}
           .agent-name {{font-weight:800;color:#f5f7ef;font-size:12px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
           .agent-state {{font-size:10px;color:#10140d;background:#9da69b;border-radius:999px;padding:2px 7px;white-space:nowrap}}
-          .agent-detail {{font-size:11px;line-height:1.2;color:#9da69b;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+          .agent-detail {{font-size:10px;line-height:1.15;color:#b9ff4a;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+          .agent-action {{font-size:10px;line-height:1.15;color:#9da69b;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
           .agent-state-working {{
             border-color:#b9ff4a;
             box-shadow:0 0 0 0 rgba(185,255,74,.55);
@@ -924,7 +944,7 @@ def render_agent_flowchart(messages: list[dict], final: dict | None = None,
           <div class="current-text">{html.escape(active_action)}</div>
         </div>
         """,
-        height=315,
+        height=min(430, max(210, canvas_height + 95)),
     )
 
 
@@ -1101,7 +1121,7 @@ def render_incident_response_simulation() -> None:
         final_holder: dict[str, dict] = {}
         stream_thread_id = f"ui-{state['incident']['id']}"
         with flow.container():
-            render_agent_flowchart(collected)
+            render_agent_flowchart(collected, incident=state["incident"])
         with trace.container():
             with st.expander("Backend agent trace", expanded=True):
                 render_streaming_backend_agent_trace(collected, stream_thread_id)
@@ -1120,6 +1140,7 @@ def render_incident_response_simulation() -> None:
                         collected,
                         active_phase=phase,
                         active_agent=active_agent,
+                        incident=state["incident"],
                     )
                 with feed.container():
                     render_slack_channel(
@@ -1136,7 +1157,7 @@ def render_incident_response_simulation() -> None:
             st.error("Incident stream ended before LangGraph returned final state.")
             return
         with flow.container():
-            render_agent_flowchart(collected, final=final)
+            render_agent_flowchart(collected, final=final, incident=final.get("incident"))
         with trace.container():
             with st.expander("Backend agent trace", expanded=True):
                 render_backend_agent_trace(final)

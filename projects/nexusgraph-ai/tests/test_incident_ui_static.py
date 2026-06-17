@@ -70,10 +70,12 @@ def test_incident_ui_has_agent_flowchart():
     assert "workflow-node" in APP
     assert "workflow-edge" in APP
     assert "marker id=\"arrow\"" in APP
-    assert "nodes_per_row = 4" in APP
+    assert "workflow_events = final_messages or unique_messages" in APP
+    assert "nodes_per_row = 6" in APP
     assert "row = index // nodes_per_row" in APP
-    assert "overflow:hidden" in APP
+    assert "overflow:auto" in APP
     assert "agent-flow-compact" in APP
+    assert "service_label" in APP
     assert "Current backend action" in APP
     assert "active_action" in APP
     assert "agent-state-working" in APP

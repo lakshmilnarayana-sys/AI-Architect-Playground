@@ -12,6 +12,14 @@ def test_get_logs_for_incident_filters_by_scenario_and_service():
     assert any("OOMKilled" in log["message"] for log in logs)
 
 
+def test_default_playback_latency_scenario_has_diagnostic_logs():
+    logs = get_logs_for_incident("playback-latency-sev1", "Playback Service")
+    assert logs
+    assert all(log["scenario_id"] == "playback-latency-sev1" for log in logs)
+    assert any("Playback p99 start latency" in log["message"] for log in logs)
+    assert any("OOMKilled" in log["message"] for log in logs)
+
+
 def test_get_logs_for_incident_filters_by_severity():
     logs = get_logs_for_incident("playback-oom-sev1", "playback-service", severity="ERROR")
     assert logs
