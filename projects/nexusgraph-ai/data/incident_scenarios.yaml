@@ -19,3 +19,35 @@
   affected_services: ["Identity Service"]
   signal: "Admin accounts locked out after MFA provider change; privileged access blocked."
   recovered: false
+- id: "playback-oom-sev1"
+  incident_id: "incident:playback-oom-sev1"
+  title: "Playback API OOMKilled SEV1"
+  severity: "SEV1"
+  affected_services: ["playback-service"]
+  signal: "Pods in playback-api are OOMKilled and p99 playback start latency is breaching across US-East."
+  failure_mode: "oom_kill"
+  recovered: true
+- id: "playback-pod-restart-sev1"
+  incident_id: "incident:playback-pod-restart-sev1"
+  title: "Playback API Restart Loop SEV1"
+  severity: "SEV1"
+  affected_services: ["playback-service"]
+  signal: "Playback API pods are in CrashLoopBackOff after a canary rollout; session starts are failing."
+  failure_mode: "pod_restart"
+  recovered: true
+- id: "playback-disk-iops-sev2"
+  incident_id: "incident:playback-disk-iops-sev2"
+  title: "Playback Cache Disk IOPS SEV2"
+  severity: "SEV2"
+  affected_services: ["playback-service"]
+  signal: "Playback cache PVC latency is above 400ms and cache reads are timing out."
+  failure_mode: "disk_iops"
+  recovered: true
+- id: "playback-cpu-throttle-sev2"
+  incident_id: "incident:playback-cpu-throttle-sev2"
+  title: "Playback CPU Throttling SEV2"
+  severity: "SEV2"
+  affected_services: ["playback-service"]
+  signal: "Playback API CPU throttling ratio is above 70% and p99 start latency is elevated."
+  failure_mode: "cpu_throttle"
+  recovered: true

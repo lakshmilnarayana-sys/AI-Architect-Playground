@@ -1,0 +1,20 @@
+- kind: "external_logging"
+  name: "OpenSearch"
+  recommendation: "Ship Kubernetes, app, ingress, and audit logs to OpenSearch using Fluent Bit; index by service, namespace, pod, request_id, and incident_id."
+  applies_to: ["playback-service", "billing-service", "identity-service", "recommendation-service", "observability-service"]
+- kind: "observability"
+  name: "Grafana Cloud"
+  recommendation: "Use Prometheus metrics, Loki logs, Tempo traces, and Grafana dashboards for golden signals, dependency maps, and incident overlays."
+  applies_to: ["playback-service", "billing-service", "identity-service", "recommendation-service", "observability-service"]
+- kind: "dashboard"
+  name: "Playback Golden Signals"
+  recommendation: "Track playback start latency, error rate, traffic, saturation, CDN failover state, and manifest dependency latency."
+  applies_to: ["playback-service"]
+- kind: "alert"
+  name: "Kubernetes Resource Saturation"
+  recommendation: "Alert when OOMKilled, CrashLoopBackOff, DiskIOPSSaturation, or CPUThrottlingHigh persists for more than 5 minutes."
+  applies_to: ["playback-service", "billing-service", "identity-service", "recommendation-service"]
+- kind: "trace"
+  name: "Tempo Playback Request Trace"
+  recommendation: "Correlate playback start traces across playback-api, manifest-service, entitlement check, and CDN token generation."
+  applies_to: ["playback-service", "manifest-service", "cdn-routing-service"]

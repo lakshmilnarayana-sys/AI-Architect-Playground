@@ -1,0 +1,185 @@
+- service: "playback-service"
+  namespace: "streamflix-prod"
+  cluster: "streamflix-us-east-1"
+  workload:
+    kind: "Deployment"
+    name: "playback-api"
+    replicas: 12
+    image: "registry.streamflix.local/playback-api:2026.06.17"
+  resources:
+    requests: {cpu: "500m", memory: "512Mi"}
+    limits: {cpu: "2000m", memory: "1024Mi"}
+  storage:
+    pvc: "playback-cache-pvc"
+    class: "gp3"
+    iops: "3000"
+  kv:
+    env: "prod"
+    tier: "edge-api"
+    owner: "streaming-platform"
+    pager: "playback-primary"
+  failure_modes:
+    oom_kill:
+      enabled: false
+      symptom: "OOMKilled"
+      trigger: {memory_working_set: "1180Mi", restart_count_delta: 4}
+    pod_restart:
+      enabled: false
+      symptom: "CrashLoopBackOff"
+      trigger: {restart_count_delta: 9, exit_code: 137}
+    disk_iops:
+      enabled: false
+      symptom: "DiskIOPSSaturation"
+      trigger: {read_iops: 9500, write_iops: 8700, pvc_latency_ms: 420}
+    cpu_throttle:
+      enabled: false
+      symptom: "CPUThrottlingHigh"
+      trigger: {cpu_throttled_ratio: 0.72, p99_latency_ms: 3800}
+- service: "billing-service"
+  namespace: "streamflix-prod"
+  cluster: "streamflix-us-east-1"
+  workload:
+    kind: "Deployment"
+    name: "billing-api"
+    replicas: 8
+    image: "registry.streamflix.local/billing-api:2026.06.12"
+  resources:
+    requests: {cpu: "400m", memory: "512Mi"}
+    limits: {cpu: "1500m", memory: "1024Mi"}
+  storage:
+    pvc: "billing-ledger-pvc"
+    class: "io2"
+    iops: "6000"
+  kv:
+    env: "prod"
+    tier: "revenue-api"
+    owner: "revenue-systems"
+    pager: "billing-primary"
+  failure_modes:
+    oom_kill:
+      enabled: false
+      symptom: "OOMKilled"
+      trigger: {memory_working_set: "1105Mi", restart_count_delta: 3}
+    pod_restart:
+      enabled: false
+      symptom: "CrashLoopBackOff"
+      trigger: {restart_count_delta: 6, exit_code: 1}
+    disk_iops:
+      enabled: false
+      symptom: "DiskIOPSSaturation"
+      trigger: {read_iops: 12000, write_iops: 13500, pvc_latency_ms: 610}
+    cpu_throttle:
+      enabled: false
+      symptom: "CPUThrottlingHigh"
+      trigger: {cpu_throttled_ratio: 0.58, capture_latency_ms: 2100}
+- service: "identity-service"
+  namespace: "streamflix-prod"
+  cluster: "streamflix-us-east-1"
+  workload:
+    kind: "Deployment"
+    name: "identity-api"
+    replicas: 10
+    image: "registry.streamflix.local/identity-api:2026.06.10"
+  resources:
+    requests: {cpu: "300m", memory: "384Mi"}
+    limits: {cpu: "1200m", memory: "768Mi"}
+  storage:
+    pvc: "identity-session-pvc"
+    class: "gp3"
+    iops: "3000"
+  kv:
+    env: "prod"
+    tier: "auth-api"
+    owner: "identity-platform"
+    pager: "identity-primary"
+  failure_modes:
+    oom_kill:
+      enabled: false
+      symptom: "OOMKilled"
+      trigger: {memory_working_set: "840Mi", restart_count_delta: 2}
+    pod_restart:
+      enabled: false
+      symptom: "CrashLoopBackOff"
+      trigger: {restart_count_delta: 8, exit_code: 2}
+    disk_iops:
+      enabled: false
+      symptom: "DiskIOPSSaturation"
+      trigger: {read_iops: 6400, write_iops: 7100, pvc_latency_ms: 330}
+    cpu_throttle:
+      enabled: false
+      symptom: "CPUThrottlingHigh"
+      trigger: {cpu_throttled_ratio: 0.49, mfa_latency_ms: 1600}
+- service: "recommendation-service"
+  namespace: "streamflix-prod"
+  cluster: "streamflix-us-east-1"
+  workload:
+    kind: "Deployment"
+    name: "recommendation-api"
+    replicas: 14
+    image: "registry.streamflix.local/recommendation-api:2026.06.15"
+  resources:
+    requests: {cpu: "700m", memory: "768Mi"}
+    limits: {cpu: "2500m", memory: "1536Mi"}
+  storage:
+    pvc: "recommendation-cache-pvc"
+    class: "gp3"
+    iops: "5000"
+  kv:
+    env: "prod"
+    tier: "ml-serving"
+    owner: "personalization"
+    pager: "recommendation-primary"
+  failure_modes:
+    oom_kill:
+      enabled: false
+      symptom: "OOMKilled"
+      trigger: {memory_working_set: "1690Mi", restart_count_delta: 5}
+    pod_restart:
+      enabled: false
+      symptom: "CrashLoopBackOff"
+      trigger: {restart_count_delta: 7, exit_code: 137}
+    disk_iops:
+      enabled: false
+      symptom: "DiskIOPSSaturation"
+      trigger: {read_iops: 11300, write_iops: 9000, pvc_latency_ms: 500}
+    cpu_throttle:
+      enabled: false
+      symptom: "CPUThrottlingHigh"
+      trigger: {cpu_throttled_ratio: 0.66, ranking_latency_ms: 2400}
+- service: "observability-service"
+  namespace: "observability"
+  cluster: "streamflix-us-east-1"
+  workload:
+    kind: "Deployment"
+    name: "otel-collector"
+    replicas: 6
+    image: "registry.streamflix.local/otel-collector:2026.06.08"
+  resources:
+    requests: {cpu: "500m", memory: "512Mi"}
+    limits: {cpu: "2000m", memory: "2048Mi"}
+  storage:
+    pvc: "otel-buffer-pvc"
+    class: "gp3"
+    iops: "6000"
+  kv:
+    env: "prod"
+    tier: "platform-telemetry"
+    owner: "platform-operations"
+    pager: "observability-primary"
+  failure_modes:
+    oom_kill:
+      enabled: false
+      symptom: "OOMKilled"
+      trigger: {memory_working_set: "2300Mi", restart_count_delta: 3}
+    pod_restart:
+      enabled: false
+      symptom: "CrashLoopBackOff"
+      trigger: {restart_count_delta: 5, exit_code: 137}
+    disk_iops:
+      enabled: false
+      symptom: "DiskIOPSSaturation"
+      trigger: {read_iops: 15000, write_iops: 17200, pvc_latency_ms: 740}
+    cpu_throttle:
+      enabled: false
+      symptom: "CPUThrottlingHigh"
+      trigger: {cpu_throttled_ratio: 0.81, ingest_lag_seconds: 180}
