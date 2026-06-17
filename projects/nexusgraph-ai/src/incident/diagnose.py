@@ -17,7 +17,13 @@ def _runbook(state: IncidentState, ctx: GraphContext) -> dict:
     matches = ctx.runbooks_for(svc)
     chosen = matches[0] if matches else None
     name = chosen["name"] if chosen else "no matching runbook"
-    update = emit("diagnose", "DiagnoseAgent", "diagnose", "finding", f"Runbook matched: {name}")
+    update = emit(
+        "diagnose",
+        "Remediation Agent",
+        "diagnose",
+        "finding",
+        f"Pulled service runbook for {svc}: {name}",
+    )
     update["findings"] = {"runbook": chosen}
     return update
 
@@ -89,6 +95,21 @@ def _evidence(state: IncidentState, use_vector: bool) -> dict:
     return emit("diagnose", "EvidenceAgent", "diagnose", "action", snippet)
 
 
+def _zoom_bridge(state: IncidentState) -> dict:
+    from src.incident.bridge import collect_zoom_actions
+
+    bridge = collect_zoom_actions(state["incident"], state.get("findings") or {})
+    update = emit(
+        "diagnose",
+        "Zoom Agent",
+        "diagnose",
+        "action",
+        f"Collected {len(bridge['action_items'])} action item(s) from the incident bridge.",
+    )
+    update["findings"] = {"zoom_bridge": bridge}
+    return update
+
+
 def build_diagnose_subgraph(llm=None, ctx: GraphContext | None = None, use_vector: bool = True):
     ctx = ctx or GraphContext()
     g = StateGraph(IncidentState)
@@ -97,10 +118,12 @@ def build_diagnose_subgraph(llm=None, ctx: GraphContext | None = None, use_vecto
     g.add_node("logs", _logs)
     g.add_node("observability", _observability)
     g.add_node("evidence", partial(_evidence, use_vector=use_vector))
+    g.add_node("zoom_bridge", _zoom_bridge)
     g.add_edge(START, "runbook")
     g.add_edge("runbook", "rca")
     g.add_edge("rca", "logs")
     g.add_edge("logs", "observability")
     g.add_edge("observability", "evidence")
-    g.add_edge("evidence", END)
+    g.add_edge("evidence", "zoom_bridge")
+    g.add_edge("zoom_bridge", END)
     return g.compile()

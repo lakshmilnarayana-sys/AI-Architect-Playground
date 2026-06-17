@@ -56,6 +56,7 @@ from src.incident.slack import filter_messages, channel_name
 from src.incident.scenarios import load_scenarios
 from src.incident.state import new_incident
 from src.incident.graph_lookup import GraphContext
+from src.incident.jira import query_incident_metrics
 from src.incident.supervisor import run_incident, stream_incident
 from src.project_status.supervisor import run_project_status
 from src.status_page import build_status_summary, incident_history
@@ -671,7 +672,7 @@ def render_incident_command_center() -> None:
     )
 
 
-def render_slack_channel(incident: dict, messages: list[dict]) -> None:
+def render_slack_channel(incident: dict, messages: list[dict], key_suffix: str | None = None) -> None:
     import base64
     logo_path = ROOT / "app" / "assets" / "slack-logo.svg"
     logo_tag = ""
@@ -680,10 +681,11 @@ def render_slack_channel(incident: dict, messages: list[dict]) -> None:
         logo_tag = f'<img src="data:image/svg+xml;base64,{b64}" width="22" style="vertical-align:middle"/>'
 
     header_cols = st.columns([3, 2])
+    channel_key = re.sub(r"[^a-zA-Z0-9_]+", "_", key_suffix or incident.get("id", "incident"))
     with header_cols[0]:
         st.markdown(f"{logo_tag} **{channel_name(incident)}**", unsafe_allow_html=True)
     with header_cols[1]:
-        search = st.text_input("Search messages", key="slack_search",
+        search = st.text_input("Search messages", key=f"slack_search_{channel_key}",
                                placeholder="Search messages (text, author, phase)")
 
     visible = filter_messages(messages, search)
@@ -694,6 +696,102 @@ def render_slack_channel(incident: dict, messages: list[dict]) -> None:
                 f"`{m.get('phase','')}` · {m.get('ts','')}  \n{m.get('text','')}"
             )
     st.caption(f"{len(visible)} / {len(messages)} messages")
+
+
+def render_agent_flowchart(messages: list[dict], final: dict | None = None, active_phase: str = "") -> None:
+    findings = (final or {}).get("findings") or {}
+    phases = {message.get("phase") for message in messages}
+    if final:
+        phases.update(event.get("phase") for event in final.get("timeline", []))
+
+    agents = [
+        ("Observability Agent", "declare", "Evaluates thresholds and raises alerts."),
+        ("Incident Commander Agent", "declare", "Declares, routes, approves, and closes the loop."),
+        ("Triage Agent", "triage", "Finds owner, on-call, impact, and responders."),
+        ("Remediation Agent", "mitigate", "Pulls runbooks and prepares mitigation."),
+        ("Zoom Agent", "diagnose", "Collects bridge decisions and action items."),
+        ("Scribe Agent", "postmortem", "Summarizes Slack, timeline, and status updates."),
+        ("Jira Agent", "postmortem", "Saves the incident and exposes metrics."),
+    ]
+
+    cards = []
+    for name, phase, detail in agents:
+        if active_phase == phase:
+            state = "working"
+        elif phase in phases:
+            state = "done"
+        else:
+            state = "idle"
+        if name == "Scribe Agent" and findings.get("status_update", {}).get("requires_human_approval"):
+            state = "waiting for HITL"
+        css_state = re.sub(r"[^a-z]+", "-", state.lower()).strip("-")
+        cards.append(
+            f"""
+            <div class="agent-card agent-state-{css_state}">
+              <div class="agent-top">
+                <div class="agent-name">{html.escape(name)}</div>
+                <div class="agent-state">{html.escape(state)}</div>
+              </div>
+              <div class="agent-detail">{html.escape(detail)}</div>
+            </div>
+            """
+        )
+
+    st.markdown("**Agent operations flow**")
+    components.html(
+        f"""
+        <style>
+          .agent-flow {{
+            display:grid;
+            grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+            gap:10px;
+            margin:8px 0 14px;
+          }}
+          .agent-card {{
+            min-height:104px;
+            border:1px solid #2c332a;
+            border-radius:8px;
+            padding:12px;
+            background:#101110;
+          }}
+          .agent-top {{display:flex;justify-content:space-between;gap:8px;align-items:center}}
+          .agent-name {{font-weight:800;color:#f5f7ef;font-size:13px}}
+          .agent-state {{font-size:11px;color:#10140d;background:#9da69b;border-radius:999px;padding:3px 7px;white-space:nowrap}}
+          .agent-detail {{font-size:12px;line-height:1.35;color:#9da69b;margin-top:10px}}
+          .agent-state-working {{
+            border-color:#b9ff4a;
+            box-shadow:0 0 0 0 rgba(185,255,74,.55);
+            animation:agentPulse 1.6s ease-in-out infinite;
+          }}
+          .agent-state-working .agent-state {{background:#b9ff4a}}
+          .agent-state-done .agent-state {{background:#3ce37a}}
+          .agent-state-waiting-for-hitl {{border-color:#ffcf5a}}
+          .agent-state-waiting-for-hitl .agent-state {{background:#ffcf5a}}
+          @keyframes agentPulse {{
+            0% {{box-shadow:0 0 0 0 rgba(185,255,74,.55)}}
+            70% {{box-shadow:0 0 0 10px rgba(185,255,74,0)}}
+            100% {{box-shadow:0 0 0 0 rgba(185,255,74,0)}}
+          }}
+        </style>
+        <div class="agent-flow">{''.join(cards)}</div>
+        """,
+        height=260,
+    )
+
+
+def render_jira_metrics() -> None:
+    metrics = query_incident_metrics()
+    st.markdown("**Jira incident metrics**")
+    cols = st.columns(4)
+    cols[0].metric("Saved incidents", metrics["total_incidents"])
+    cols[1].metric("Open incidents", metrics["open_incidents"])
+    cols[2].metric("Mean TTM", f"{metrics['mean_time_to_mitigate_minutes']}m")
+    sev_count = sum(metrics["by_severity"].values())
+    cols[3].metric("Severity buckets", sev_count)
+    if metrics["issues"]:
+        st.dataframe(pd.DataFrame(metrics["issues"]), width="stretch", hide_index=True)
+    else:
+        st.info("No simulated Jira incidents saved yet.")
 
 
 def render_incident_response_simulation() -> None:
@@ -711,6 +809,13 @@ def render_incident_response_simulation() -> None:
                                      key="inc_sim_k8s")
     with sim_cols[1]:
         failure_mode = st.selectbox("Failure mode", failure_modes, key="inc_failure_mode")
+    demo_pacing = st.toggle(
+        "Concept demo pacing",
+        value=False,
+        key="inc_demo_pacing",
+        help="Adds synthetic 10 second delays between agent updates so viewers can follow the flow.",
+    )
+    demo_delay_seconds = 10 if demo_pacing else 0
 
     if mode == "Scripted scenario":
         labels = [f"{s['title']} ({s['severity']})" for s in scenarios]
@@ -745,15 +850,19 @@ def render_incident_response_simulation() -> None:
             llm = get_llm()
         ctx = GraphContext(use_neo4j=env_flag("INCIDENT_USE_NEO4J", False))
         feed = st.empty()
+        flow = st.empty()
         collected: list[dict] = []
+        render_agent_flowchart(collected)
         for phase, messages in stream_incident(state, llm=llm, ctx=ctx,
                                                 use_vector=env_flag("INCIDENT_USE_VECTOR", False),
                                                 approve=lambda phase: True,
                                                 thread_id=f"ui-{state['incident']['id']}"):
             collected.extend(messages)
+            with flow.container():
+                render_agent_flowchart(collected, active_phase=phase)
             with feed.container():
-                render_slack_channel(state["incident"], collected)
-            time.sleep(0.6)  # timed streaming playback pacing
+                render_slack_channel(state["incident"], collected, key_suffix=f"{state['incident']['id']}_{phase}")
+            time.sleep(demo_delay_seconds or 0.6)  # timed streaming playback pacing
         final = run_incident(
             state,
             llm=llm,
@@ -761,6 +870,8 @@ def render_incident_response_simulation() -> None:
             use_vector=env_flag("INCIDENT_USE_VECTOR", False),
             thread_id=f"ui-summary-{state['incident']['id']}",
         )
+        with flow.container():
+            render_agent_flowchart(collected, final=final)
         st.success("Incident resolved — postmortem generated.")
         automation = (final.get("findings") or {}).get("automation") or {}
         with st.expander("Runbook automation", expanded=True):
@@ -781,6 +892,13 @@ def render_incident_response_simulation() -> None:
             if timeline:
                 st.dataframe(pd.DataFrame(timeline), width="stretch", hide_index=True)
 
+        status_update = (final.get("findings") or {}).get("status_update") or {}
+        with st.expander("Human approval required", expanded=True):
+            st.caption("Publish to Slack and status page only after operator approval.")
+            st.markdown("**Publish to Slack and status page**")
+            st.info(status_update.get("text", "No status update drafted."))
+            st.json((final.get("approvals") or {}).get("status_update", {}))
+
         with st.expander("Static production logs", expanded=False):
             logs = final.get("logs") or []
             if logs:
@@ -795,6 +913,9 @@ def render_incident_response_simulation() -> None:
                 st.dataframe(pd.DataFrame(evidence), width="stretch", hide_index=True)
             else:
                 st.info("No observability evidence selected.")
+
+        with st.expander("Jira incident metrics", expanded=False):
+            render_jira_metrics()
 
 
 def render_streamflix_status_page() -> None:

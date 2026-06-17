@@ -18,7 +18,7 @@ def _load_yaml(name: str) -> list[dict]:
 
 def _keyword_match(haystack: str, needle: str) -> bool:
     h = (haystack or "").lower()
-    return any(tok in h for tok in needle.lower().split())
+    return any(tok in h for tok in needle.lower().replace("-", " ").split())
 
 
 class GraphContext:
@@ -45,7 +45,7 @@ class GraphContext:
 
     # --- Public lookups ------------------------------------------------------
     def runbooks_for(self, service: str) -> list[dict]:
-        token = service.split()[0]
+        token = service.replace("-", " ").split()[0]
         rows = self._neo4j(
             f"MATCH (r:Runbook) WHERE r.name =~ '(?i).*{token}.*' "
             f"RETURN r.id AS id, r.name AS name LIMIT 10"

@@ -42,8 +42,16 @@ def _planner(state: IncidentState, llm=None) -> dict:
             f"Propose a concise mitigation plan for {_service(state)} following {rb_name}.",
             fallback=f"Proposed mitigation per {rb_name}: stabilize, fail over, verify recovery.",
         )
-    update = emit("mitigate", "MitigationPlanner", "mitigate", "action", plan)
-    update["findings"] = {"mitigation_plan": plan}
+    update = emit("mitigate", "Remediation Agent", "mitigate", "action", plan)
+    update["findings"] = {
+        "mitigation_plan": plan,
+        "remediation": {
+            "service": _service(state),
+            "runbook": runbook or {},
+            "plan": plan,
+            "status": "ready_for_commander_approval",
+        },
+    }
     return update
 
 
