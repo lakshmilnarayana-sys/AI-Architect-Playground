@@ -1,0 +1,229 @@
+- project: "Playback Resiliency 2026"
+  owner: "Streaming Platform"
+  current_week: "2026-W24"
+  snapshots:
+    - week: "2026-W23"
+      progress_percent: 58
+      health: "Yellow"
+      summary: "Multi-CDN failover shipped to staging while manifest cache tests remained unstable."
+      metrics:
+        completed_tickets: 18
+        open_tickets: 14
+        merged_prs: 7
+        p95_start_time_ms: 1850
+      milestones:
+        - name: "Multi-CDN routing beta"
+          due: "2026-06-14"
+          status: "At Risk"
+    - week: "2026-W24"
+      progress_percent: 71
+      health: "Yellow"
+      summary: "Multi-CDN routing beta is live for 25% of traffic; cache invalidation and player rollback work remain active."
+      metrics:
+        completed_tickets: 27
+        open_tickets: 11
+        merged_prs: 12
+        p95_start_time_ms: 1430
+      milestones:
+        - name: "Multi-CDN routing beta"
+          due: "2026-06-14"
+          status: "Done"
+        - name: "Player rollback guardrails"
+          due: "2026-06-21"
+          status: "At Risk"
+      tickets:
+        - id: "PLAY-241"
+          title: "Validate CDN weighted failover in canary regions"
+          status: "Done"
+          priority: "High"
+        - id: "PLAY-266"
+          title: "Fix stale manifest cache after region evacuation"
+          status: "Blocked"
+          priority: "High"
+      pull_requests:
+        - id: "PR-1842"
+          title: "Add manifest cache bypass on CDN evacuation"
+          status: "Review"
+          repository: "streamflix/playback-api"
+        - id: "PR-1851"
+          title: "Emit player rollback decision events"
+          status: "Merged"
+          repository: "streamflix/player-web"
+      blockers:
+        - id: "BLK-17"
+          title: "CDN vendor sandbox does not expose regional failover headers"
+          owner: "Vendor Management"
+          severity: "High"
+          status: "Open"
+      risks:
+        - id: "RSK-21"
+          title: "Stale manifests could extend outage blast radius during a CDN evacuation"
+          severity: "High"
+          mitigation: "Ship cache bypass PR and replay traffic before expanding beta."
+        - id: "RSK-22"
+          title: "Player rollback telemetry has incomplete mobile coverage"
+          severity: "Medium"
+          mitigation: "Add iOS and Android event parity checks."
+      dependencies:
+        - id: "DEP-12"
+          name: "CDN failover header contract"
+          owner: "Vendor Management"
+          status: "Blocked"
+        - id: "DEP-13"
+          name: "Mobile telemetry release"
+          owner: "Client Apps"
+          status: "At Risk"
+      decisions:
+        - id: "DEC-9"
+          title: "Hold beta at 25% until cache bypass is verified"
+          outcome: "Approved"
+
+- project: "Observability Unification"
+  owner: "Platform Observability"
+  current_week: "2026-W24"
+  snapshots:
+    - week: "2026-W23"
+      progress_percent: 46
+      health: "Yellow"
+      summary: "OpenTelemetry rollout reached core APIs but dashboards still used mixed naming."
+      metrics:
+        completed_tickets: 12
+        open_tickets: 19
+        merged_prs: 5
+        services_instrumented: 8
+      milestones:
+        - name: "Trace schema v1"
+          due: "2026-06-12"
+          status: "Done"
+    - week: "2026-W24"
+      progress_percent: 60
+      health: "Yellow"
+      summary: "OpenTelemetry rollout now covers revenue and playback services; alert taxonomy and dashboard migration are next."
+      metrics:
+        completed_tickets: 21
+        open_tickets: 15
+        merged_prs: 9
+        services_instrumented: 14
+      milestones:
+        - name: "Unified golden-signal dashboards"
+          due: "2026-06-20"
+          status: "At Risk"
+      tickets:
+        - id: "OBS-118"
+          title: "Backfill trace service names for billing workers"
+          status: "In Progress"
+          priority: "High"
+        - id: "OBS-124"
+          title: "Map legacy alert labels to severity taxonomy"
+          status: "Blocked"
+          priority: "High"
+      pull_requests:
+        - id: "PR-2201"
+          title: "Standardize OpenTelemetry resource attributes"
+          status: "Merged"
+          repository: "streamflix/platform-observability"
+      blockers:
+        - id: "BLK-22"
+          title: "Legacy alert exporter drops new severity labels"
+          owner: "SRE Tooling"
+          severity: "Medium"
+          status: "Open"
+      risks:
+        - id: "RSK-31"
+          title: "Dashboard migration may miss service-owner handoff window"
+          severity: "High"
+          mitigation: "Prioritize top 10 services and publish migration checklist."
+      dependencies:
+        - id: "DEP-25"
+          name: "SRE Tooling alert exporter patch"
+          owner: "SRE Tooling"
+          status: "At Risk"
+        - id: "DEP-26"
+          name: "Service owner dashboard review"
+          owner: "Engineering Managers"
+          status: "On Track"
+      decisions:
+        - id: "DEC-14"
+          title: "Freeze metric naming changes after 2026-W25"
+          outcome: "Approved"
+
+- project: "Billing Platform Modernization"
+  owner: "Revenue Platform"
+  current_week: "2026-W24"
+  snapshots:
+    - week: "2026-W23"
+      progress_percent: 39
+      health: "Red"
+      summary: "Ledger replay found duplicate invoice events and tax integration remained blocked."
+      metrics:
+        completed_tickets: 9
+        open_tickets: 25
+        merged_prs: 4
+        replay_accuracy_percent: 97.8
+      milestones:
+        - name: "Ledger replay parity"
+          due: "2026-06-15"
+          status: "Blocked"
+    - week: "2026-W24"
+      progress_percent: 43
+      health: "Red"
+      summary: "Event ledger migration is behind plan due to duplicate invoice handling and tax provider certification delays."
+      metrics:
+        completed_tickets: 12
+        open_tickets: 27
+        merged_prs: 5
+        replay_accuracy_percent: 98.2
+      milestones:
+        - name: "Ledger replay parity"
+          due: "2026-06-15"
+          status: "Blocked"
+        - name: "Tax provider certification"
+          due: "2026-06-19"
+          status: "Blocked"
+      tickets:
+        - id: "BILL-330"
+          title: "De-duplicate invoice emitted events during replay"
+          status: "Blocked"
+          priority: "Critical"
+        - id: "BILL-346"
+          title: "Add reconciliation report for migrated accounts"
+          status: "In Progress"
+          priority: "High"
+      pull_requests:
+        - id: "PR-1987"
+          title: "Introduce ledger event idempotency key"
+          status: "Changes Requested"
+          repository: "streamflix/billing-ledger"
+      blockers:
+        - id: "BLK-30"
+          title: "Tax provider certification queue moved to next week"
+          owner: "Tax Integrations"
+          severity: "High"
+          status: "Open"
+        - id: "BLK-31"
+          title: "Duplicate invoice event semantics unresolved"
+          owner: "Revenue Platform"
+          severity: "High"
+          status: "Open"
+      risks:
+        - id: "RSK-41"
+          title: "Migration date may slip if replay parity stays below 99.9%"
+          severity: "High"
+          mitigation: "Run daily replay diff reviews with finance engineering."
+        - id: "RSK-42"
+          title: "Manual reconciliation workload could exceed support capacity"
+          severity: "High"
+          mitigation: "Scope temporary reconciliation queue ownership."
+      dependencies:
+        - id: "DEP-33"
+          name: "Tax provider certification"
+          owner: "Tax Integrations"
+          status: "Blocked"
+        - id: "DEP-34"
+          name: "Finance sign-off on replay parity"
+          owner: "Finance Engineering"
+          status: "Blocked"
+      decisions:
+        - id: "DEC-19"
+          title: "Do not migrate enterprise accounts until replay parity reaches 99.9%"
+          outcome: "Approved"
