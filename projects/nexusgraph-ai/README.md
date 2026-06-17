@@ -146,6 +146,17 @@ StreamFlix Organizational Knowledge Dataset
 
 The current seed graph contains people, teams, projects, services, skills, tools, documents, decisions, incidents, audits, vendors, systems, on-call schedules, current on-call assignments, dashboards, runbooks, escalation policies, SLO metrics, datastores, event topics, architecture docs, OpenAPI specs, Kubernetes manifests, and Terraform references. It also incorporates missing service-dependency and operational documentation concepts from the Netflix synthetic service dataset. Source artifacts live in `data/`, while graph import artifacts live in `graph/`.
 
+## Week 3 Agentic AI Systems
+
+This repo now implements two Week 3 project tracks on top of the StreamFlix operations graph:
+
+1. **Multi-Agent IT Support / Incident Response Agent**: a Freshworks-style incident lifecycle simulation covering identification, logging, categorization, prioritization, response, escalation, diagnosis, recovery, closure, and post-incident review. The demo can inject Kubernetes failure modes for `oom_kill`, `pod_restart`, `disk_iops`, and `cpu_throttle`; the agents attach Kubernetes KV context, static production logs, observability evidence, mitigation plans, recovery checks, and postmortem actions.
+2. **Intelligent Project Status Agent**: a weekly status synthesis agent over synthetic Jira, GitHub, dependency, risk, blocker, and decision snapshots. It produces a status color, executive summary, risks, blockers, dependencies, week-over-week insights, and next actions.
+
+The incident simulation uses local deterministic data rather than touching a live cluster. Kubernetes resources live in `data/kubernetes_resources.yaml`; static logs live in `data/service_logs.yaml`; outage scenarios live in `data/incident_scenarios.yaml`; FireHydrant-style runbook automation lives in `data/firehydrant_runbook_automations.yaml`.
+
+Recommended production integrations are modeled in `data/observability_sources.yaml`: OpenSearch with Fluent Bit for external log collection, and Grafana Cloud with Prometheus, Loki, Tempo, and Alertmanager for observability. The Streamlit UI also includes a Streamflix status-history surface inspired by public SaaS status pages.
+
 ## Deliverables
 
 ```text
@@ -268,3 +279,6 @@ The Streamlit demo includes:
 3. Behind-the-scenes trace timelines and evidence cards.
 4. Neo4j graph import and ChromaDB vector ingestion during container startup.
 5. A software catalog explorer and graph preview for the synthetic Streamflix dataset.
+6. A production-like incident response simulation with Kubernetes failure injection, static logs, observability evidence, FireHydrant-style automation, and Freshworks-style lifecycle checkpoints.
+7. A Streamflix status page with active incident and incident history.
+8. A project status agent that summarizes weekly risks, blockers, dependencies, and next actions.
