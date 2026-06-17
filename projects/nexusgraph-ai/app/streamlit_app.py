@@ -763,7 +763,11 @@ def render_agent_flowchart(messages: list[dict], final: dict | None = None,
     if final:
         seen_agents = {name for name, _phase, _detail in agents}
 
-    cards = []
+    nodes = []
+    connectors = []
+    node_width = 164
+    node_gap = 52
+    node_y = 36
     for index, (name, phase, detail) in enumerate(agents):
         if active_agent == name or (active_phase == phase and not active_agent):
             state = "working"
@@ -774,57 +778,89 @@ def render_agent_flowchart(messages: list[dict], final: dict | None = None,
         if name == "Scribe Agent" and findings.get("status_update", {}).get("requires_human_approval"):
             state = "waiting for HITL"
         css_state = re.sub(r"[^a-z]+", "-", state.lower()).strip("-")
-        cards.append(
+        x = 24 + index * (node_width + node_gap)
+        connector_state = "done" if name in seen_agents else "idle"
+        if index < len(agents) - 1:
+            next_x = 24 + (index + 1) * (node_width + node_gap)
+            connectors.append(
+                f"""
+                <line class="workflow-edge edge-{connector_state}" x1="{x + node_width}" y1="{node_y + 32}" x2="{next_x}" y2="{node_y + 32}" />
+                """
+            )
+        nodes.append(
             f"""
-            <div class="agent-node agent-state-{css_state}">
-              <div class="agent-index">{index + 1}</div>
-              <div class="agent-main">
-                <div class="agent-name">{html.escape(name)}</div>
-                <div class="agent-detail">{html.escape(detail)}</div>
+            <div class="workflow-node agent-state-{css_state}" style="left:{x}px;top:{node_y}px">
+              <div class="node-header">
+                <div class="agent-index">{index + 1}</div>
+                <div class="agent-state">{html.escape(state)}</div>
               </div>
-              <div class="agent-state">{html.escape(state)}</div>
+              <div class="agent-name">{html.escape(name)}</div>
+              <div class="agent-detail">{html.escape(detail)}</div>
             </div>
             """
         )
 
     st.markdown("**Agent operations flow**")
+    canvas_width = 48 + len(agents) * node_width + (len(agents) - 1) * node_gap
     components.html(
         f"""
         <style>
           body {{ margin:0; background:#090b09; overflow:auto; }}
-          .agent-flow-compact {{
-            display:flex;
-            flex-direction:column;
-            gap:6px;
-            margin:0;
-            max-width:980px;
+          .workflow-shell {{
+            max-width:100%;
+            overflow:auto;
+            border:1px solid #24301f;
+            border-radius:8px;
+            background:
+              linear-gradient(rgba(185,255,74,.045) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(185,255,74,.045) 1px, transparent 1px),
+              #090b09;
+            background-size:22px 22px;
+            padding:10px;
           }}
-          .agent-node {{
-            min-height:42px;
+          .agent-flow-compact {{
+            position:relative;
+            width:{canvas_width}px;
+            height:150px;
+          }}
+          .workflow-svg {{
+            position:absolute;
+            inset:0;
+            width:{canvas_width}px;
+            height:150px;
+            pointer-events:none;
+          }}
+          .workflow-edge {{
+            stroke:#596052;
+            stroke-width:2;
+            marker-end:url(#arrow);
+          }}
+          .edge-done {{stroke:#3ce37a}}
+          .workflow-node {{
+            position:absolute;
+            width:{node_width}px;
+            min-height:64px;
             border:1px solid #2c332a;
             border-radius:8px;
-            padding:8px 10px;
+            padding:8px;
             background:#101110;
-            display:flex;
-            align-items:center;
-            gap:10px;
+            box-sizing:border-box;
           }}
+          .node-header {{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}}
           .agent-index {{
-            width:26px;
-            height:26px;
-            border-radius:7px;
+            width:22px;
+            height:22px;
+            border-radius:6px;
             background:#b9ff4a;
             color:#10140d;
             display:grid;
             place-items:center;
             font-weight:900;
-            font-size:13px;
-            flex:0 0 auto;
+            font-size:12px;
           }}
-          .agent-main {{flex:1; min-width:0; display:flex; align-items:baseline; gap:10px}}
-          .agent-name {{font-weight:800;color:#f5f7ef;font-size:13px}}
-          .agent-state {{font-size:11px;color:#10140d;background:#9da69b;border-radius:999px;padding:3px 8px;white-space:nowrap}}
-          .agent-detail {{font-size:12px;line-height:1.2;color:#9da69b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+          .agent-name {{font-weight:800;color:#f5f7ef;font-size:12px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+          .agent-state {{font-size:10px;color:#10140d;background:#9da69b;border-radius:999px;padding:2px 7px;white-space:nowrap}}
+          .agent-detail {{font-size:11px;line-height:1.2;color:#9da69b;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
           .agent-state-working {{
             border-color:#b9ff4a;
             box-shadow:0 0 0 0 rgba(185,255,74,.55);
@@ -832,6 +868,7 @@ def render_agent_flowchart(messages: list[dict], final: dict | None = None,
           }}
           .agent-state-working .agent-state {{background:#b9ff4a}}
           .agent-state-done .agent-state {{background:#3ce37a}}
+          .agent-state-done {{border-color:#315b38}}
           .agent-state-waiting-for-hitl {{border-color:#ffcf5a}}
           .agent-state-waiting-for-hitl .agent-state {{background:#ffcf5a}}
           .current-action {{
@@ -849,13 +886,25 @@ def render_agent_flowchart(messages: list[dict], final: dict | None = None,
             100% {{box-shadow:0 0 0 0 rgba(185,255,74,0)}}
           }}
         </style>
-        <div class="agent-flow-compact">{''.join(cards)}</div>
+        <div class="workflow-shell">
+          <div class="agent-flow-compact">
+            <svg class="workflow-svg" viewBox="0 0 {canvas_width} 150" preserveAspectRatio="none">
+              <defs>
+                <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto" markerUnits="strokeWidth">
+                  <path d="M0,0 L8,4 L0,8 z" fill="#b9ff4a"></path>
+                </marker>
+              </defs>
+              {''.join(connectors)}
+            </svg>
+            {''.join(nodes)}
+          </div>
+        </div>
         <div class="current-action">
           <div class="current-label">Current backend action</div>
           <div class="current-text">{html.escape(active_action)}</div>
         </div>
         """,
-        height=470,
+        height=245,
     )
 
 

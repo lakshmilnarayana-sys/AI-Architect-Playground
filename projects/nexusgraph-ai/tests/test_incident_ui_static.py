@@ -66,6 +66,10 @@ def test_incident_ui_has_agent_flowchart():
     assert "def render_agent_flowchart(" in APP
     assert "def agent_name_for_message(" in APP
     assert "Agent operations flow" in APP
+    assert "workflow-shell" in APP
+    assert "workflow-node" in APP
+    assert "workflow-edge" in APP
+    assert "marker id=\"arrow\"" in APP
     assert "agent-flow-compact" in APP
     assert "Current backend action" in APP
     assert "active_action" in APP
