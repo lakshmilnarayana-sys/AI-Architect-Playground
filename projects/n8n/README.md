@@ -6,7 +6,7 @@ This folder contains importable n8n workflow templates.
 
 File: `Code Review ReAct Agent (GitHub PR).json`
 
-This workflow reviews GitHub pull requests with a ReAct-style AI agent. It listens for GitHub `pull_request` events, fetches the PR diff, runs deterministic code review tools, asks an OpenAI chat model to produce a structured review, and posts the result back to the pull request as a non-blocking GitHub review comment.
+This workflow reviews GitHub pull requests with a hardened ReAct-style AI agent. It listens for GitHub `pull_request` events, fetches the PR diff, runs deterministic code review tools, validates the final report, and posts the result back to the pull request as a non-blocking GitHub review comment.
 
 ![Code Review ReAct Agent GitHub PR workflow](assets/code-review-react-agent-github-pr.png)
 
@@ -23,17 +23,29 @@ Failing review example:
 ### Workflow
 
 1. `GitHub Trigger` receives pull request events.
-2. `Filter PR Events` keeps relevant PR activity.
+2. `Filter PR Events` keeps relevant PR activity and skips draft or opt-out labelled PRs.
 3. `Fetch Diff` downloads the pull request diff from GitHub.
 4. `Parse Input` prepares the diff and context for the agent.
-5. `Code Review Agent` reviews the diff using these tools:
+5. `Large Diff Gate` prevents partial reviews of oversized diffs.
+6. `Large Diff Report` posts a safe fallback report when the PR is too large for single-pass review.
+7. `Code Review Agent` reviews normal-sized diffs using these tools:
    - `get_code`
    - `ast_complexity_analysis`
    - `security_analysis`
    - `quality_regex_analysis`
    - `web_search`
-6. `Format Output` prepares the final report.
-7. `Create a review` posts the review comment to GitHub.
+8. `Format Output` prepares the final report.
+9. `Sanitize and Validate Report` checks required sections, caps report size, and removes unsafe mention patterns.
+10. `Create a review` posts the review comment to GitHub.
+
+### Safeguards
+
+- Skips draft PRs and PRs labelled `no-ai-review`, `skip-ai-review`, or `ai-review-skip`.
+- Treats PR titles, branch names, filenames, comments, and diff content as untrusted input.
+- Avoids silent truncation by posting a large-diff fallback report when the diff exceeds the configured limit.
+- Scans added diff lines while ignoring diff headers.
+- Sanitizes final GitHub output before posting.
+- Uses parsed PR metadata for stable pull request number and commit SHA references.
 
 ### Requirements
 
