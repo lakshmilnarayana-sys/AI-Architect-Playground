@@ -8,6 +8,8 @@ File: `Code Review ReAct Agent (GitHub PR).json`
 
 This workflow reviews GitHub pull requests with a ReAct-style AI agent. It listens for GitHub `pull_request` events, fetches the PR diff, runs deterministic code review tools, asks an OpenAI chat model to produce a structured review, and posts the result back to the pull request as a non-blocking GitHub review comment.
 
+![Code Review ReAct Agent GitHub PR workflow](assets/code-review-react-agent-github-pr.png)
+
 ### Workflow
 
 1. `GitHub Trigger` receives pull request events.
