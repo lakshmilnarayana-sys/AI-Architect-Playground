@@ -1,6 +1,56 @@
 # n8n Workflows
 
-This folder contains importable n8n workflow templates.
+This folder contains 17 importable n8n workflow templates for developer automation, AI review, operations, and knowledge workflows.
+
+## Quick Start
+
+1. Download or clone this repository.
+2. Open n8n and go to **Workflows**.
+3. Choose **Import from File**.
+4. Select one of the `.json` files in this folder.
+5. Replace placeholder values such as `OWNER`, `REPOSITORY`, and `https://example.com/...`.
+6. Reconnect credentials inside n8n.
+7. Activate the workflow only after testing it with your target repository or endpoint.
+
+All templates are exported without credential bindings, webhook IDs, API keys, or private repository values.
+
+## Common Configuration
+
+GitHub templates use these placeholders:
+
+- `OWNER`: GitHub organization or user name.
+- `REPOSITORY`: GitHub repository name.
+
+Webhook and HTTP endpoint templates use placeholder URLs like:
+
+- `https://example.com/ROUTING_WEBHOOK_URL`
+- `https://example.com/INCIDENT_WEBHOOK_URL`
+- `https://example.com/DIGEST_WEBHOOK_URL`
+- `https://example.com/VECTOR_INDEX_ENDPOINT`
+
+Most AI templates use `gpt-4o-mini` with temperature `0.2`. After import, attach your own OpenAI credential to `OpenAI Chat Model`.
+
+## Template Catalog
+
+| Template | Trigger | Output | Required setup |
+| --- | --- | --- | --- |
+| `Code Review ReAct Agent (GitHub PR).json` | GitHub pull request | PR review comment | GitHub OAuth2, OpenAI, `OWNER`, `REPOSITORY` |
+| `CI Failure Explainer (GitHub Actions).json` | GitHub workflow run | PR issue comment | GitHub OAuth2, OpenAI, `OWNER`, `REPOSITORY` |
+| `Issue Triage Agent (GitHub Issues).json` | GitHub issue | Issue triage comment | GitHub OAuth2, OpenAI, `OWNER`, `REPOSITORY` |
+| `Release Notes Generator (GitHub).json` | GitHub release | Release notes issue | GitHub OAuth2, OpenAI, `OWNER`, `REPOSITORY` |
+| `Dependency Risk Monitor.json` | Schedule | Dependency risk issue | GitHub OAuth2, OpenAI, package source configuration |
+| `Code Owner Notifier (GitHub PR).json` | GitHub pull request | PR owner suggestion comment | GitHub OAuth2, OpenAI, `OWNER`, `REPOSITORY` |
+| `Architecture Review Agent (GitHub PR).json` | GitHub pull request | PR architecture review comment | GitHub OAuth2, OpenAI, `OWNER`, `REPOSITORY` |
+| `Documentation Update Agent (GitHub PR).json` | GitHub pull request | PR documentation check comment | GitHub OAuth2, OpenAI, `OWNER`, `REPOSITORY` |
+| `Test Gap Agent (GitHub PR).json` | GitHub pull request | PR test gap comment | GitHub OAuth2, OpenAI, `OWNER`, `REPOSITORY` |
+| `Security Review Agent (GitHub PR).json` | GitHub pull request | PR security review comment | GitHub OAuth2, OpenAI, `OWNER`, `REPOSITORY` |
+| `Customer Feedback Router.json` | Webhook | Ticketing endpoint request | OpenAI, routing webhook URL |
+| `Incident Assistant.json` | Webhook | Incident endpoint request | OpenAI, incident webhook URL |
+| `Daily Engineering Digest.json` | Schedule | Digest endpoint request | OpenAI, digest webhook URL, data sources |
+| `SLA Monitor.json` | Schedule | SLA escalation issue | GitHub OAuth2, OpenAI, ticket source configuration |
+| `Repo Knowledge Indexer.json` | GitHub push | Vector/index endpoint request | GitHub OAuth2, OpenAI, vector index endpoint |
+| `Meeting Notes to Tasks.json` | Webhook | GitHub tracking issue | GitHub OAuth2, OpenAI, `OWNER`, `REPOSITORY` |
+| `Research Watcher.json` | Schedule | Research digest issue | GitHub OAuth2, OpenAI, research source configuration |
 
 ## Code Review ReAct Agent (GitHub PR)
 
@@ -120,36 +170,3 @@ Replace `OWNER` and `REPOSITORY`, then reconnect credentials for:
 - `OpenAI Chat Model`
 
 This first version uses job and step metadata rather than zipped log parsing. A future upgrade can fetch and summarize raw logs for deeper root-cause analysis.
-
-## Template Catalog
-
-Developer automation:
-
-- `Code Review ReAct Agent (GitHub PR).json` reviews pull request diffs and posts structured code review comments.
-- `CI Failure Explainer (GitHub Actions).json` explains failed GitHub Actions runs on pull requests.
-- `Issue Triage Agent (GitHub Issues).json` classifies new issues and posts triage guidance.
-- `Release Notes Generator (GitHub).json` drafts release notes from GitHub release events.
-- `Dependency Risk Monitor.json` provides a scheduled dependency risk report starter.
-- `Code Owner Notifier (GitHub PR).json` suggests reviewers or owner groups for pull requests.
-
-AI review agents:
-
-- `Architecture Review Agent (GitHub PR).json` reviews pull requests for architecture, scalability, and operational risk.
-- `Documentation Update Agent (GitHub PR).json` checks whether a pull request needs docs, runbook, or example updates.
-- `Test Gap Agent (GitHub PR).json` suggests missing tests and regression scenarios.
-- `Security Review Agent (GitHub PR).json` performs focused security review triage.
-
-Product and operations:
-
-- `Customer Feedback Router.json` classifies incoming feedback and sends it to a configured ticketing endpoint.
-- `Incident Assistant.json` summarizes alerts and sends an incident update to a configured endpoint.
-- `Daily Engineering Digest.json` creates a scheduled engineering status digest.
-- `SLA Monitor.json` creates an escalation report for stale or at-risk work.
-
-Data and knowledge:
-
-- `Repo Knowledge Indexer.json` turns push events into searchable knowledge-index payloads.
-- `Meeting Notes to Tasks.json` extracts action items from meeting notes and creates a tracking issue.
-- `Research Watcher.json` creates scheduled research/advisory digest issues.
-
-All templates are exported without credential bindings, webhook IDs, API keys, or private repository values. Replace placeholders such as `OWNER`, `REPOSITORY`, and `https://example.com/...` before activation, then attach the required credentials inside n8n.
