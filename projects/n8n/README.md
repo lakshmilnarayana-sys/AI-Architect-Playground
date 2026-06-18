@@ -10,6 +10,16 @@ This workflow reviews GitHub pull requests with a ReAct-style AI agent. It liste
 
 ![Code Review ReAct Agent GitHub PR workflow](assets/code-review-react-agent-github-pr.png)
 
+### Example Output
+
+Passing review example:
+
+![Code review report with grade A](assets/code-review-report-grade-a.png)
+
+Failing review example:
+
+![Code review report with grade F](assets/code-review-report-grade-f.png)
+
 ### Workflow
 
 1. `GitHub Trigger` receives pull request events.
