@@ -82,3 +82,49 @@ The `OpenAI Chat Model` node uses `gpt-4o-mini` with temperature `0.2`. Adjust t
 Activate the workflow in n8n after credentials and repository values are configured. An active workflow registers the real GitHub webhook. Test/listen mode is not enough for production PR review automation.
 
 By default, the workflow posts reviews with `event=comment`, so it does not block merges. To make the review gating, update the `Create a review` node event setting according to your repository policy.
+
+## CI Failure Explainer (GitHub Actions)
+
+File: `CI Failure Explainer (GitHub Actions).json`
+
+This workflow watches failed GitHub Actions `workflow_run` events, fetches failed job and step metadata, asks an OpenAI model for a concise explanation, and posts a non-blocking comment on the related pull request.
+
+### Workflow
+
+1. `GitHub Trigger` receives completed workflow run events.
+2. `Filter Failed Runs` keeps failed, timed-out, cancelled, or action-required runs attached to a pull request.
+3. `Fetch Jobs` calls the GitHub Actions jobs API for the failed run.
+4. `Build Failure Context` extracts failed jobs, failed steps, run links, branch, PR number, and commit SHA.
+5. `AI Failure Explainer` generates a short PR-ready debugging summary.
+6. `Format Comment` sanitizes the comment and applies a size cap.
+7. `Create PR Comment` posts the explanation to the pull request.
+
+### Requirements
+
+- GitHub OAuth2 credential in n8n with access to workflow runs and issue comments.
+- OpenAI API credential in n8n.
+- GitHub Actions enabled on the target repository.
+
+### Configure
+
+After import, update the GitHub owner and repository values in:
+
+- `GitHub Trigger`
+- `Create PR Comment`
+
+Replace `OWNER` and `REPOSITORY`, then reconnect credentials for:
+
+- `GitHub Trigger`
+- `Fetch Jobs`
+- `Create PR Comment`
+- `OpenAI Chat Model`
+
+This first version uses job and step metadata rather than zipped log parsing. A future upgrade can fetch and summarize raw logs for deeper root-cause analysis.
+
+## Project Roadmap
+
+- Issue Triage Agent
+- Security Review Agent
+- Release Notes Generator
+- Dependency Risk Monitor
+- Documentation Update Agent
