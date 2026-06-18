@@ -121,10 +121,35 @@ Replace `OWNER` and `REPOSITORY`, then reconnect credentials for:
 
 This first version uses job and step metadata rather than zipped log parsing. A future upgrade can fetch and summarize raw logs for deeper root-cause analysis.
 
-## Project Roadmap
+## Template Catalog
 
-- Issue Triage Agent
-- Security Review Agent
-- Release Notes Generator
-- Dependency Risk Monitor
-- Documentation Update Agent
+Developer automation:
+
+- `Code Review ReAct Agent (GitHub PR).json` reviews pull request diffs and posts structured code review comments.
+- `CI Failure Explainer (GitHub Actions).json` explains failed GitHub Actions runs on pull requests.
+- `Issue Triage Agent (GitHub Issues).json` classifies new issues and posts triage guidance.
+- `Release Notes Generator (GitHub).json` drafts release notes from GitHub release events.
+- `Dependency Risk Monitor.json` provides a scheduled dependency risk report starter.
+- `Code Owner Notifier (GitHub PR).json` suggests reviewers or owner groups for pull requests.
+
+AI review agents:
+
+- `Architecture Review Agent (GitHub PR).json` reviews pull requests for architecture, scalability, and operational risk.
+- `Documentation Update Agent (GitHub PR).json` checks whether a pull request needs docs, runbook, or example updates.
+- `Test Gap Agent (GitHub PR).json` suggests missing tests and regression scenarios.
+- `Security Review Agent (GitHub PR).json` performs focused security review triage.
+
+Product and operations:
+
+- `Customer Feedback Router.json` classifies incoming feedback and sends it to a configured ticketing endpoint.
+- `Incident Assistant.json` summarizes alerts and sends an incident update to a configured endpoint.
+- `Daily Engineering Digest.json` creates a scheduled engineering status digest.
+- `SLA Monitor.json` creates an escalation report for stale or at-risk work.
+
+Data and knowledge:
+
+- `Repo Knowledge Indexer.json` turns push events into searchable knowledge-index payloads.
+- `Meeting Notes to Tasks.json` extracts action items from meeting notes and creates a tracking issue.
+- `Research Watcher.json` creates scheduled research/advisory digest issues.
+
+All templates are exported without credential bindings, webhook IDs, API keys, or private repository values. Replace placeholders such as `OWNER`, `REPOSITORY`, and `https://example.com/...` before activation, then attach the required credentials inside n8n.
