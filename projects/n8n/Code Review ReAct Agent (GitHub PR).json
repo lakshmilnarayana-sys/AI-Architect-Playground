@@ -42,14 +42,7 @@
             "position": [
                 320,
                 300
-            ],
-            "webhookId": "GITHUB_TRIGGER_WEBHOOK",
-            "credentials": {
-                "githubOAuth2Api": {
-                    "id": "GITHUB_CREDENTIAL_ID",
-                    "name": "GitHub OAuth2 Credential"
-                }
-            }
+            ]
         },
         {
             "parameters": {
@@ -93,13 +86,7 @@
             "position": [
                 800,
                 300
-            ],
-            "credentials": {
-                "githubOAuth2Api": {
-                    "id": "GITHUB_CREDENTIAL_ID",
-                    "name": "GitHub OAuth2 Credential"
-                }
-            }
+            ]
         },
         {
             "parameters": {
@@ -199,13 +186,7 @@
             "position": [
                 1340,
                 680
-            ],
-            "credentials": {
-                "openAiApi": {
-                    "id": "OPENAI_CREDENTIAL_ID",
-                    "name": "OpenAI API Credential"
-                }
-            }
+            ]
         },
         {
             "parameters": {
@@ -342,14 +323,7 @@
             "position": [
                 2480,
                 300
-            ],
-            "webhookId": "CREATE_REVIEW_WEBHOOK",
-            "credentials": {
-                "githubOAuth2Api": {
-                    "id": "GITHUB_CREDENTIAL_ID",
-                    "name": "GitHub OAuth2 Credential"
-                }
-            }
+            ]
         }
     ],
     "pinData": {},

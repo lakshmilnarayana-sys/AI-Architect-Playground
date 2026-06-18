@@ -73,7 +73,7 @@ After import, update the GitHub owner and repository values in both:
 - `GitHub Trigger`
 - `Create a review`
 
-The exported workflow currently contains example repository values from the source environment. Replace them with the target repository before activating the workflow.
+The exported workflow uses placeholder repository values. Replace `OWNER` and `REPOSITORY` with the target repository before activating the workflow.
 
 The `OpenAI Chat Model` node uses `gpt-4o-mini` with temperature `0.2`. Adjust the model only if your n8n instance has a different approved model or budget requirement.
 
