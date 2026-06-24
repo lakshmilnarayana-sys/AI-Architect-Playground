@@ -10,6 +10,11 @@ def _short(service_id: str) -> str:
     return service_id.split(":", 1)[1]
 
 
+def _k8s_name(short: str) -> str:
+    """Kubernetes Service/Deployment name for a service short-id, avoiding a doubled -service suffix."""
+    return short if short.endswith("-service") else f"{short}-service"
+
+
 def load_services(nodes_path: Path) -> list[dict]:
     services = []
     with open(nodes_path, newline="") as fh:
@@ -36,8 +41,8 @@ def load_dependencies(edges_path: Path) -> dict[str, list[str]]:
 
 
 def render_service(svc: dict, deps: list[str], image: str) -> str:
-    name = f"{svc['short']}-service"
-    downstreams = ",".join(f"{_short(d)}={_short(d)}-service:8080/" for d in deps)
+    name = _k8s_name(svc['short'])
+    downstreams = ",".join(f"{_short(d)}={_k8s_name(_short(d))}:8080/" for d in deps)
     return f"""---
 apiVersion: apps/v1
 kind: Deployment
@@ -88,7 +93,7 @@ def main(out_dir: str, image: str, nodes: str, edges: str) -> None:
     deps = load_dependencies(Path(edges))
     for svc in services:
         manifest = render_service(svc, deps.get(svc["id"], []), image)
-        (out / f"{svc['short']}-service.yaml").write_text(manifest)
+        (out / f"{_k8s_name(svc['short'])}.yaml").write_text(manifest)
     print(f"Generated {len(services)} service manifests in {out}")
 
 

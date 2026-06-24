@@ -45,3 +45,15 @@ def test_render_service_includes_downstreams_env():
     assert "manifest-service:8080" in out
     assert "identity-service:8080" in out
     assert "SERVICE_TIER" in out and "customer-facing" in out
+
+
+def test_render_service_avoids_doubled_service_suffix():
+    svc = {"id": "service:account-service", "short": "account-service", "tier": "internal"}
+    out = render_service(svc, ["service:auth-service", "service:playback"], "img:dev")
+    # own name must not be doubled
+    assert "name: account-service\n" in out or "name: account-service " in out
+    assert "account-service-service" not in out
+    # downstream that already ends in -service -> host not doubled
+    assert "auth-service=auth-service:8080/" in out
+    # downstream that does NOT end in -service -> gets suffix
+    assert "playback=playback-service:8080/" in out
