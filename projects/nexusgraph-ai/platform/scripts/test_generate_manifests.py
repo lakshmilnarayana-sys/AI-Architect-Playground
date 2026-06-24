@@ -1,3 +1,4 @@
+import re
 import textwrap
 from pathlib import Path
 
@@ -59,3 +60,19 @@ def test_render_service_avoids_doubled_service_suffix():
     assert "auth-service=auth-service:8080/" in out
     # downstream that does NOT end in -service -> gets suffix
     assert "playback=playback-service:8080/" in out
+
+
+def test_safe_label_sanitizes_invalid_description():
+    from generate_manifests import _safe_label
+    raw = "Imported from Netflix synthetic dataset: Service account-service"
+    result = _safe_label(raw)
+    assert len(result) <= 63
+    assert re.match(r'^[A-Za-z0-9]', result)
+    assert re.search(r'[A-Za-z0-9]$', result)
+    assert ':' not in result and ' ' not in result
+
+
+def test_safe_label_empty_returns_unknown():
+    from generate_manifests import _safe_label
+    assert _safe_label("") == "unknown"
+    assert _safe_label(":::") == "unknown"
