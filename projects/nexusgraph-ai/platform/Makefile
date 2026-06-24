@@ -2,7 +2,7 @@ SHELL := /usr/bin/env bash
 CTX := kind-streamflix
 REG := localhost:5001
 
-.PHONY: up down context observe build deploy verify fault
+.PHONY: up down context observe build deploy verify fault alerts
 up:
 	@command -v kind >/dev/null || { echo "kind not installed"; exit 1; }
 	@docker info >/dev/null 2>&1 || { echo "Docker not running"; exit 1; }
@@ -42,3 +42,14 @@ verify:
 
 fault:
 	@bash scripts/inject_fault.sh $(SVC) $(MODE) $(VALUE) $(TTL)
+
+alerts:
+	@docker build -t $(REG)/streamflix-alert-sink:dev alerting/alert-sink
+	@docker push $(REG)/streamflix-alert-sink:dev
+	@kind load docker-image $(REG)/streamflix-alert-sink:dev --name streamflix
+	@kubectl --context $(CTX) apply -f alerting/alert-sink/k8s.yaml
+	@kubectl --context $(CTX) -n observability rollout status deploy/alert-sink --timeout=120s
+	@kubectl --context $(CTX) apply -f alerting/rules/streamflix-alerts.yaml
+	@helm --kube-context $(CTX) upgrade --install kps prometheus-community/kube-prometheus-stack \
+		-n observability -f observability/values/kube-prometheus-stack.yaml --wait --timeout 10m
+	@echo "Alerts deployed. Alertmanager routes SEV* to alert-sink."

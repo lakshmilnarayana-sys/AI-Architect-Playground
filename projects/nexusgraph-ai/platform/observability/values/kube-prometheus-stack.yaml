@@ -11,3 +11,27 @@ grafana:
   defaultDashboardsEnabled: true
 alertmanager:
   enabled: true
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      receiver: "null"
+      group_by: ['alertname', 'service', 'pod']
+      group_wait: 10s
+      group_interval: 30s
+      repeat_interval: 1h
+      routes:
+        - receiver: "alert-sink"
+          matchers:
+            - severity=~"SEV1|SEV2|SEV3"
+          continue: false
+    inhibit_rules:
+      - source_matchers: ['severity="SEV2"']
+        target_matchers: ['severity="SEV3"']
+        equal: ['service', 'pod']
+    receivers:
+      - name: "null"
+      - name: "alert-sink"
+        webhook_configs:
+          - url: "http://alert-sink.observability.svc:8080/webhook"
+            send_resolved: true
