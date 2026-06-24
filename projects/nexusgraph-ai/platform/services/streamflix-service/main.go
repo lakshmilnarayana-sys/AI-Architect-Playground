@@ -31,6 +31,8 @@ var knownFaultModes = map[string]bool{
 	"oom_kill":     true,
 	"pod_restart":  true,
 	"disk_iops":    true,
+	"error_rate":   true,
+	"latency":      true,
 }
 
 var (
@@ -112,6 +114,11 @@ func applyFault() (extraLatency time.Duration, forceErr bool) {
 		os.Exit(137)
 	case "disk_iops":
 		return time.Duration(val*100) * time.Millisecond, false
+	case "error_rate":
+		return 0, true // forces a 5xx on this request, driving StreamFlixHighErrorRate
+	case "latency":
+		// value>=1 adds >=600ms, crossing the 500ms p95 alert threshold (StreamFlixHighLatencyP95)
+		return time.Duration(300+int(val)*300) * time.Millisecond, false
 	default: // node_pressure, hpa_maxed, image_pull_backoff handled at manifest layer
 		return 0, false
 	}
@@ -167,7 +174,7 @@ func handleFault(w http.ResponseWriter, r *http.Request) {
 	if !knownFaultModes[body.Mode] {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, `{"error":"unknown fault mode %s","valid_modes":["cpu_throttle","memory_leak","oom_kill","pod_restart","disk_iops"]}`, body.Mode)
+		fmt.Fprintf(w, `{"error":"unknown fault mode %s","valid_modes":["cpu_throttle","memory_leak","oom_kill","pod_restart","disk_iops","error_rate","latency"]}`, body.Mode)
 		return
 	}
 	ttl := time.Duration(body.TTL) * time.Second

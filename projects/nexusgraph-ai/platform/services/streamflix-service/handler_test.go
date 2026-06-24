@@ -55,6 +55,46 @@ func TestHandleFault_UnknownMode(t *testing.T) {
 	}
 }
 
+func TestHandleFault_ErrorRateMode(t *testing.T) {
+	resetFaults()
+	body := `{"mode":"error_rate","value":1,"ttl":30}`
+	req := httptest.NewRequest(http.MethodPost, "/admin/fault", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+
+	handleFault(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for error_rate mode, got %d: %s", rec.Code, rec.Body.String())
+	}
+	mode, _, ok := faults.Active()
+	if !ok {
+		t.Fatal("expected an active fault after setting error_rate")
+	}
+	if mode != "error_rate" {
+		t.Fatalf("expected mode=error_rate, got %q", mode)
+	}
+}
+
+func TestHandleFault_LatencyMode(t *testing.T) {
+	resetFaults()
+	body := `{"mode":"latency","value":2,"ttl":30}`
+	req := httptest.NewRequest(http.MethodPost, "/admin/fault", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+
+	handleFault(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for latency mode, got %d: %s", rec.Code, rec.Body.String())
+	}
+	mode, _, ok := faults.Active()
+	if !ok {
+		t.Fatal("expected an active fault after setting latency")
+	}
+	if mode != "latency" {
+		t.Fatalf("expected mode=latency, got %q", mode)
+	}
+}
+
 func TestHandleFault_Clear(t *testing.T) {
 	resetFaults()
 	// Seed a fault first

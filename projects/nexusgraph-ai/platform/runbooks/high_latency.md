@@ -10,12 +10,13 @@ p95 request latency above 500ms for 10m; user-facing slowness.
 - `kubectl --context kind-streamflix -n streamflix-prod top pod` (check CPU/memory pressure)
 
 ## Likely cause
-CPU throttling, downstream latency, resource contention, or a latency fault (`make fault SVC=<svc> MODE=high_latency`).
+CPU throttling, downstream latency, resource contention, or a latency fault (`make fault SVC=<svc> MODE=latency VALUE=2`).
 
 ## Mitigation
 1. Clear cpu_throttle or latency fault if injected: `make fault SVC=<svc> MODE=clear`.
-2. Check throttling alerts and downstream health dashboards.
-3. Verify p95 latency returns below 500ms after mitigation.
+2. To reproduce or confirm: `make fault SVC=<svc> MODE=latency VALUE=2` (adds >=600ms per request, crossing 500ms p95 threshold).
+3. Check throttling alerts and downstream health dashboards.
+4. Verify p95 latency returns below 500ms after mitigation.
 
 ## Owning team
 Derived from graph `OWNS_SERVICE` for the affected service (e.g. Platform Engineering for playback/manifest/cdn-routing).
