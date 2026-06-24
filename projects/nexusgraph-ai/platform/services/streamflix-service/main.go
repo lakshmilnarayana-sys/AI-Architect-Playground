@@ -23,6 +23,16 @@ const (
 	leakMaxBytes   = 512 * 1024 * 1024 // 512 MiB self-cap (defence-in-depth; cgroup kills first at 128Mi)
 )
 
+// knownFaultModes lists the runtime fault modes implemented by applyFault.
+// Any mode not in this set is rejected with HTTP 400.
+var knownFaultModes = map[string]bool{
+	"cpu_throttle": true,
+	"memory_leak":  true,
+	"oom_kill":     true,
+	"pod_restart":  true,
+	"disk_iops":    true,
+}
+
 var (
 	svcName     = env("SERVICE_NAME", "unknown-service")
 	svcTier     = env("SERVICE_TIER", "internal")
@@ -152,6 +162,12 @@ func handleFault(w http.ResponseWriter, r *http.Request) {
 		leak = nil
 		leakMu.Unlock()
 		w.Write([]byte(`{"status":"cleared"}`))
+		return
+	}
+	if !knownFaultModes[body.Mode] {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, `{"error":"unknown fault mode %s","valid_modes":["cpu_throttle","memory_leak","oom_kill","pod_restart","disk_iops"]}`, body.Mode)
 		return
 	}
 	ttl := time.Duration(body.TTL) * time.Second
