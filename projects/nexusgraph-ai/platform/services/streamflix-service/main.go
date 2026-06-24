@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,7 +8,6 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -80,7 +78,6 @@ func applyFault() (extraLatency time.Duration, forceErr bool) {
 		leakMu.Lock()
 		leak = append(leak, make([]byte, 8*1024*1024)) // 8MiB per hit
 		leakMu.Unlock()
-		runtime.GC()
 		return 0, false
 	case "pod_restart":
 		log.Printf("fault pod_restart: exiting")
@@ -148,7 +145,6 @@ func handleFault(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	_ = context.Background
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handleRoot)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
