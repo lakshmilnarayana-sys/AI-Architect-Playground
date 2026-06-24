@@ -18,6 +18,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+const (
+	leakChunkSize  = 16 * 1024 * 1024 // 16 MiB per injection hit
+	leakMaxBytes   = 512 * 1024 * 1024 // 512 MiB self-cap (defence-in-depth; cgroup kills first at 128Mi)
+)
+
 var (
 	svcName     = env("SERVICE_NAME", "unknown-service")
 	svcTier     = env("SERVICE_TIER", "internal")
@@ -76,7 +81,20 @@ func applyFault() (extraLatency time.Duration, forceErr bool) {
 		return 0, false
 	case "memory_leak", "oom_kill":
 		leakMu.Lock()
-		leak = append(leak, make([]byte, 8*1024*1024)) // 8MiB per hit
+		retained := len(leak) * leakChunkSize
+		if retained >= leakMaxBytes {
+			leakMu.Unlock()
+			return 0, false // self-cap: stop before ballooning the host
+		}
+		chunk := make([]byte, leakChunkSize)
+		// Touch every OS page so pages are committed to resident memory.
+		// Zero pages are deduped/compressed by macOS Docker Desktop's lightweight VM;
+		// writing a non-zero byte per page defeats that and makes RSS grow for real,
+		// allowing the pod's 128Mi cgroup limit to trigger OOMKilled.
+		for i := 0; i < len(chunk); i += 4096 {
+			chunk[i] = byte(i%251 + 1)
+		}
+		leak = append(leak, chunk)
 		leakMu.Unlock()
 		return 0, false
 	case "pod_restart":

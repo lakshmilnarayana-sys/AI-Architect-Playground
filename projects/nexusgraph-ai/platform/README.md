@@ -32,10 +32,10 @@ Manifest-layer modes: `image_pull_backoff` (apply `cluster/variants/playback-ima
 |------|-----------|------------------|
 | `cpu_throttle` | Spin goroutines consuming VALUE cores | p95 latency spike in Prometheus / Grafana |
 | `memory_leak` | Allocate VALUE MiB and hold | RSS growth; eventually OOM |
-| `oom_kill` | Allocate 8 MiB per call, hold | Pod `OOMKilled` when memory limit (128Mi) is breached |
+| `oom_kill` | Allocate 16 MiB per call, touch every 4 KiB page so allocations are fully committed to resident memory (defeats zero-page dedup in macOS Docker Desktop's VM); cgroup v2 OOM-kills the pod when RSS exceeds the 128 Mi limit → real `OOMKilled` (exit 137) on both Linux and macOS Docker Desktop | Pod `Last State: Terminated / Reason: OOMKilled / Exit Code: 137`; Restart Count increments |
 | `pod_restart` | `os.Exit(1)` after TTL seconds | Deployment restarts visible in `kubectl get pods` |
 | `disk_iops` | Write-loop to a temp file at VALUE MB/s | Disk I/O saturation (best-effort on a laptop) |
-| `image_pull_backoff` | Patch deployment to a nonexistent image tag | Pod enters `ImagePullBackOff` / `ErrImagePull` |
+| `image_pull_backoff` | Patch deployment to a nonexistent image tag via `kubectl --context kind-streamflix -n streamflix-prod patch deploy/playback-service --patch-file cluster/variants/playback-imagepull.yaml`; revert with `make deploy` (use patch-file, not `apply -f`, as the variant is a partial spec) | Pod enters `ImagePullBackOff` / `ErrImagePull` |
 | `clear` | Clear all active faults | Service returns to baseline behaviour |
 
 ## Teardown
