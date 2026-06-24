@@ -45,6 +45,8 @@ def test_render_service_includes_downstreams_env():
     assert "manifest-service:8080" in out
     assert "identity-service:8080" in out
     assert "SERVICE_TIER" in out and "customer-facing" in out
+    # Port must be named 'http' for Prometheus-Operator ServiceMonitor compatibility
+    assert "name: http" in out
 
 
 def test_render_service_avoids_doubled_service_suffix():

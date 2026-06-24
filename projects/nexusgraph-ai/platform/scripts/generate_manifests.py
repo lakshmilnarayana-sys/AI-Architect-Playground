@@ -1,6 +1,7 @@
 """Generate Kubernetes manifests for StreamFlix services from the graph CSVs."""
 import argparse
 import csv
+import re
 from pathlib import Path
 
 NAMESPACE = "streamflix-prod"
@@ -8,6 +9,20 @@ NAMESPACE = "streamflix-prod"
 
 def _short(service_id: str) -> str:
     return service_id.split(":", 1)[1]
+
+
+def _safe_label(value: str) -> str:
+    """Sanitize a string so it is a valid Kubernetes label value (max 63 chars,
+    alphanumeric / '-' / '_' / '.', starts and ends with alphanumeric)."""
+    # Replace any invalid character with '-'
+    sanitized = re.sub(r"[^A-Za-z0-9._-]", "-", value)
+    # Collapse consecutive dashes
+    sanitized = re.sub(r"-{2,}", "-", sanitized)
+    # Strip leading/trailing non-alphanumeric
+    sanitized = sanitized.strip("-._")
+    # Truncate to 63 chars, then strip again in case truncation left a dash
+    sanitized = sanitized[:63].rstrip("-._")
+    return sanitized or "unknown"
 
 
 def _k8s_name(short: str) -> str:
@@ -43,13 +58,14 @@ def load_dependencies(edges_path: Path) -> dict[str, list[str]]:
 def render_service(svc: dict, deps: list[str], image: str) -> str:
     name = _k8s_name(svc['short'])
     downstreams = ",".join(f"{_short(d)}={_k8s_name(_short(d))}:8080/" for d in deps)
+    tier_label = _safe_label(svc['tier'])
     return f"""---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {name}
   namespace: {NAMESPACE}
-  labels: {{app: {name}, tier: "{svc['tier']}"}}
+  labels: {{app: {name}, tier: "{tier_label}"}}
 spec:
   replicas: 1
   selector: {{matchLabels: {{app: {name}}}}}
@@ -82,7 +98,7 @@ metadata:
   labels: {{app: {name}}}
 spec:
   selector: {{app: {name}}}
-  ports: [{{port: 8080, targetPort: 8080}}]
+  ports: [{{port: 8080, targetPort: 8080, name: http}}]
 """
 
 
