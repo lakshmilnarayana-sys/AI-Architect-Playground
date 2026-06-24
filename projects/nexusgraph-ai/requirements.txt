@@ -9,6 +9,9 @@ langchain-chroma==1.1.0
 langchain-neo4j==0.9.0
 langchain-huggingface==1.2.2
 
+# Evaluation & Observability (Week 4)
+langsmith==0.8.12
+
 # ML & Embeddings (Lightweight CPU versions where possible)
 sentence-transformers==3.3.1
 
