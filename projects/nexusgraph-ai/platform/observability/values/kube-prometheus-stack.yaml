@@ -1,0 +1,13 @@
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    retention: 6h
+    resources:
+      requests: {cpu: 100m, memory: 400Mi}
+grafana:
+  adminPassword: admin
+  defaultDashboardsEnabled: true
+alertmanager:
+  enabled: true

@@ -1,0 +1,7 @@
+tempo:
+  metricsGenerator:
+    enabled: false
+traces:
+  otlp:
+    http: {enabled: true}
+    grpc: {enabled: true}
