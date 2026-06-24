@@ -2,7 +2,7 @@ SHELL := /usr/bin/env bash
 CTX := kind-streamflix
 REG := localhost:5001
 
-.PHONY: up down context observe build deploy verify fault alerts
+.PHONY: up down context observe build deploy verify fault alerts alerts-verify
 up:
 	@command -v kind >/dev/null || { echo "kind not installed"; exit 1; }
 	@docker info >/dev/null 2>&1 || { echo "Docker not running"; exit 1; }
@@ -42,6 +42,14 @@ verify:
 
 fault:
 	@bash scripts/inject_fault.sh $(SVC) $(MODE) $(VALUE) $(TTL)
+
+alerts-verify:
+	@echo "--- PrometheusRule ---"
+	@kubectl --context $(CTX) -n observability get prometheusrule streamflix-alerts
+	@echo "--- alert-sink pod ---"
+	@kubectl --context $(CTX) -n observability get pods -l app=alert-sink
+	@echo "--- recent alerts at the sink (port-forward then curl /alerts) ---"
+	@echo "Run: kubectl --context $(CTX) -n observability port-forward svc/alert-sink 18090:8080  # then curl localhost:18090/alerts"
 
 alerts:
 	@docker build -t $(REG)/streamflix-alert-sink:dev alerting/alert-sink
