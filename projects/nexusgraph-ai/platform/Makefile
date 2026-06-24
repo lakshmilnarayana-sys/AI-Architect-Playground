@@ -2,7 +2,7 @@ SHELL := /usr/bin/env bash
 CTX := kind-streamflix
 REG := localhost:5001
 
-.PHONY: up down context observe build deploy verify
+.PHONY: up down context observe build deploy verify fault
 up:
 	@command -v kind >/dev/null || { echo "kind not installed"; exit 1; }
 	@docker info >/dev/null 2>&1 || { echo "Docker not running"; exit 1; }
@@ -39,3 +39,6 @@ verify:
 	@kubectl --context $(CTX) get pods -n streamflix-prod
 	@echo "--- Prometheus targets (port-forward then curl) ---"
 	@echo "Run: kubectl --context $(CTX) -n observability port-forward svc/kps-grafana 3000:80  # admin/admin"
+
+fault:
+	@bash scripts/inject_fault.sh $(SVC) $(MODE) $(VALUE) $(TTL)
