@@ -641,3 +641,6 @@ incident:recommendation-quality-incident,AFFECTED,service:recommendation
 incident:recommendation-quality-incident,AFFECTED,service:personalization-service
 incident:recommendation-quality-incident,AFFECTED,service:ml-ranking-service
 incident:recommendation-quality-incident,DOCUMENTED_BY,document:docs-incidents-recommendation-quality-incident-md
+service:playback,DEPENDS_ON,service:recommendation
+service:playback,DEPENDS_ON,service:identity
+service:payment-gateway,DEPENDS_ON,service:identity
