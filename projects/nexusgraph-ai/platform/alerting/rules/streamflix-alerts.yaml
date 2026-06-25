@@ -78,8 +78,8 @@ spec:
             runbook_url: "https://runbooks.streamflix.local/image_pull_backoff"
         - alert: StreamFlixMemoryNearLimit
           expr: |
-            sum by (pod) (container_memory_working_set_bytes{namespace="streamflix-prod", container!=""})
-              / sum by (pod) (kube_pod_container_resource_limits{namespace="streamflix-prod", resource="memory"}) > 0.9
+            sum by (pod, container) (container_memory_working_set_bytes{namespace="streamflix-prod", container!=""})
+              / sum by (pod, container) (kube_pod_container_resource_limits{namespace="streamflix-prod", resource="memory"}) > 0.9
           for: 15m
           labels: {severity: SEV3, failure_mode: memory_leak}
           annotations:
