@@ -2,7 +2,7 @@ SHELL := /usr/bin/env bash
 CTX := kind-streamflix
 REG := localhost:5001
 
-.PHONY: up down context observe build deploy verify fault alerts alerts-verify traces-verify incident-services
+.PHONY: up down context observe build deploy verify fault alerts alerts-verify traces-verify incident-services incident-up incident-verify
 up:
 	@command -v kind >/dev/null || { echo "kind not installed"; exit 1; }
 	@docker info >/dev/null 2>&1 || { echo "Docker not running"; exit 1; }
@@ -75,6 +75,24 @@ incident-services:
 	@helm --kube-context $(CTX) upgrade --install kps prometheus-community/kube-prometheus-stack \
 		-n observability -f observability/values/kube-prometheus-stack.yaml --wait --timeout 10m
 	@echo "Incident services deployed; Alertmanager → slack-mock."
+
+incident-up:
+	@kubectl --context $(CTX) -n observability port-forward svc/slack-mock 18100:8080 >/tmp/pf-slack.log 2>&1 &
+	@kubectl --context $(CTX) -n observability port-forward svc/jira-mock 18101:8080 >/tmp/pf-jira.log 2>&1 &
+	@kubectl --context $(CTX) -n observability port-forward svc/oncall-registry 18102:8080 >/tmp/pf-oncall.log 2>&1 &
+	@kubectl --context $(CTX) -n observability port-forward svc/kps-kube-prometheus-stack-prometheus 9090:9090 >/tmp/pf-prom.log 2>&1 &
+	@kubectl --context $(CTX) -n observability port-forward svc/kps-kube-prometheus-stack-alertmanager 9093:9093 >/tmp/pf-am.log 2>&1 &
+	@sleep 4
+	@echo "Port-forwards up. Export these, then run the watcher or a manual run:"
+	@echo "  export INCIDENT_LIVE=true SLACK_MOCK_URL=http://localhost:18100 JIRA_MOCK_URL=http://localhost:18101 ONCALL_REGISTRY_URL=http://localhost:18102 PROMETHEUS_URL=http://localhost:9090 ALERTMANAGER_URL=http://localhost:9093"
+	@echo "  (cd .. && python -m src.incident.watcher)   # or: python -m src.incident.run --service billing-service --failure-mode oom_kill"
+
+incident-verify:
+	@kubectl --context $(CTX) -n observability get pods -l 'app in (slack-mock,jira-mock,oncall-registry)'
+	@echo "GET endpoints (after make incident-up):"
+	@echo "  curl localhost:18102/oncall/billing-service"
+	@echo "  curl localhost:18100/alerts ; curl 'localhost:18100/channels/inc-...'"
+	@echo "  curl localhost:18101/issues"
 
 alerts:
 	@docker build -t $(REG)/streamflix-alert-sink:dev alerting/alert-sink
