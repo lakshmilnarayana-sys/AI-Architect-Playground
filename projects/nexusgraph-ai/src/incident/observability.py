@@ -114,26 +114,29 @@ def live_evidence(service: str, failure_mode: str):
     from src.incident.live_clients import live_enabled, endpoint, http_get_json
     if not live_enabled():
         return None
-    import urllib.parse as _up
-    base = endpoint("prometheus")
-    queries = {
-        "error_ratio": f'sum(rate(http_requests_total{{service="{service}",code=~"5.."}}[5m]))/sum(rate(http_requests_total{{service="{service}"}}[5m]))',
-        "p95_latency": f'histogram_quantile(0.95,sum by (le)(rate(http_request_duration_seconds_bucket{{service="{service}"}}[5m])))',
-        "cpu_throttle": f'sum(rate(container_cpu_cfs_throttled_periods_total{{namespace="streamflix-prod"}}[5m]))/sum(rate(container_cpu_cfs_periods_total{{namespace="streamflix-prod"}}[5m]))',
-    }
-    items = []
-    for name, q in queries.items():
-        data = http_get_json(f"{base}/api/v1/query?query={_up.quote(q)}")
-        value = None
-        try:
-            res = (data or {}).get("data", {}).get("result", [])
-            if res:
-                value = res[0]["value"][1]
-        except Exception:
+    try:
+        import urllib.parse as _up
+        base = endpoint("prometheus")
+        queries = {
+            "error_ratio": f'sum(rate(http_requests_total{{service="{service}",code=~"5.."}}[5m]))/sum(rate(http_requests_total{{service="{service}"}}[5m]))',
+            "p95_latency": f'histogram_quantile(0.95,sum by (le)(rate(http_request_duration_seconds_bucket{{service="{service}"}}[5m])))',
+            "cpu_throttle": f'sum(rate(container_cpu_cfs_throttled_periods_total{{namespace="streamflix-prod"}}[5m]))/sum(rate(container_cpu_cfs_periods_total{{namespace="streamflix-prod"}}[5m]))',
+        }
+        items = []
+        for name, q in queries.items():
+            data = http_get_json(f"{base}/api/v1/query?query={_up.quote(q)}")
             value = None
-        items.append({"kind": "metric", "name": f"live:{name}", "query": q, "value": value})
-    items.append({"kind": "alert", "name": f"{failure_mode} detector (live)", "query": f"failure_mode={failure_mode}"})
-    return items
+            try:
+                res = (data or {}).get("data", {}).get("result", [])
+                if res:
+                    value = res[0]["value"][1]
+            except Exception:
+                value = None
+            items.append({"kind": "metric", "name": f"live:{name}", "query": q, "value": value})
+        items.append({"kind": "alert", "name": f"{failure_mode} detector (live)", "query": f"failure_mode={failure_mode}"})
+        return items
+    except Exception:
+        return None
 
 
 def external_recommendations(path: Path = OBSERVABILITY_SOURCES_PATH) -> list[dict]:
