@@ -2,7 +2,7 @@ SHELL := /usr/bin/env bash
 CTX := kind-streamflix
 REG := localhost:5001
 
-.PHONY: up down context observe build deploy verify fault alerts alerts-verify traces-verify
+.PHONY: up down context observe build deploy verify fault alerts alerts-verify traces-verify incident-services
 up:
 	@command -v kind >/dev/null || { echo "kind not installed"; exit 1; }
 	@docker info >/dev/null 2>&1 || { echo "Docker not running"; exit 1; }
@@ -56,6 +56,23 @@ traces-verify:
 	@echo "  kubectl --context $(CTX) -n observability port-forward svc/tempo 3200:3200"
 	@echo "  curl -s 'http://localhost:3200/api/search?tags=service.name=playback-service&limit=1'"
 	@echo "Then GET /api/traces/<traceID> and confirm multiple service.name values (fan-out)."
+
+incident-services:
+	@python3 incident-services/generate_oncall_seed.py --out incident-services/oncall-seed.json --data ../data --graph ../graph
+	@kubectl --context $(CTX) -n observability create configmap oncall-seed \
+		--from-file=oncall-seed.json=incident-services/oncall-seed.json \
+		--dry-run=client -o yaml | kubectl --context $(CTX) apply -f -
+	@for d in slack-mock jira-mock oncall-registry; do \
+		docker build -t $(REG)/streamflix-$$d:dev incident-services/$$d ; \
+		docker push $(REG)/streamflix-$$d:dev ; \
+		kind load docker-image $(REG)/streamflix-$$d:dev --name streamflix ; \
+	done
+	@kubectl --context $(CTX) apply -f incident-services/k8s.yaml
+	@kubectl --context $(CTX) -n observability rollout restart deploy/oncall-registry
+	@kubectl --context $(CTX) -n observability rollout status deploy/slack-mock --timeout=120s
+	@helm --kube-context $(CTX) upgrade --install kps prometheus-community/kube-prometheus-stack \
+		-n observability -f observability/values/kube-prometheus-stack.yaml --wait --timeout 10m
+	@echo "Incident services deployed; Alertmanager → slack-mock."
 
 alerts:
 	@docker build -t $(REG)/streamflix-alert-sink:dev alerting/alert-sink

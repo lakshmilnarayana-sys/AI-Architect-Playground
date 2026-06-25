@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: slack-mock, namespace: observability, labels: {app: slack-mock}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: slack-mock}}
+  template:
+    metadata: {labels: {app: slack-mock}}
+    spec:
+      containers:
+        - name: slack-mock
+          image: localhost:5001/streamflix-slack-mock:dev
+          ports: [{containerPort: 8080}]
+          readinessProbe: {httpGet: {path: /healthz, port: 8080}, initialDelaySeconds: 2}
+          resources: {requests: {cpu: 20m, memory: 16Mi}, limits: {cpu: 100m, memory: 64Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: slack-mock, namespace: observability, labels: {app: slack-mock}}
+spec: {selector: {app: slack-mock}, ports: [{port: 8080, targetPort: 8080}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: jira-mock, namespace: observability, labels: {app: jira-mock}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: jira-mock}}
+  template:
+    metadata: {labels: {app: jira-mock}}
+    spec:
+      containers:
+        - name: jira-mock
+          image: localhost:5001/streamflix-jira-mock:dev
+          ports: [{containerPort: 8080}]
+          readinessProbe: {httpGet: {path: /healthz, port: 8080}, initialDelaySeconds: 2}
+          resources: {requests: {cpu: 20m, memory: 16Mi}, limits: {cpu: 100m, memory: 64Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: jira-mock, namespace: observability, labels: {app: jira-mock}}
+spec: {selector: {app: jira-mock}, ports: [{port: 8080, targetPort: 8080}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: oncall-registry, namespace: observability, labels: {app: oncall-registry}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: oncall-registry}}
+  template:
+    metadata: {labels: {app: oncall-registry}}
+    spec:
+      containers:
+        - name: oncall-registry
+          image: localhost:5001/streamflix-oncall-registry:dev
+          ports: [{containerPort: 8080}]
+          env: [{name: SEED_PATH, value: /seed/oncall-seed.json}]
+          volumeMounts: [{name: seed, mountPath: /seed}]
+          readinessProbe: {httpGet: {path: /healthz, port: 8080}, initialDelaySeconds: 2}
+          resources: {requests: {cpu: 20m, memory: 16Mi}, limits: {cpu: 100m, memory: 64Mi}}
+      volumes:
+        - name: seed
+          configMap: {name: oncall-seed}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: oncall-registry, namespace: observability, labels: {app: oncall-registry}}
+spec: {selector: {app: oncall-registry}, ports: [{port: 8080, targetPort: 8080}]}

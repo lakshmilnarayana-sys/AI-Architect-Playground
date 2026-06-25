@@ -33,5 +33,5 @@ alertmanager:
       - name: "null"
       - name: "alert-sink"
         webhook_configs:
-          - url: "http://alert-sink.observability.svc:8080/webhook"
+          - url: "http://slack-mock.observability.svc:8080/webhook"
             send_resolved: true
