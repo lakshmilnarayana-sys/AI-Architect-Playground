@@ -49,9 +49,10 @@ def _kubernetes_context(state: IncidentState) -> dict:
         fallback_service = "billing-service" if "billing" in signal else "playback-service"
         resource = get_service_resource(fallback_service)
         svc = fallback_service
+    from src.incident.kubernetes import live_runtime
     failure_mode = state["incident"].get("failure_mode")
     simulate = bool(state["incident"].get("simulate_failure"))
-    runtime = (
+    runtime = live_runtime(svc) or (
         inject_failure(resource, failure_mode)
         if simulate and failure_mode
         else clear_failure(resource)

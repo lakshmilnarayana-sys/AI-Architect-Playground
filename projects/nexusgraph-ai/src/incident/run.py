@@ -2,15 +2,27 @@
 from __future__ import annotations
 
 import argparse
+import re
 
 from src.incident.state import new_incident, IncidentState
 from src.incident.graph_lookup import GraphContext
 from src.incident.supervisor import run_incident
 
 
+def _service_from_labels(labels: dict) -> str:
+    svc = labels.get("service")
+    if svc:
+        return svc
+    pod = labels.get("pod", "")
+    if pod:
+        # strip trailing "-<rshash>-<podhash>" (deployment name remains)
+        return re.sub(r"-[a-z0-9]+-[a-z0-9]+$", "", pod)
+    return "unknown-service"
+
+
 def seed_from_alert(alert: dict) -> IncidentState:
     labels = alert.get("labels", {}) or {}
-    service = labels.get("service") or labels.get("pod") or "unknown-service"
+    service = _service_from_labels(labels)
     severity = labels.get("severity", "SEV3")
     failure_mode = labels.get("failure_mode")
     alertname = labels.get("alertname", "StreamFlixAlert")
@@ -23,6 +35,7 @@ def seed_from_alert(alert: dict) -> IncidentState:
     )
     if failure_mode:
         state["incident"]["failure_mode"] = failure_mode
+        state["incident"]["simulate_failure"] = True
     state["incident"]["scenario_id"] = alertname
     return state
 
@@ -37,6 +50,7 @@ def run_for_service(service: str, failure_mode: str | None = None, severity: str
     )
     if failure_mode:
         state["incident"]["failure_mode"] = failure_mode
+        state["incident"]["simulate_failure"] = True
     ctx = GraphContext(use_neo4j=False)
     return run_incident(state, ctx=ctx, use_vector=False)
 

@@ -17,3 +17,9 @@ def test_run_for_service_runs_pipeline(monkeypatch):
     from src.incident.run import run_for_service
     final = run_for_service("billing-service", failure_mode="oom_kill", severity="SEV2")
     assert "timeline" in final and len(final["timeline"]) > 0
+
+
+def test_service_from_labels_strips_pod_hash():
+    from src.incident.run import _service_from_labels
+    assert _service_from_labels({"pod": "billing-service-7d9f8c-abcde"}) == "billing-service"
+    assert _service_from_labels({"service": "playback-service", "pod": "x-y-z"}) == "playback-service"

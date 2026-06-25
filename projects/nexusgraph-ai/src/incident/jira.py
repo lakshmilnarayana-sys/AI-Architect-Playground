@@ -143,7 +143,10 @@ def create_issue_live(state: dict):
     if not live_enabled():
         return None
     issue = issue_from_state(state)
-    return http_post_json(
+    resp = http_post_json(
         f"{endpoint('jira')}/rest/api/2/issue",
         {"incident_id": issue.get("incident_id") or "incident", "fields": {"summary": issue.get("summary"), "severity": issue.get("severity"), "services": issue.get("services")}},
     )
+    if not resp:
+        return None
+    return {**issue, "key": resp.get("key", issue.get("key")), "live": True}
