@@ -2,7 +2,7 @@ SHELL := /usr/bin/env bash
 CTX := kind-streamflix
 REG := localhost:5001
 
-.PHONY: up down context observe build deploy verify fault alerts alerts-verify
+.PHONY: up down context observe build deploy verify fault alerts alerts-verify traces-verify
 up:
 	@command -v kind >/dev/null || { echo "kind not installed"; exit 1; }
 	@docker info >/dev/null 2>&1 || { echo "Docker not running"; exit 1; }
@@ -50,6 +50,12 @@ alerts-verify:
 	@kubectl --context $(CTX) -n observability get pods -l app=alert-sink
 	@echo "--- recent alerts at the sink (port-forward then curl /alerts) ---"
 	@echo "Run: kubectl --context $(CTX) -n observability port-forward svc/alert-sink 18090:8080  # then curl localhost:18090/alerts"
+
+traces-verify:
+	@echo "Port-forward Tempo then query a recent playback trace:"
+	@echo "  kubectl --context $(CTX) -n observability port-forward svc/tempo 3200:3200"
+	@echo "  curl -s 'http://localhost:3200/api/search?tags=service.name=playback-service&limit=1'"
+	@echo "Then GET /api/traces/<traceID> and confirm multiple service.name values (fan-out)."
 
 alerts:
 	@docker build -t $(REG)/streamflix-alert-sink:dev alerting/alert-sink

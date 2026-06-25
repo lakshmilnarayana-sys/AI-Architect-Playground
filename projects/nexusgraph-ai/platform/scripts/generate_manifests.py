@@ -63,7 +63,7 @@ def load_dependencies(edges_path: Path) -> dict[str, list[str]]:
 
 def render_service(svc: dict, deps: list[str], image: str) -> str:
     name = _k8s_name(svc['short'])
-    downstreams = ",".join(f"{_short(d)}={_k8s_name(_short(d))}:8080/" for d in deps)
+    downstreams = ",".join(f"{_short(d)}=http://{_k8s_name(_short(d))}:8080/" for d in deps)
     tier = _normalize_tier(svc['tier'])
     tier_label = _safe_label(tier)
     return f"""---
