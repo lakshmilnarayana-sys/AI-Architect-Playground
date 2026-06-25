@@ -47,3 +47,14 @@ def filter_messages(messages: list[SlackMessage], query: str) -> list[SlackMessa
         or q in m.get("phase", "").lower()
         or q in m.get("role", "").lower()
     ]
+
+
+def post_to_slack(channel: str, text: str, username: str = "incident-bot"):
+    """Post to the live slack-mock when INCIDENT_LIVE; else return None (caller renders in-memory)."""
+    from src.incident.live_clients import live_enabled, endpoint, http_post_json
+    if not live_enabled():
+        return None
+    return http_post_json(
+        f"{endpoint('slack')}/api/chat.postMessage",
+        {"channel": channel, "text": text, "username": username},
+    )
