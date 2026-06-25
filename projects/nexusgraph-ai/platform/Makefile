@@ -2,7 +2,7 @@ SHELL := /usr/bin/env bash
 CTX := kind-streamflix
 REG := localhost:5001
 
-.PHONY: up down context observe build deploy verify fault alerts alerts-verify traces-verify incident-services incident-up incident-verify
+.PHONY: up down context observe build deploy verify fault alerts alerts-verify traces-verify incident-services incident-up incident-verify backstage backstage-up backstage-verify
 up:
 	@command -v kind >/dev/null || { echo "kind not installed"; exit 1; }
 	@docker info >/dev/null 2>&1 || { echo "Docker not running"; exit 1; }
@@ -93,6 +93,28 @@ incident-verify:
 	@echo "  curl localhost:18102/oncall/billing-service"
 	@echo "  curl localhost:18100/alerts ; curl 'localhost:18100/channels/inc-...'"
 	@echo "  curl localhost:18101/issues"
+
+backstage:
+	@python3 backstage/generate_catalog.py --out backstage/catalog/catalog.yaml --nodes ../graph/nodes.csv --edges ../graph/edges.csv
+	@kubectl --context $(CTX) create namespace backstage --dry-run=client -o yaml | kubectl --context $(CTX) apply -f -
+	@kubectl --context $(CTX) -n backstage create configmap backstage-catalog \
+		--from-file=catalog.yaml=backstage/catalog/catalog.yaml \
+		--dry-run=client -o yaml | kubectl --context $(CTX) apply -f -
+	@docker build -t $(REG)/streamflix-catalog-server:dev backstage/catalog-server
+	@docker push $(REG)/streamflix-catalog-server:dev
+	@kind load docker-image $(REG)/streamflix-catalog-server:dev --name streamflix
+	@kubectl --context $(CTX) apply -f backstage/k8s.yaml
+	@kubectl --context $(CTX) -n backstage rollout status deploy/backstage --timeout=300s
+	@echo "Backstage catalog-server deployed in ns backstage."
+
+backstage-up:
+	@kubectl --context $(CTX) -n backstage port-forward svc/backstage 7007:7007 >/tmp/pf-backstage.log 2>&1 &
+	@sleep 4
+	@echo "Catalog-server at http://localhost:7007  (catalog API: http://localhost:7007/api/catalog/entities)"
+
+backstage-verify:
+	@kubectl --context $(CTX) -n backstage get pods -l app=backstage
+	@echo "After backstage-up: curl -s 'http://localhost:7007/api/catalog/entities?filter=kind=component' | python3 -c 'import sys,json;print(len(json.load(sys.stdin)),\"components\")'"
 
 alerts:
 	@docker build -t $(REG)/streamflix-alert-sink:dev alerting/alert-sink
