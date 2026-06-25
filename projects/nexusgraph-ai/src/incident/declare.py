@@ -30,6 +30,9 @@ def _intake(state: IncidentState, llm=None) -> dict:
             f"{inc['title']} — {inc['signal']}"
         ),
     )
+    from src.incident.slack import post_to_slack, channel_name
+    post_to_slack(channel_name(state["incident"]), text, username="incident-commander")
+
     update = {"phase": "declare", **emit("declare", "Incident Commander Agent", "commander", "message", text)}
     update["findings"] = {
         "incident_commander": {
