@@ -45,6 +45,10 @@ func getChannel(w http.ResponseWriter, r *http.Request) {
 }
 
 func webhook(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
 	var p struct {
 		Alerts []map[string]any `json:"alerts"`
 	}

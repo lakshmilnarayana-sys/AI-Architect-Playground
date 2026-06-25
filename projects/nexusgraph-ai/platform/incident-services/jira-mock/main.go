@@ -20,7 +20,8 @@ type issue struct {
 var (
 	mu     sync.Mutex
 	issues = map[string]issue{}
-	seq    int64
+	keySeq int64
+	idSeq  int64
 )
 
 func createIssue(w http.ResponseWriter, r *http.Request) {
@@ -40,9 +41,9 @@ func createIssue(w http.ResponseWriter, r *http.Request) {
 	if body.IncidentID != "" {
 		key = issueKey(body.IncidentID)
 	} else {
-		key = fmt.Sprintf("INC-%d", atomic.AddInt64(&seq, 1)+100000)
+		key = fmt.Sprintf("INC-%d", atomic.AddInt64(&keySeq, 1)+100000)
 	}
-	id := fmt.Sprintf("%d", atomic.AddInt64(&seq, 1))
+	id := fmt.Sprintf("%d", atomic.AddInt64(&idSeq, 1))
 	it := issue{Key: key, ID: id, Self: "/rest/api/2/issue/" + key, Fields: body.Fields}
 	mu.Lock()
 	issues[key] = it
