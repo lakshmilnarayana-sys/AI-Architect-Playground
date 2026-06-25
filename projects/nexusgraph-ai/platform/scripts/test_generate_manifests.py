@@ -57,9 +57,9 @@ def test_render_service_avoids_doubled_service_suffix():
     assert "name: account-service\n" in out or "name: account-service " in out
     assert "account-service-service" not in out
     # downstream that already ends in -service -> host not doubled
-    assert "auth-service=auth-service:8080/" in out
+    assert "auth-service=http://auth-service:8080/" in out
     # downstream that does NOT end in -service -> gets suffix
-    assert "playback=playback-service:8080/" in out
+    assert "playback=http://playback-service:8080/" in out
 
 
 def test_safe_label_sanitizes_invalid_description():
