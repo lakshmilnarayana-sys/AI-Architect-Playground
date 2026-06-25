@@ -69,7 +69,9 @@ incident-services:
 	done
 	@kubectl --context $(CTX) apply -f incident-services/k8s.yaml
 	@kubectl --context $(CTX) -n observability rollout restart deploy/oncall-registry
-	@kubectl --context $(CTX) -n observability rollout status deploy/slack-mock --timeout=120s
+	@for d in slack-mock jira-mock oncall-registry; do \
+		kubectl --context $(CTX) -n observability rollout status deploy/$$d --timeout=120s ; \
+	done
 	@helm --kube-context $(CTX) upgrade --install kps prometheus-community/kube-prometheus-stack \
 		-n observability -f observability/values/kube-prometheus-stack.yaml --wait --timeout 10m
 	@echo "Incident services deployed; Alertmanager → slack-mock."
