@@ -76,3 +76,18 @@ def test_safe_label_empty_returns_unknown():
     from generate_manifests import _safe_label
     assert _safe_label("") == "unknown"
     assert _safe_label(":::") == "unknown"
+
+
+def test_render_service_sets_otel_endpoint():
+    svc = {"id": "service:playback", "short": "playback", "tier": "customer-facing"}
+    out = render_service(svc, [], "img:dev")
+    assert "OTEL_EXPORTER_OTLP_ENDPOINT" in out
+    assert "tempo.observability.svc:4318" in out
+
+
+def test_service_tier_normalized():
+    from generate_manifests import _normalize_tier
+    assert _normalize_tier("customer-facing") == "customer-facing"
+    assert _normalize_tier("internal") == "internal"
+    assert _normalize_tier("Imported from Netflix synthetic dataset: Service account-service") == "internal"
+    assert _normalize_tier("") == "internal"

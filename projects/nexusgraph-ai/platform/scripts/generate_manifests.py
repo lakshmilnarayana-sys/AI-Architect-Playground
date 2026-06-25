@@ -25,6 +25,12 @@ def _safe_label(value: str) -> str:
     return sanitized or "unknown"
 
 
+def _normalize_tier(tier: str) -> str:
+    """Collapse arbitrary descriptions to a valid tier; default to internal."""
+    t = (tier or "").strip().lower()
+    return t if t in ("customer-facing", "internal") else "internal"
+
+
 def _k8s_name(short: str) -> str:
     """Kubernetes Service/Deployment name for a service short-id, avoiding a doubled -service suffix."""
     return short if short.endswith("-service") else f"{short}-service"
@@ -58,7 +64,8 @@ def load_dependencies(edges_path: Path) -> dict[str, list[str]]:
 def render_service(svc: dict, deps: list[str], image: str) -> str:
     name = _k8s_name(svc['short'])
     downstreams = ",".join(f"{_short(d)}={_k8s_name(_short(d))}:8080/" for d in deps)
-    tier_label = _safe_label(svc['tier'])
+    tier = _normalize_tier(svc['tier'])
+    tier_label = _safe_label(tier)
     return f"""---
 apiVersion: apps/v1
 kind: Deployment
@@ -80,10 +87,11 @@ spec:
           ports: [{{containerPort: 8080}}]
           env:
             - {{name: SERVICE_NAME, value: "{name}"}}
-            - {{name: SERVICE_TIER, value: "{svc['tier']}"}}
+            - {{name: SERVICE_TIER, value: "{tier}"}}
             - {{name: DOWNSTREAMS, value: "{downstreams}"}}
             - {{name: BASE_LATENCY_MS, value: "20"}}
             - {{name: ERROR_RATE, value: "0"}}
+            - {{name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "tempo.observability.svc:4318"}}
           readinessProbe: {{httpGet: {{path: /readyz, port: 8080}}, initialDelaySeconds: 2}}
           livenessProbe: {{httpGet: {{path: /healthz, port: 8080}}, initialDelaySeconds: 5}}
           resources:
