@@ -1,4 +1,3 @@
-import textwrap
 from pathlib import Path
 
 from generate_catalog import load_nodes, load_edges, build_entities, validate, _k8s_name
