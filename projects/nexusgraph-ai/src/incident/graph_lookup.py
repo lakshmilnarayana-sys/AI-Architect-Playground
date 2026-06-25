@@ -59,6 +59,9 @@ class GraphContext:
         ]
 
     def escalation_for(self, service: str, severity: str) -> dict | None:
+        live = self._registry_escalation(service, severity)
+        if live is not None:
+            return live
         policies = _load_yaml("escalation_policies.yaml")
         sev = severity.lower()
         token = service.split()[0].lower()
@@ -78,7 +81,29 @@ class GraphContext:
         return self._edge_target(service, ("OWNS_SERVICE", "OWNED_BY"))
 
     def oncall_for(self, service: str) -> dict | None:
+        live = self._registry_oncall(service)
+        if live is not None:
+            return live
         return self._edge_target(service, ("HAS_ONCALL_SCHEDULE", "ON_CALL"))
+
+    # --- Live on-call registry (env-gated, registry-first) -------------------
+    def _registry_oncall(self, service: str) -> dict | None:
+        from src.incident.live_clients import live_enabled, endpoint, http_get_json
+        if not live_enabled():
+            return None
+        data = http_get_json(f"{endpoint('oncall')}/oncall/{service}")
+        if not data or not data.get("team"):
+            return None
+        return {"id": data.get("schedule"), "name": data.get("person") or data.get("schedule"), "team": data.get("team")}
+
+    def _registry_escalation(self, service: str, severity: str) -> dict | None:
+        from src.incident.live_clients import live_enabled, endpoint, http_get_json
+        if not live_enabled():
+            return None
+        data = http_get_json(f"{endpoint('oncall')}/escalation/{service}/{severity}")
+        if not data or not data.get("policy"):
+            return None
+        return {"id": data.get("policy"), "name": data.get("policy")}
 
     # --- CSV edge traversal fallback -----------------------------------------
     def _edge_target(self, service: str, rel_types: tuple[str, ...]) -> dict | None:
