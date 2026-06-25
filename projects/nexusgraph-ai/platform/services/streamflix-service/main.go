@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,6 +17,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 const (
@@ -113,7 +115,25 @@ func applyFault() (extraLatency time.Duration, forceErr bool) {
 		log.Printf("fault pod_restart: exiting")
 		os.Exit(137)
 	case "disk_iops":
-		return time.Duration(val*100) * time.Millisecond, false
+		n := int(val)
+		if n < 1 {
+			n = 1
+		}
+		if n > 50 {
+			n = 50 // bounded: never hammer a laptop disk
+		}
+		buf := make([]byte, 1024*1024) // 1 MiB
+		for i := 0; i < n; i++ {
+			f, err := os.CreateTemp("", "perf-iops-*")
+			if err != nil {
+				break
+			}
+			f.Write(buf)
+			f.Sync()
+			f.Close()
+			os.Remove(f.Name())
+		}
+		return time.Duration(n*5) * time.Millisecond, false
 	case "error_rate":
 		return 0, true // forces a 5xx on this request, driving StreamFlixHighErrorRate
 	case "latency":
@@ -135,10 +155,11 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
 	if forceErr || rand.Float64() < errRate {
 		code = http.StatusInternalServerError
 	}
-	// fan out to downstreams
-	client := &http.Client{Timeout: 2 * time.Second}
+	// fan out to downstreams with trace context propagation
+	client := &http.Client{Timeout: 2 * time.Second, Transport: otelhttp.NewTransport(http.DefaultTransport)}
 	for name, url := range downstreams() {
-		resp, err := client.Get(url)
+		req, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, url, nil)
+		resp, err := client.Do(req)
 		dc := "error"
 		if err == nil {
 			dc = strconv.Itoa(resp.StatusCode)
@@ -186,6 +207,13 @@ func handleFault(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	otlpEndpoint := env("OTEL_EXPORTER_OTLP_ENDPOINT", "tempo.observability.svc:4318")
+	if shutdown, err := initTracer(context.Background(), svcName, otlpEndpoint); err != nil {
+		log.Printf("tracing disabled: %v", err)
+	} else {
+		defer shutdown(context.Background())
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handleRoot)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
@@ -194,5 +222,5 @@ func main() {
 	mux.Handle("/metrics", promhttp.Handler())
 	addr := ":" + env("PORT", "8080")
 	log.Printf("%s (%s) listening on %s", svcName, svcTier, addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
+	log.Fatal(http.ListenAndServe(addr, otelhttp.NewHandler(mux, "http.server")))
 }
