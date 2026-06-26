@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 ALERT_THRESHOLDS = {
-    "oom_kill": {"metric": "kube_pod_container_status_terminated_reason", "threshold": ">= 1 OOMKilled pod for 5m"},
+    "oom_kill": {"metric": "kube_pod_container_status_last_terminated_reason", "threshold": ">= 1 OOMKilled pod for 5m"},
     "pod_restart": {"metric": "kube_pod_container_status_restarts_total", "threshold": "restart delta >= 3 for 10m"},
     "disk_iops": {"metric": "volume_iops_utilization", "threshold": ">= 90% for 10m"},
     "cpu_throttle": {"metric": "container_cpu_cfs_throttled_ratio", "threshold": ">= 25% for 10m"},

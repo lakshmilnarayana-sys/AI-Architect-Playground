@@ -148,3 +148,55 @@ def inject_failure(resource: dict, failure_mode: str) -> dict:
 
 def clear_failure(resource: dict) -> dict:
     return healthy_runtime(resource)
+
+
+def live_runtime(service: str):
+    """Read real pod status/events for a service; None if disabled or on any error."""
+    import json as _json
+    import os as _os
+    import subprocess as _sp
+    from src.incident.live_clients import live_enabled
+    if not live_enabled():
+        return None
+    ctx = _os.getenv("KUBE_CONTEXT", "kind-streamflix")
+    svc = normalize_service_name(service)
+    try:
+        out = _sp.run(
+            ["kubectl", "--context", ctx, "-n", "streamflix-prod", "get", "pods",
+             "-l", f"app={svc}", "-o", "json"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if out.returncode != 0:
+            return None
+        pods = _json.loads(out.stdout).get("items", [])
+        if not pods:
+            return None
+        restart_delta = 0
+        active = None
+        pod_status = "Running"
+        for pod in pods:
+            for cs in pod.get("status", {}).get("containerStatuses", []) or []:
+                restart_delta = max(restart_delta, int(cs.get("restartCount", 0)))
+                waiting = (cs.get("state", {}).get("waiting") or {}).get("reason")
+                term = (cs.get("lastState", {}).get("terminated") or {}).get("reason")
+                if term == "OOMKilled":
+                    active, pod_status = "oom_kill", "OOMKilled"
+                elif waiting in ("CrashLoopBackOff",):
+                    active, pod_status = "pod_restart", "CrashLoopBackOff"
+                elif waiting in ("ImagePullBackOff", "ErrImagePull"):
+                    active, pod_status = "image_pull_backoff", "ImagePullBackOff"
+        if active is None and restart_delta >= 3:
+            active, pod_status = "pod_restart", "CrashLoopBackOff"
+        return {
+            "service": svc,
+            "cluster": "streamflix",
+            "namespace": "streamflix-prod",
+            "workload": svc,
+            "active_failure": active,
+            "pod_status": pod_status,
+            "health": "degraded" if active else "healthy",
+            "restart_count_delta": restart_delta,
+            "signals": {"source": "live-kubectl", "pods": len(pods)},
+        }
+    except Exception:
+        return None

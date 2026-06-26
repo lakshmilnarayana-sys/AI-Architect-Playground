@@ -1,0 +1,88 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: streamflix-alerts
+  namespace: observability
+  labels:
+    release: kps
+spec:
+  groups:
+    - name: streamflix.rules
+      rules:
+        - alert: StreamFlixHighErrorRate
+          expr: |
+            sum by (service) (rate(http_requests_total{code=~"5.."}[5m]))
+              / sum by (service) (rate(http_requests_total[5m])) > 0.05
+          for: 5m
+          labels: {severity: SEV2, failure_mode: high_error_rate}
+          annotations:
+            summary: "High 5xx error rate on {{ $labels.service }}"
+            description: "{{ $labels.service }} 5xx ratio above 5% for 5m."
+            runbook_url: "https://runbooks.streamflix.local/high_error_rate"
+        - alert: StreamFlixHighLatencyP95
+          expr: |
+            histogram_quantile(0.95,
+              sum by (service, le) (rate(http_request_duration_seconds_bucket[5m]))) > 0.5
+          for: 10m
+          labels: {severity: SEV3, failure_mode: high_latency}
+          annotations:
+            summary: "High p95 latency on {{ $labels.service }}"
+            description: "{{ $labels.service }} p95 latency above 500ms for 10m."
+            runbook_url: "https://runbooks.streamflix.local/high_latency"
+        - alert: StreamFlixDownstreamFailures
+          expr: |
+            sum by (service) (rate(downstream_requests_total{code=~"5..|error"}[5m]))
+              / sum by (service) (rate(downstream_requests_total[5m])) > 0.1
+          for: 10m
+          labels: {severity: SEV3, failure_mode: dependency_timeout}
+          annotations:
+            summary: "Downstream call failures from {{ $labels.service }}"
+            description: "{{ $labels.service }} downstream error ratio above 10% for 10m."
+            runbook_url: "https://runbooks.streamflix.local/downstream_failures"
+        - alert: StreamFlixCPUThrottling
+          expr: |
+            sum by (pod) (rate(container_cpu_cfs_throttled_periods_total{namespace="streamflix-prod"}[5m]))
+              / sum by (pod) (rate(container_cpu_cfs_periods_total{namespace="streamflix-prod"}[5m])) > 0.25
+          for: 10m
+          labels: {severity: SEV3, failure_mode: cpu_throttle}
+          annotations:
+            summary: "CPU throttling on {{ $labels.pod }}"
+            description: "{{ $labels.pod }} CPU throttled ratio above 25% for 10m."
+            runbook_url: "https://runbooks.streamflix.local/cpu_throttle"
+        - alert: StreamFlixOOMKilled
+          expr: |
+            max by (pod, container) (kube_pod_container_status_last_terminated_reason{namespace="streamflix-prod", reason="OOMKilled"}) == 1
+          for: 1m
+          labels: {severity: SEV2, failure_mode: oom_kill}
+          annotations:
+            summary: "OOMKilled container in {{ $labels.pod }}"
+            description: "{{ $labels.pod }}/{{ $labels.container }} was OOMKilled."
+            runbook_url: "https://runbooks.streamflix.local/oom_kill"
+        - alert: StreamFlixPodCrashLooping
+          expr: |
+            increase(kube_pod_container_status_restarts_total{namespace="streamflix-prod"}[10m]) >= 3
+          for: 2m
+          labels: {severity: SEV2, failure_mode: pod_restart}
+          annotations:
+            summary: "Pod crash-looping: {{ $labels.pod }}"
+            description: "{{ $labels.pod }} restarted >= 3 times in 10m."
+            runbook_url: "https://runbooks.streamflix.local/pod_restart"
+        - alert: StreamFlixImagePullBackOff
+          expr: |
+            max by (pod) (kube_pod_container_status_waiting_reason{namespace="streamflix-prod", reason=~"ImagePullBackOff|ErrImagePull"}) == 1
+          for: 5m
+          labels: {severity: SEV3, failure_mode: image_pull_backoff}
+          annotations:
+            summary: "ImagePullBackOff: {{ $labels.pod }}"
+            description: "{{ $labels.pod }} cannot pull its image for 5m."
+            runbook_url: "https://runbooks.streamflix.local/image_pull_backoff"
+        - alert: StreamFlixMemoryNearLimit
+          expr: |
+            sum by (pod, container) (container_memory_working_set_bytes{namespace="streamflix-prod", container!=""})
+              / sum by (pod, container) (kube_pod_container_resource_limits{namespace="streamflix-prod", resource="memory"}) > 0.9
+          for: 15m
+          labels: {severity: SEV3, failure_mode: memory_leak}
+          annotations:
+            summary: "Memory near limit: {{ $labels.pod }}"
+            description: "{{ $labels.pod }} working set above 90% of its memory limit for 15m."
+            runbook_url: "https://runbooks.streamflix.local/memory_leak"

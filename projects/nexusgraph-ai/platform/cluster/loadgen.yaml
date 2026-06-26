@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgen
+  namespace: streamflix-prod
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: loadgen}}
+  template:
+    metadata: {labels: {app: loadgen}}
+    spec:
+      containers:
+        - name: loadgen
+          image: localhost:5001/streamflix-loadgen:dev
+          env:
+            - name: RPS
+              value: "10"
+            - name: TARGETS
+              value: >-
+                http://edge-router-service:8080/
+                http://api-gateway-service:8080/
+                http://playback-service:8080/
+                http://billing-service:8080/
+                http://identity-service:8080/
+                http://recommendation-service:8080/

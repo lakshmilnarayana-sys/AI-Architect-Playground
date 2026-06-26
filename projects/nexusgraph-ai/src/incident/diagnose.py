@@ -69,7 +69,8 @@ def _observability(state: IncidentState) -> dict:
 
     runtime = (state.get("findings") or {}).get("kubernetes_runtime", {})
     failure_mode = runtime.get("active_failure") or state["incident"].get("failure_mode") or "unknown"
-    evidence = get_observability_evidence(_service(state), failure_mode)
+    from src.incident.observability import live_evidence
+    evidence = live_evidence(_service(state), failure_mode) or get_observability_evidence(_service(state), failure_mode)
     update = emit(
         "diagnose",
         "ObservabilityAgent",

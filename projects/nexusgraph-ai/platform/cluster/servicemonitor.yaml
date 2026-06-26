@@ -1,0 +1,14 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: streamflix-services
+  namespace: observability
+  labels: {release: kps}
+spec:
+  namespaceSelector: {matchNames: [streamflix-prod]}
+  selector: {}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      honorLabels: true

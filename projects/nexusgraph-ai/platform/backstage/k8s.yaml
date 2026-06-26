@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Namespace
+metadata: {name: backstage}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: backstage, namespace: backstage, labels: {app: backstage}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: backstage}}
+  template:
+    metadata: {labels: {app: backstage}}
+    spec:
+      containers:
+        - name: catalog-server
+          image: localhost:5001/streamflix-catalog-server:dev
+          ports: [{containerPort: 7007}]
+          volumeMounts: [{name: catalog, mountPath: /catalog}]
+          readinessProbe: {httpGet: {path: /healthz, port: 7007}, initialDelaySeconds: 10, periodSeconds: 5, failureThreshold: 30}
+          resources:
+            requests: {cpu: "250m", memory: "256Mi"}
+            limits: {cpu: "1", memory: "1Gi"}
+      volumes:
+        - name: catalog
+          configMap: {name: backstage-catalog}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: backstage, namespace: backstage, labels: {app: backstage}}
+spec: {selector: {app: backstage}, ports: [{port: 7007, targetPort: 7007}]}

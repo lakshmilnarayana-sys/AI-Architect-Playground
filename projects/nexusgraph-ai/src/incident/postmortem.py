@@ -120,9 +120,9 @@ def _action_items(state: IncidentState) -> dict:
 
 
 def _save_jira(state: IncidentState) -> dict:
-    from src.incident.jira import save_incident
+    from src.incident.jira import create_issue_live, save_incident
 
-    issue = save_incident(state)
+    issue = create_issue_live(state) or save_incident(state)
     update = emit(
         "postmortem",
         "Jira Agent",

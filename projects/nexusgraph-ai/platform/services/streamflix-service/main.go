@@ -1,0 +1,226 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"math/rand"
+	"net/http"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+)
+
+const (
+	leakChunkSize  = 16 * 1024 * 1024 // 16 MiB per injection hit
+	leakMaxBytes   = 512 * 1024 * 1024 // 512 MiB self-cap (defence-in-depth; cgroup kills first at 128Mi)
+)
+
+// knownFaultModes lists the runtime fault modes implemented by applyFault.
+// Any mode not in this set is rejected with HTTP 400.
+var knownFaultModes = map[string]bool{
+	"cpu_throttle": true,
+	"memory_leak":  true,
+	"oom_kill":     true,
+	"pod_restart":  true,
+	"disk_iops":    true,
+	"error_rate":   true,
+	"latency":      true,
+}
+
+var (
+	svcName     = env("SERVICE_NAME", "unknown-service")
+	svcTier     = env("SERVICE_TIER", "internal")
+	baseMS, _   = strconv.Atoi(env("BASE_LATENCY_MS", "20"))
+	errRate, _  = strconv.ParseFloat(env("ERROR_RATE", "0"), 64)
+	faults      = NewFaultStore()
+	leak        [][]byte
+	leakMu      sync.Mutex
+
+	reqs = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "http_requests_total", Help: "Requests by code",
+		ConstLabels: prometheus.Labels{"service": svcName},
+	}, []string{"code"})
+	dur = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "http_request_duration_seconds", Help: "Latency",
+		Buckets: prometheus.DefBuckets, ConstLabels: prometheus.Labels{"service": svcName},
+	}, []string{"code"})
+	down = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "downstream_requests_total", Help: "Downstream calls",
+		ConstLabels: prometheus.Labels{"service": svcName},
+	}, []string{"target", "code"})
+)
+
+func env(k, d string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return d
+}
+
+func downstreams() map[string]string {
+	out := map[string]string{}
+	for _, p := range strings.Split(os.Getenv("DOWNSTREAMS"), ",") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if kv := strings.SplitN(p, "=", 2); len(kv) == 2 {
+			out[kv[0]] = kv[1]
+		}
+	}
+	return out
+}
+
+func applyFault() (extraLatency time.Duration, forceErr bool) {
+	mode, val, ok := faults.Active()
+	if !ok {
+		return 0, false
+	}
+	switch mode {
+	case "cpu_throttle":
+		// busy-loop to burn CPU against a low cgroup limit
+		deadline := time.Now().Add(time.Duration(50+val*100) * time.Millisecond)
+		for time.Now().Before(deadline) {
+		}
+		return 0, false
+	case "memory_leak", "oom_kill":
+		leakMu.Lock()
+		retained := len(leak) * leakChunkSize
+		if retained >= leakMaxBytes {
+			leakMu.Unlock()
+			return 0, false // self-cap: stop before ballooning the host
+		}
+		chunk := make([]byte, leakChunkSize)
+		// Touch every OS page so pages are committed to resident memory.
+		// Zero pages are deduped/compressed by macOS Docker Desktop's lightweight VM;
+		// writing a non-zero byte per page defeats that and makes RSS grow for real,
+		// allowing the pod's 128Mi cgroup limit to trigger OOMKilled.
+		for i := 0; i < len(chunk); i += 4096 {
+			chunk[i] = byte(i%251 + 1)
+		}
+		leak = append(leak, chunk)
+		leakMu.Unlock()
+		return 0, false
+	case "pod_restart":
+		log.Printf("fault pod_restart: exiting")
+		os.Exit(137)
+	case "disk_iops":
+		n := int(val)
+		if n < 1 {
+			n = 1
+		}
+		if n > 50 {
+			n = 50 // bounded: never hammer a laptop disk
+		}
+		buf := make([]byte, 1024*1024) // 1 MiB
+		for i := 0; i < n; i++ {
+			f, err := os.CreateTemp("", "perf-iops-*")
+			if err != nil {
+				break
+			}
+			f.Write(buf)
+			f.Sync()
+			f.Close()
+			os.Remove(f.Name())
+		}
+		return time.Duration(n*5) * time.Millisecond, false
+	case "error_rate":
+		return 0, true // forces a 5xx on this request, driving StreamFlixHighErrorRate
+	case "latency":
+		// value>=1 adds >=600ms, crossing the 500ms p95 alert threshold (StreamFlixHighLatencyP95)
+		return time.Duration(300+int(val)*300) * time.Millisecond, false
+	default: // node_pressure, hpa_maxed, image_pull_backoff handled at manifest layer
+		return 0, false
+	}
+	return 0, false
+}
+
+func handleRoot(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	time.Sleep(time.Duration(baseMS) * time.Millisecond)
+	extra, forceErr := applyFault()
+	time.Sleep(extra)
+
+	code := http.StatusOK
+	if forceErr || rand.Float64() < errRate {
+		code = http.StatusInternalServerError
+	}
+	// fan out to downstreams with trace context propagation
+	client := &http.Client{Timeout: 2 * time.Second, Transport: otelhttp.NewTransport(http.DefaultTransport)}
+	for name, url := range downstreams() {
+		req, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, url, nil)
+		resp, err := client.Do(req)
+		dc := "error"
+		if err == nil {
+			dc = strconv.Itoa(resp.StatusCode)
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+		}
+		down.WithLabelValues(name, dc).Inc()
+	}
+	w.WriteHeader(code)
+	fmt.Fprintf(w, `{"service":%q,"tier":%q,"code":%d}`, svcName, svcTier, code)
+	reqs.WithLabelValues(strconv.Itoa(code)).Inc()
+	dur.WithLabelValues(strconv.Itoa(code)).Observe(time.Since(start).Seconds())
+}
+
+func handleFault(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Mode  string  `json:"mode"`
+		Value float64 `json:"value"`
+		TTL   int     `json:"ttl"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if body.Mode == "" || body.Mode == "clear" {
+		faults.Clear()
+		leakMu.Lock()
+		leak = nil
+		leakMu.Unlock()
+		w.Write([]byte(`{"status":"cleared"}`))
+		return
+	}
+	if !knownFaultModes[body.Mode] {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, `{"error":"unknown fault mode %s","valid_modes":["cpu_throttle","memory_leak","oom_kill","pod_restart","disk_iops","error_rate","latency"]}`, body.Mode)
+		return
+	}
+	ttl := time.Duration(body.TTL) * time.Second
+	if body.TTL == 0 {
+		ttl = 10 * time.Minute
+	}
+	faults.Set(body.Mode, body.Value, ttl)
+	fmt.Fprintf(w, `{"status":"set","mode":%q}`, body.Mode)
+}
+
+func main() {
+	otlpEndpoint := env("OTEL_EXPORTER_OTLP_ENDPOINT", "tempo.observability.svc:4318")
+	if shutdown, err := initTracer(context.Background(), svcName, otlpEndpoint); err != nil {
+		log.Printf("tracing disabled: %v", err)
+	} else {
+		defer shutdown(context.Background())
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", handleRoot)
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ready")) })
+	mux.HandleFunc("/admin/fault", handleFault)
+	mux.Handle("/metrics", promhttp.Handler())
+	addr := ":" + env("PORT", "8080")
+	log.Printf("%s (%s) listening on %s", svcName, svcTier, addr)
+	log.Fatal(http.ListenAndServe(addr, otelhttp.NewHandler(mux, "http.server")))
+}

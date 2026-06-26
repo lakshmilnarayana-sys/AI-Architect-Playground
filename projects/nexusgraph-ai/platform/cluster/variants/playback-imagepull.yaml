@@ -1,0 +1,15 @@
+# Apply to reproduce image_pull_backoff on playback-service:
+#   kubectl --context kind-streamflix -n streamflix-prod patch deployment playback-service \
+#     --patch-file cluster/variants/playback-imagepull.yaml
+# Revert with: make deploy
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: playback-service
+  namespace: streamflix-prod
+spec:
+  template:
+    spec:
+      containers:
+        - name: playback-service
+          image: localhost:5001/streamflix-service:nonexistent-tag

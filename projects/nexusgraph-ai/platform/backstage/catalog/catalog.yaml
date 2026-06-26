@@ -1,0 +1,948 @@
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: streamflix
+  description: StreamFlix streaming platform
+spec:
+  owner: group:platform-engineering
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: platform-engineering
+  description: Platform services and runtime
+spec:
+  type: team
+  profile:
+    displayName: Platform Engineering
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: security-governance
+  description: Controls, audits, and security policy
+spec:
+  type: team
+  profile:
+    displayName: Security Governance
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: recommendation-systems
+  description: Personalization and ranking
+spec:
+  type: team
+  profile:
+    displayName: Recommendation Systems
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: product-strategy
+  description: Pricing, packaging, and roadmap
+spec:
+  type: team
+  profile:
+    displayName: Product Strategy
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: billing-platform
+  description: Billing and payments systems
+spec:
+  type: team
+  profile:
+    displayName: Billing Platform
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: reliability-engineering
+  description: SRE, incidents, and observability
+spec:
+  type: team
+  profile:
+    displayName: Reliability Engineering
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: content-discovery-team
+  description: 'Imported from Netflix synthetic dataset: Team content-discovery-team'
+spec:
+  type: team
+  profile:
+    displayName: content-discovery-team
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: core-platform-team
+  description: 'Imported from Netflix synthetic dataset: Team core-platform-team'
+spec:
+  type: team
+  profile:
+    displayName: core-platform-team
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: data-platform-team
+  description: 'Imported from Netflix synthetic dataset: Team data-platform-team'
+spec:
+  type: team
+  profile:
+    displayName: data-platform-team
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: identity-platform-team
+  description: 'Imported from Netflix synthetic dataset: Team identity-platform-team'
+spec:
+  type: team
+  profile:
+    displayName: identity-platform-team
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: monetization-platform-team
+  description: 'Imported from Netflix synthetic dataset: Team monetization-platform-team'
+spec:
+  type: team
+  profile:
+    displayName: monetization-platform-team
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: streaming-platform-team
+  description: 'Imported from Netflix synthetic dataset: Team streaming-platform-team'
+spec:
+  type: team
+  profile:
+    displayName: streaming-platform-team
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: user-engagement-team
+  description: 'Imported from Netflix synthetic dataset: Team user-engagement-team'
+spec:
+  type: team
+  profile:
+    displayName: user-engagement-team
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: aisha-khan
+  description: Staff Platform Engineer
+spec:
+  profile:
+    displayName: Aisha Khan
+  memberOf:
+  - platform-engineering
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: priya-menon
+  description: Director of Security Governance
+spec:
+  profile:
+    displayName: Priya Menon
+  memberOf:
+  - security-governance
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: marcus-lee
+  description: Principal Data Scientist
+spec:
+  profile:
+    displayName: Marcus Lee
+  memberOf:
+  - recommendation-systems
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: sofia-garcia
+  description: Product Manager
+spec:
+  profile:
+    displayName: Sofia Garcia
+  memberOf:
+  - product-strategy
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: daniel-okafor
+  description: Engineering Manager
+spec:
+  profile:
+    displayName: Daniel Okafor
+  memberOf:
+  - billing-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: emma-chen
+  description: SRE Lead
+spec:
+  profile:
+    displayName: Emma Chen
+  memberOf:
+  - reliability-engineering
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: rahul-patel
+  description: Backend Engineer
+spec:
+  profile:
+    displayName: Rahul Patel
+  memberOf:
+  - platform-engineering
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: hannah-miller
+  description: Compliance Analyst
+spec:
+  profile:
+    displayName: Hannah Miller
+  memberOf:
+  - security-governance
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: luca-romano
+  description: Data Engineer
+spec:
+  profile:
+    displayName: Luca Romano
+  memberOf:
+  - recommendation-systems
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: nora-wilson
+  description: VP Engineering
+spec:
+  profile:
+    displayName: Nora Wilson
+  memberOf:
+  - product-strategy
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: yuki-tanaka
+  description: Security Engineer
+spec:
+  profile:
+    displayName: Yuki Tanaka
+  memberOf:
+  - security-governance
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: omar-hassan
+  description: ML Platform Engineer
+spec:
+  profile:
+    displayName: Omar Hassan
+  memberOf:
+  - recommendation-systems
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: playback-service
+  description: StreamFlix playback-service
+  tags:
+  - customer-facing
+  annotations:
+    prometheus.io/service: playback-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22playback-service%22%7D%5B5m%5D)
+    streamflix.io/runbook: platform/runbooks/cpu_throttle.md
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:auth-service
+  - component:cdn-routing-service
+  - component:identity-service
+  - component:license-service
+  - component:manifest-service
+  - component:recommendation-service
+  - component:subtitle-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: manifest-service
+  description: StreamFlix manifest-service
+  tags:
+  - customer-facing
+  annotations:
+    prometheus.io/service: manifest-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22manifest-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:catalog-service
+  - component:cdn-routing-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: cdn-routing-service
+  description: StreamFlix cdn-routing-service
+  tags:
+  - customer-facing
+  annotations:
+    prometheus.io/service: cdn-routing-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22cdn-routing-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:config-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: recommendation-service
+  description: StreamFlix recommendation-service
+  tags:
+  - customer-facing
+  annotations:
+    prometheus.io/service: recommendation-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22recommendation-service%22%7D%5B5m%5D)
+    streamflix.io/runbook: platform/runbooks/memory_leak.md
+spec:
+  type: service
+  lifecycle: production
+  owner: group:recommendation-systems
+  system: streamflix
+  dependsOn:
+  - component:catalog-service
+  - component:feature-store-service
+  - component:ml-ranking-service
+  - component:personalization-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: feature-store-service
+  description: StreamFlix feature-store-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: feature-store-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22feature-store-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:recommendation-systems
+  system: streamflix
+  dependsOn:
+  - component:event-ingestion-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: billing-service
+  description: StreamFlix billing-service
+  tags:
+  - customer-facing
+  annotations:
+    prometheus.io/service: billing-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22billing-service%22%7D%5B5m%5D)
+    streamflix.io/runbook: platform/runbooks/oom_kill.md
+spec:
+  type: service
+  lifecycle: production
+  owner: group:billing-platform
+  system: streamflix
+  dependsOn:
+  - component:account-service
+  - component:identity-service
+  - component:invoice-service
+  - component:payment-gateway-service
+  - component:payment-service
+  - component:subscription-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: payment-gateway-service
+  description: StreamFlix payment-gateway-service
+  tags:
+  - customer-facing
+  annotations:
+    prometheus.io/service: payment-gateway-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22payment-gateway-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:billing-platform
+  system: streamflix
+  dependsOn:
+  - component:identity-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: identity-service
+  description: StreamFlix identity-service
+  tags:
+  - customer-facing
+  annotations:
+    prometheus.io/service: identity-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22identity-service%22%7D%5B5m%5D)
+    streamflix.io/runbook: platform/runbooks/image_pull_backoff.md
+spec:
+  type: service
+  lifecycle: production
+  owner: group:security-governance
+  system: streamflix
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: audit-evidence-service
+  description: StreamFlix audit-evidence-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: audit-evidence-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22audit-evidence-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:security-governance
+  system: streamflix
+  dependsOn:
+  - component:identity-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: observability-service
+  description: StreamFlix observability-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: observability-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22observability-service%22%7D%5B5m%5D)
+    streamflix.io/runbook: platform/runbooks/high_error_rate.md
+spec:
+  type: service
+  lifecycle: production
+  owner: group:reliability-engineering
+  system: streamflix
+  dependsOn:
+  - component:billing-service
+  - component:playback-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: account-service
+  description: StreamFlix account-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: account-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22account-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: analytics-service
+  description: StreamFlix analytics-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: analytics-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22analytics-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:event-ingestion-service
+  - component:feature-store-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: api-gateway-service
+  description: StreamFlix api-gateway-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: api-gateway-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22api-gateway-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:auth-service
+  - component:billing-service
+  - component:catalog-service
+  - component:playback-service
+  - component:profile-service
+  - component:search-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: auth-service
+  description: StreamFlix auth-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: auth-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22auth-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:account-service
+  - component:device-auth-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: catalog-service
+  description: StreamFlix catalog-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: catalog-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22catalog-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:metadata-service
+  - component:search-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: config-service
+  description: StreamFlix config-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: config-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22config-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: device-auth-service
+  description: StreamFlix device-auth-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: device-auth-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22device-auth-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:account-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: edge-router-service
+  description: StreamFlix edge-router-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: edge-router-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22edge-router-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:api-gateway-service
+  - component:cdn-routing-service
+  - component:device-auth-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: email-service
+  description: StreamFlix email-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: email-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22email-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:profile-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: event-ingestion-service
+  description: StreamFlix event-ingestion-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: event-ingestion-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22event-ingestion-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:api-gateway-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: experiment-service
+  description: StreamFlix experiment-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: experiment-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22experiment-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:config-service
+  - component:profile-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: invoice-service
+  description: StreamFlix invoice-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: invoice-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22invoice-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:billing-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: license-service
+  description: StreamFlix license-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: license-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22license-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:account-service
+  - component:subscription-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: metadata-service
+  description: StreamFlix metadata-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: metadata-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22metadata-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ml-ranking-service
+  description: StreamFlix ml-ranking-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: ml-ranking-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22ml-ranking-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:experiment-service
+  - component:feature-store-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: notification-service
+  description: StreamFlix notification-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: notification-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22notification-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:email-service
+  - component:profile-service
+  - component:push-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: payment-service
+  description: StreamFlix payment-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: payment-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22payment-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:account-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: personalization-service
+  description: StreamFlix personalization-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: personalization-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22personalization-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:profile-service
+  - component:ratings-service
+  - component:watchlist-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: profile-service
+  description: StreamFlix profile-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: profile-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22profile-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:account-service
+  - component:ratings-service
+  - component:watchlist-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: push-service
+  description: StreamFlix push-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: push-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22push-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:device-auth-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ratings-service
+  description: StreamFlix ratings-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: ratings-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22ratings-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:catalog-service
+  - component:profile-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: search-service
+  description: StreamFlix search-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: search-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22search-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:catalog-service
+  - component:metadata-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: subscription-service
+  description: StreamFlix subscription-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: subscription-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22subscription-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:account-service
+  - component:payment-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: subtitle-service
+  description: StreamFlix subtitle-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: subtitle-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22subtitle-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:metadata-service
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: watchlist-service
+  description: StreamFlix watchlist-service
+  tags:
+  - internal
+  annotations:
+    prometheus.io/service: watchlist-service
+    streamflix.io/grafana: http://localhost:3000/explore?query=rate(http_requests_total%7Bservice%3D%22watchlist-service%22%7D%5B5m%5D)
+spec:
+  type: service
+  lifecycle: production
+  owner: group:platform-engineering
+  system: streamflix
+  dependsOn:
+  - component:catalog-service
+  - component:profile-service

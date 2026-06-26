@@ -135,3 +135,18 @@ def seed_incident_history(scenarios: list[dict], path: Path | None = None) -> di
     merged = list(by_incident_id.values())
     _write(merged, path)
     return {"seeded": len(seeded), "total": len(merged), "path": str(path or store_path())}
+
+
+def create_issue_live(state: dict):
+    """Create an issue in the live jira-mock when INCIDENT_LIVE; else None (caller uses save_incident)."""
+    from src.incident.live_clients import live_enabled, endpoint, http_post_json
+    if not live_enabled():
+        return None
+    issue = issue_from_state(state)
+    resp = http_post_json(
+        f"{endpoint('jira')}/rest/api/2/issue",
+        {"incident_id": issue.get("incident_id") or "incident", "fields": {"summary": issue.get("summary"), "severity": issue.get("severity"), "services": issue.get("services")}},
+    )
+    if not resp:
+        return None
+    return {**issue, "key": resp.get("key", issue.get("key")), "live": True}
