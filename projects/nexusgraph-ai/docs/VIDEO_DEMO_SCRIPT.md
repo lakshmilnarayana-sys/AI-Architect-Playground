@@ -90,7 +90,7 @@ curl -s localhost:18102/oncall/billing-service
 INCIDENT_LIVE=true SLACK_MOCK_URL=http://localhost:18100 JIRA_MOCK_URL=http://localhost:18101 \
 ONCALL_REGISTRY_URL=http://localhost:18102 PROMETHEUS_URL=http://localhost:9090 \
 ALERTMANAGER_URL=http://localhost:9093 KUBE_CONTEXT=kind-streamflix \
-.venv/bin/python -m src.incident.print_trace --service billing-service --failure-mode oom_kill
+.venv/bin/python -m src.incident.print_trace --service billing-service --failure-mode oom_kill --demo
 ```
 
 **Say (scroll the trace):**

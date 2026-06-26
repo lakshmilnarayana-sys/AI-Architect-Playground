@@ -12,6 +12,8 @@ live cluster; without them it runs deterministically. Either way the trace is th
 from __future__ import annotations
 
 import argparse
+import random
+import time
 
 from src.incident.run import run_for_service
 from src.incident.supervisor import _dedupe_events
@@ -20,7 +22,21 @@ PHASE_ORDER = ["declare", "triage", "diagnose", "mitigate", "resolve", "postmort
 KIND_MARK = {"message": "💬", "action": "⚙️", "gate": "✅", "finding": "🔎"}
 
 
-def print_trace(service: str, failure_mode: str | None, severity: str) -> dict:
+def print_trace(
+    service: str,
+    failure_mode: str | None,
+    severity: str,
+    demo: bool = False,
+    delay_min: float = 1.0,
+    delay_max: float = 5.0,
+) -> dict:
+    # Demo-only pacing: pause between printed steps so the trace streams out as if the
+    # agent were working through each phase live. This is PRESENTATION ONLY — the pipeline
+    # and the evaluation run untouched and fast; the delay is never inside the agent.
+    def _pace() -> None:
+        if demo:
+            time.sleep(random.uniform(delay_min, delay_max))
+
     final = run_for_service(service, failure_mode=failure_mode, severity=severity)
     events = _dedupe_events(final.get("timeline", []))
 
@@ -37,12 +53,13 @@ def print_trace(service: str, failure_mode: str | None, severity: str) -> dict:
         steps = by_phase.get(phase)
         if not steps:
             continue
-        print(f"\n── {phase.upper()} ──")
+        print(f"\n── {phase.upper()} ──", flush=True)
         for e in steps:
+            _pace()
             mark = KIND_MARK.get(e.get("kind", ""), "•")
             actor = e.get("actor", "?")
             text = e.get("text", "")
-            print(f"  {mark} {actor:30} {text}")
+            print(f"  {mark} {actor:30} {text}", flush=True)
 
     findings = final.get("findings") or {}
     print("\n" + "=" * 78)
@@ -63,8 +80,13 @@ def main() -> None:
     ap.add_argument("--service", required=True)
     ap.add_argument("--failure-mode", default=None)
     ap.add_argument("--severity", default="SEV2")
+    ap.add_argument("--demo", action="store_true",
+                    help="stream steps with a synthetic pause between them (presentation only)")
+    ap.add_argument("--delay-min", type=float, default=1.0, help="min seconds between steps in --demo")
+    ap.add_argument("--delay-max", type=float, default=5.0, help="max seconds between steps in --demo")
     a = ap.parse_args()
-    print_trace(a.service, a.failure_mode, a.severity)
+    print_trace(a.service, a.failure_mode, a.severity,
+                demo=a.demo, delay_min=a.delay_min, delay_max=a.delay_max)
 
 
 if __name__ == "__main__":
