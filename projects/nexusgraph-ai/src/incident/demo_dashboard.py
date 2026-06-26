@@ -195,6 +195,13 @@ def fault_async(service: str, mode: str, value: float, ttl: int, flag: dict, key
     threading.Thread(target=_work, daemon=True).start()
 
 
+def _fmt_latency(v) -> str:
+    """Sub-second latencies read clearer in ms; 1s+ stays in seconds."""
+    if v is None:
+        return "?"
+    return f"{v * 1000:.0f}ms" if v < 1.0 else f"{v:.2f}s"
+
+
 _SPARK = "▁▂▃▄▅▆▇█"
 
 
@@ -256,9 +263,8 @@ def k8s_panel(service, pods, p95_hist, recovering, recovered, pod_mode, breached
     p95_line = Text("\np95 ", style="bold")
     p95_line.append(Text(spark + "  ", style="cyan"))
     if cur_p95 is not None:
-        peak_s = f"{peak:.2f}s" if peak is not None else "?"
         col = "green" if cur_p95 < 0.5 else "yellow"
-        p95_line.append(Text(f"peak {peak_s} → now {cur_p95:.3f}s", style=col))
+        p95_line.append(Text(f"peak {_fmt_latency(peak)} → now {_fmt_latency(cur_p95)}", style=col))
     else:
         p95_line.append(Text("(no traffic signal)", style="dim"))
 
