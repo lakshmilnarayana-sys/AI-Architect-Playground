@@ -153,7 +153,7 @@ This repo now implements two Week 3 project tracks on top of the StreamFlix oper
 1. **Multi-Agent IT Support / Incident Response Agent**: a Freshworks-style incident lifecycle simulation covering identification, logging, categorization, prioritization, response, escalation, diagnosis, recovery, closure, and post-incident review. The demo can inject Kubernetes failure modes for `oom_kill`, `pod_restart`, `disk_iops`, and `cpu_throttle`; the agents attach Kubernetes KV context, static production logs, observability evidence, mitigation plans, recovery checks, and postmortem actions.
 2. **Intelligent Project Status Agent**: a weekly status synthesis agent over synthetic Jira, GitHub, dependency, risk, blocker, and decision snapshots. It produces a status color, executive summary, risks, blockers, dependencies, week-over-week insights, and next actions.
 
-The incident simulation uses local deterministic data rather than touching a live cluster. Kubernetes resources live in `data/kubernetes_resources.yaml`; static logs live in `data/service_logs.yaml`; outage scenarios live in `data/incident_scenarios.yaml`; FireHydrant-style runbook automation lives in `data/firehydrant_runbook_automations.yaml`.
+By default the incident simulation uses local deterministic data rather than touching a live cluster. Kubernetes resources live in `data/kubernetes_resources.yaml`; static logs live in `data/service_logs.yaml`; outage scenarios live in `data/incident_scenarios.yaml`; FireHydrant-style runbook automation lives in `data/firehydrant_runbook_automations.yaml`. An **optional live mode** (`INCIDENT_LIVE=true`) wires the same agent to a real Kubernetes cluster, Prometheus, and local Slack/Jira/on-call services — see the StreamFlix Platform section below. With the flag unset, behavior and the evaluation suite are byte-identical to the deterministic path.
 
 Recommended production integrations are modeled in `data/observability_sources.yaml`: OpenSearch with Fluent Bit for external log collection, and Grafana Cloud with Prometheus, Loki, Tempo, and Alertmanager for observability. The Streamlit UI also includes a Streamflix status-history surface inspired by public SaaS status pages.
 
@@ -164,6 +164,61 @@ Every app startup runs the shared seeder in `src/seed_runtime_data.py`:
 - Docker/Railway entrypoint seeds Neo4j from `graph/*.csv`, recreates the Chroma vector store from graph/data/docs/evaluation artifacts, and seeds fallback simulation stores.
 - Streamlit startup runs the same seeder. It recreates Chroma by default, optionally imports Neo4j when `NEXUSGRAPH_AUTO_IMPORT_NEO4J=true`, and seeds the simulated Jira incident history under `var/`.
 - Set `NEXUSGRAPH_FORCE_VECTOR_SEED=false` only when you intentionally want to reuse an existing Chroma store during local iteration.
+
+## Week 4 Evaluation
+
+The incident-response agent has a dedicated evaluation framework under
+`evaluation/incident/`: a **40-case golden dataset** (50% happy / 30% edge / 15%
+known-failure / 5% adversarial, seeded from the 23 real StreamFlix scenarios) scored by
+**10 code-based evaluators + 2 optional LLM-as-judge** metrics (failure-mode/owning-team/
+escalation/on-call/mitigation accuracy, postmortem faithfulness, task completion,
+rediagnose trajectory, injection-leak, latency).
+
+Run the local baseline (no LangSmith account needed, deterministic):
+
+```bash
+.venv/bin/python -m evaluation.incident.run_local
+# add LLM-as-judge faithfulness metrics:
+INCIDENT_USE_LLM=true .venv/bin/python -m evaluation.incident.run_local
+```
+
+Current baseline over 40 cases: failure_mode 1.00, owning_team 0.95, mitigation 0.975,
+no_injection_leak 1.00, task_completion 0.97, p95 latency well under 1s. The known gaps
+(escalation 0.525, on-call paging 0.025, one unmodeled-mode crash) are the documented
+Day-4 improvement targets — see `evaluation/incident/README.md`. LangSmith runs are
+available via `run_langsmith.py` (`LANGSMITH_API_KEY` + `LANGSMITH_TRACING=true`).
+
+## StreamFlix Platform On Kubernetes (Phases 1–4)
+
+Beyond the Streamlit/GraphRAG app, `platform/` makes the StreamFlix graph **real** on a
+local `kind` cluster: the services, observability, alerting, a live incident loop, and a
+software catalog are all generated from the same `graph/*.csv` (single source of truth) and
+gated so the deterministic eval suite is unaffected. Full per-phase specs and plans live in
+`docs/superpowers/`. Requires Docker + `kind` + `kubectl` + `helm`.
+
+| Phase | What it stands up | Docs |
+|---|---|---|
+| **1 — Cluster + services + observability** | `kind` cluster + local registry; one parameterized Go service deployed 35× (one per `service:*`, topology + `DEPENDS_ON` from the graph); kube-prometheus-stack (Prometheus/Grafana/Alertmanager) + Loki + Tempo; loadgen; runtime fault injection (`/admin/fault`) reproducing the failure modes; OpenTelemetry trace fan-out to Tempo. | `platform/README.md` |
+| **2 — Alerting + runbooks** | 8 PrometheusRules firing on real cluster metrics → Alertmanager → in-cluster alert sink, each linked to a per-mode runbook in `platform/runbooks/`. | `platform/alerting/README.md` |
+| **3 — Integrations + live incident loop** | In-cluster Slack / Jira / on-call mock services; the incident agent reads the live cluster + Prometheus and posts to the mocks (`INCIDENT_LIVE=true`); a watcher polls Alertmanager and runs the pipeline on firing alerts. | `platform/incident-services/README.md` |
+| **4 — Software catalog** | Backstage entity model (1 System, 13 Groups, 12 Users, 35 Components with `dependsOn`/`ownedBy` + Prometheus/runbook annotations) generated from the graph and served via a catalog API. (Full Backstage UI deferred — API-only fallback; see its README.) | `platform/backstage/README.md` |
+
+Common entry points (run from `platform/`, all targeting the `kind-streamflix` context):
+
+```bash
+cd platform
+make up           # kind cluster + local registry
+make observe      # Prometheus/Grafana/Loki/Tempo
+make build deploy # build the service image + deploy the 35-service topology
+make alerts       # PrometheusRules + Alertmanager → alert sink
+make incident-services   # Slack/Jira/on-call mocks + point Alertmanager at slack-mock
+make backstage    # generate catalog + deploy the catalog API
+make fault SVC=playback MODE=cpu_throttle   # inject a fault and watch it flow through
+```
+
+All platform code is local-only (binds to the kind cluster; never the production EKS
+contexts) and is intended for a disposable local demo (SQLite/guest auth/mocks, no SSO or
+managed databases).
 
 ## Deliverables
 
@@ -178,6 +233,7 @@ graph/
 src/
 app/
 evaluation/
+platform/
 docs/
 ```
 
