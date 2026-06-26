@@ -93,6 +93,66 @@ def _short(service: str) -> str:
     return service[:-len("-service")] if service.endswith("-service") else service
 
 
+def show_langsmith_trace(console, started_after: float) -> bool:
+    """On exit, fetch THIS run's LangSmith trace and render it locally as a tree
+    (node · latency), plus the clickable URL. Returns False (no-op) if LangSmith isn't
+    configured or the trace can't be fetched — caller then shows nothing extra."""
+    if not (os.getenv("LANGSMITH_API_KEY") or os.getenv("LANGCHAIN_API_KEY")):
+        return False
+    try:
+        from langsmith import Client
+        from rich.tree import Tree
+        client = Client()
+        project = (os.getenv("LANGSMITH_PROJECT") or os.getenv("LANGCHAIN_PROJECT")
+                   or "default")
+        try:
+            client.flush()
+        except Exception:
+            pass
+        time.sleep(2)  # let the background uploader flush this run
+        runs = [r for r in client.list_runs(project_name=project, limit=80)
+                if getattr(r, "start_time", None)
+                and r.start_time.timestamp() >= started_after - 1]
+        if not runs:
+            console.print("[dim]LangSmith: no runs found for this execution yet.[/dim]")
+            return True
+        roots = [r for r in runs if not getattr(r, "parent_run_id", None)]
+        if not roots:
+            return False
+        root = sorted(roots, key=lambda r: r.start_time)[-1]
+
+        def lat(r):
+            try:
+                return f"{(r.end_time - r.start_time).total_seconds():.2f}s"
+            except Exception:
+                return "·"
+
+        by_parent = {}
+        for r in runs:
+            by_parent.setdefault(getattr(r, "parent_run_id", None), []).append(r)
+        tree = Tree(f"[bold cyan]🧠 LangSmith trace[/bold cyan]  {root.name}  [dim]({lat(root)})[/dim]")
+
+        def add(node, run, depth=0):
+            if depth > 6:
+                return
+            for child in sorted(by_parent.get(run.id, []),
+                                key=lambda r: r.start_time or root.start_time):
+                add(node.add(f"{child.name}  [dim]· {lat(child)}[/dim]"), child, depth + 1)
+
+        add(tree, root)
+        console.print(tree)
+        try:
+            url = client.get_run_url(run=root)
+            console.print(f"[cyan]Full visual trace:[/cyan] {url}")
+        except Exception:
+            console.print(f"[dim]Open project '{project}' in LangSmith for the full trace.[/dim]")
+        return True
+    except Exception as e:
+        console.print(f"[dim]LangSmith trace unavailable ({type(e).__name__}); "
+                      f"the local trace above is the agent's full reasoning.[/dim]")
+        return False
+
+
 class KeyReader:
     """Non-blocking single-key reader; no-op (and not enabled) when stdin isn't a TTY."""
     def __init__(self):
@@ -368,6 +428,7 @@ def run(service, failure_mode, severity, delay_min, delay_max,
         time.sleep(6)  # let the symptom register before we start
 
     console.print(f"[dim]Running incident for {service} ({failure_mode})…[/dim]")
+    ls_start = time.time()  # mark when this run's LangSmith trace begins
     final = run_for_service(service, failure_mode=failure_mode, severity=severity)
     incident = final.get("incident", {})
     steps = _dedupe_events(final.get("timeline", []))
@@ -487,7 +548,10 @@ def run(service, failure_mode, severity, delay_min, delay_max,
                 last_poll = now
 
             if state == "HOLD":
-                footer = "✅ incident resolved — press [q] or Ctrl-C to exit (frame held for capture)"
+                _ls = "; LangSmith trace prints on exit" if (
+                    os.getenv("LANGSMITH_API_KEY") or os.getenv("LANGCHAIN_API_KEY")) else ""
+                footer = (f"✅ incident resolved — press [q] or Ctrl-C to exit "
+                          f"(frame held for capture{_ls})")
 
             layout["header"].update(header_panel(incident, now - start, shown, len(steps), footer))
             layout["trace"].update(trace_panel(steps, shown,
@@ -508,6 +572,7 @@ def run(service, failure_mode, severity, delay_min, delay_max,
     console.print(f"[bold green]Incident complete[/bold green] — phase={final.get('phase')} "
                   f"· jira={jira.get('key','(n/a)')} · {len(steps)} agent steps · "
                   f"{len(published)} status updates published")
+    show_langsmith_trace(console, ls_start)
 
 
 def main() -> None:
