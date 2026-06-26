@@ -85,16 +85,19 @@ curl -s localhost:18102/oncall/billing-service
 > its own. But restarting the symptom isn't incident response. Here's what the AI agent does
 > on top of that."
 
-**Do — launch the LIVE DASHBOARD (THE 'where's the AI' moment — one terminal, 4 panes):**
+**Do — launch the LIVE DASHBOARD (THE 'where's the AI' moment — one terminal, header + 4 panes):**
 ```bash
 INCIDENT_LIVE=true SLACK_MOCK_URL=http://localhost:18100 JIRA_MOCK_URL=http://localhost:18101 \
 ONCALL_REGISTRY_URL=http://localhost:18102 PROMETHEUS_URL=http://localhost:9090 \
 ALERTMANAGER_URL=http://localhost:9093 KUBE_CONTEXT=kind-streamflix \
-.venv/bin/python -m src.incident.demo_dashboard --service billing-service --failure-mode oom_kill
+.venv/bin/python -m src.incident.demo_dashboard --service identity-service --failure-mode cpu_throttle
 ```
-Panes: 🤖 Agent Reasoning (streams in) · ☸ Kubernetes & Metrics (live pod status + p95) ·
-🔌 Integrations (Slack channel, Jira ticket, on-call appear as the agent creates them).
-Plain non-dashboard alternative: `.venv/bin/python -m src.incident.print_trace --service billing-service --failure-mode oom_kill --demo`
+Panes: 🤖 Agent Reasoning (streams in) · ☸ Kubernetes & Metrics (live pod status + **p95
+sparkline that climbs ~0.02s→0.8s then recovers**) · 🔌 Integrations (Slack/Jira/on-call) ·
+📢 Status Page (you press **[a]** to approve each public update — HITL). The dashboard
+self-injects the fault, clears it at mitigation, waits for real SLO recovery, then **holds the
+final frame** (press [q] to exit) so you can capture it.
+Plain non-dashboard alternative: `.venv/bin/python -m src.incident.print_trace --service identity-service --failure-mode cpu_throttle --demo`
 
 **Say (scroll the trace):**
 > "Twenty-three steps across six phases. It confirms severity, finds the owning team and

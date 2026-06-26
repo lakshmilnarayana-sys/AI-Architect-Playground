@@ -34,6 +34,7 @@ import threading
 import time
 import urllib.parse
 import urllib.request
+from collections import deque
 from pathlib import Path
 
 from rich.console import Console, Group
@@ -182,15 +183,29 @@ def prom_p95(service: str):
     return None
 
 
-def clear_fault_async(service: str, done_flag: dict) -> None:
+def fault_async(service: str, mode: str, value: float, ttl: int, flag: dict, key: str) -> None:
     def _work():
         try:
-            subprocess.run(["bash", str(FAULT_SCRIPT), _short(service), "clear"],
+            subprocess.run(["bash", str(FAULT_SCRIPT), _short(service), mode,
+                            str(value), str(ttl)],
                            capture_output=True, text=True, timeout=30)
         except Exception:
             pass
-        done_flag["cleared"] = True
+        flag[key] = True
     threading.Thread(target=_work, daemon=True).start()
+
+
+_SPARK = "▁▂▃▄▅▆▇█"
+
+
+def sparkline(values: list[float]) -> str:
+    vals = [v for v in values if v is not None]
+    if len(vals) < 2:
+        return ""
+    lo, hi = min(vals), max(vals)
+    if hi - lo < 1e-9:
+        return _SPARK[0] * len(vals)
+    return "".join(_SPARK[min(7, int((v - lo) / (hi - lo) * 7))] for v in vals)
 
 
 # ---- panels ----------------------------------------------------------------
@@ -221,7 +236,7 @@ def trace_panel(steps, shown, thinking) -> Panel:
     return Panel(body, title="🤖 Agent Reasoning", title_align="left", border_style="cyan")
 
 
-def k8s_panel(service, pods, p95, recovering, recovered) -> Panel:
+def k8s_panel(service, pods, p95_hist, recovering, recovered, pod_mode) -> Panel:
     tbl = Table(expand=True, show_edge=False)
     tbl.add_column("pod", style="dim", overflow="fold")
     tbl.add_column("status"); tbl.add_column("restarts", justify="right")
@@ -232,45 +247,70 @@ def k8s_panel(service, pods, p95, recovering, recovered) -> Panel:
         st = "red" if cur in BAD_STATES else "green"
         label = cur + (f"  (last: {p['last_term']})" if cur == "Running" and p["last_term"] else "")
         tbl.add_row(p["name"][-30:], Text(label, style=st), p["restarts"])
-    p95s = "n/a" if p95 is None else f"{p95:.3f}s"
-    if recovered:
-        slo = Text("\nSLO: ✅ recovered — pods Running, restarts stable  ", style="bold green")
-    elif recovering:
-        slo = Text("\nSLO: ⏳ verifying recovery (mitigation applied)…  ", style="bold yellow")
+
+    cur_p95 = next((v for v in reversed(p95_hist) if v is not None), None)
+    peak = max([v for v in p95_hist if v is not None], default=None)
+    spark = sparkline(list(p95_hist))
+    p95_line = Text("\np95 ", style="bold")
+    p95_line.append(Text(spark + "  ", style="cyan"))
+    if cur_p95 is not None:
+        peak_s = f"{peak:.2f}s" if peak is not None else "?"
+        col = "green" if cur_p95 < 0.5 else "yellow"
+        p95_line.append(Text(f"peak {peak_s} → now {cur_p95:.3f}s", style=col))
     else:
-        slo = Text("\nSLO: monitoring  ", style="dim")
-    slo.append(Text(f"p95={p95s}", style="cyan"))
-    return Panel(Group(tbl, slo), title="☸  Kubernetes & Metrics (live)",
+        p95_line.append(Text("(no traffic signal)", style="dim"))
+
+    if recovered:
+        sli = ("pods Running, restarts stable" if pod_mode else "p95 back within target")
+        slo = Text(f"\nSLO: ✅ recovered — {sli}", style="bold green")
+    elif recovering:
+        slo = Text("\nSLO: ⏳ verifying recovery (mitigation applied)…", style="bold yellow")
+    else:
+        slo = Text("\nSLO: 🔴 breached — incident active", style="bold red")
+    return Panel(Group(tbl, p95_line, slo), title="☸  Kubernetes & Metrics (live)",
                  title_align="left", border_style="magenta")
 
 
 def integrations_panel(incident, flags) -> Panel:
+    """Always shows all three integrations (On-call · Slack · Jira), polled live, with a
+    placeholder until each is active — so the full picture is visible in the terminal."""
     svc = (incident.get("affected_services") or ["?"])[0]
     g = Table.grid(padding=(0, 1)); g.add_column()
+
+    # On-call
     if flags.get("oncall"):
         oc = _get_json(f"{_env('ONCALL_REGISTRY_URL','http://localhost:18102')}/oncall/{svc}") or {}
         g.add_row(Text("📟 On-call paged", style="bold green"))
         g.add_row(Text(f"   {oc.get('schedule','?')} · {oc.get('team','?')}", style="white"))
+    else:
+        g.add_row(Text("📟 On-call: pending…", style="dim"))
+
+    # Slack
     if flags.get("slack"):
         ch = channel_name(incident)
         msgs = _get_json(f"{_env('SLACK_MOCK_URL','http://localhost:18100')}/channels/{slugify(ch)}") or []
-        # de-dupe accumulated identical lines from earlier practice runs; show most recent unique
         seen, uniq = set(), []
         for m in msgs:
-            key = (m.get("author"), m.get("text"))
-            if key not in seen:
-                seen.add(key); uniq.append(m)
+            k = (m.get("author"), m.get("text"))
+            if k not in seen:
+                seen.add(k); uniq.append(m)
         g.add_row(Text(f"💬 Slack {ch}", style="bold green"))
-        for m in uniq[-3:]:
-            g.add_row(Text(f"   {m.get('author','?')}: {m.get('text','')[:44]}", style="dim"))
-    if flags.get("jira"):
-        issues = _get_json(f"{_env('JIRA_MOCK_URL','http://localhost:18101')}/issues") or []
-        g.add_row(Text(f"🎫 Jira ({len(issues)} ticket)", style="bold green"))
-        for it in (issues or [])[-2:]:
+        for m in uniq[-2:]:
+            g.add_row(Text(f"   {m.get('author','?')}: {m.get('text','')[:42]}", style="dim"))
+    else:
+        g.add_row(Text("💬 Slack: pending…", style="dim"))
+
+    # Jira — always polled; shows the ticket as soon as one exists
+    issues = _get_json(f"{_env('JIRA_MOCK_URL','http://localhost:18101')}/issues") or []
+    if issues:
+        g.add_row(Text(f"🎫 Jira ({len(issues)} ticket{'s' if len(issues) != 1 else ''})",
+                       style="bold green"))
+        for it in issues[-2:]:
             g.add_row(Text(f"   {it.get('key','?')}: "
                            f"{(it.get('fields') or {}).get('summary','')[:38]}", style="white"))
-    if not any(flags.values()):
-        g.add_row(Text("(waiting for the agent…)", style="dim italic"))
+    else:
+        g.add_row(Text("🎫 Jira: pending…", style="dim"))
+
     return Panel(g, title="🔌 Integrations: Slack · Jira · On-call",
                  title_align="left", border_style="green")
 
@@ -292,10 +332,25 @@ def status_panel(published, pending) -> Panel:
 
 # ---- driver ----------------------------------------------------------------
 
+POD_MODES = {"oom_kill", "pod_restart", "image_pull_backoff", "memory_leak", "node_pressure"}
+
+
 def run(service, failure_mode, severity, delay_min, delay_max,
         auto_approve, gate_pause, recover_threshold, recover_stable,
-        recover_timeout, hold_seconds) -> None:
+        recover_timeout, hold_seconds, inject, fault_value) -> None:
     console = Console()
+    fm = failure_mode or "issue"
+    pod_mode = fm in POD_MODES
+
+    # Make the symptom LIVE for the demo: inject the fault now so the cluster genuinely
+    # degrades (p95 climbs for latency faults; pod OOMKills for pod faults) while the agent
+    # works — the dashboard then clears it at the mitigate step so recovery is real, not staged.
+    inject_flag = {"injected": False}
+    if inject and failure_mode:
+        console.print(f"[dim]Injecting {failure_mode} on {service} to make the incident live…[/dim]")
+        fault_async(service, failure_mode, fault_value, 900, inject_flag, "injected")
+        time.sleep(6)  # let the symptom register before we start
+
     console.print(f"[dim]Running incident for {service} ({failure_mode})…[/dim]")
     final = run_for_service(service, failure_mode=failure_mode, severity=severity)
     incident = final.get("incident", {})
@@ -325,6 +380,7 @@ def run(service, failure_mode, severity, delay_min, delay_max,
     recover_started = None
     clear_flag = {"cleared": False}
     last_poll, cache = 0.0, {"pods": [], "p95": None}
+    p95_hist = deque(maxlen=48)
     gate_entered = None
 
     def flags_now():
@@ -361,7 +417,7 @@ def run(service, failure_mode, severity, delay_min, delay_max,
                 if in_phase >= len(cur):
                     if phases[pi] == "resolve" and not recover_done:
                         state = "RECOVER"; recover_started = now
-                        clear_fault_async(service, clear_flag)
+                        fault_async(service, "clear", 0, 0, clear_flag, "cleared")
                     else:
                         state = "GATE"; gate_entered = now
                         pending = (PHASE_STATUS.get(phases[pi], ("ℹ️", "{svc}"))[0],
@@ -371,16 +427,17 @@ def run(service, failure_mode, severity, delay_min, delay_max,
                 footer = "applying remediation · verifying SLO recovery…"
                 elapsed_r = now - recover_started
                 pods = cache.get("pods") or []
-                p95 = cache.get("p95")
-                pod_modes = {"oom_kill", "pod_restart", "image_pull_backoff",
-                             "memory_leak", "node_pressure"}
-                if fm in pod_modes:
+                cur_p95 = next((v for v in reversed(p95_hist) if v is not None), None)
+                peak = max([v for v in p95_hist if v is not None], default=None)
+                if pod_mode:
                     # SLI for a pod-failure incident: pods back to Running and stable.
                     healthy = bool(pods) and all(p["current"] not in BAD_STATES for p in pods)
                     ok = clear_flag["cleared"] and healthy and elapsed_r > recover_stable
                 else:
-                    # SLI for a latency/throttle incident: p95 falls below target.
-                    ok = clear_flag["cleared"] and p95 is not None and p95 < recover_threshold
+                    # SLI for a latency/throttle incident: p95 drops below target OR falls to
+                    # half its peak (handles services whose baseline is above the flat target).
+                    ok = (clear_flag["cleared"] and cur_p95 is not None and
+                          (cur_p95 < recover_threshold or (peak and cur_p95 <= peak * 0.5)))
                 if ok or elapsed_r > recover_timeout:
                     recover_done = True
                     state = "GATE"; gate_entered = now
@@ -402,6 +459,7 @@ def run(service, failure_mode, severity, delay_min, delay_max,
             if now - last_poll > 1.2:
                 cache["pods"] = poll_pods(service)
                 cache["p95"] = prom_p95(service)
+                p95_hist.append(cache["p95"])
                 last_poll = now
 
             if state == "HOLD":
@@ -410,8 +468,8 @@ def run(service, failure_mode, severity, delay_min, delay_max,
             layout["header"].update(header_panel(incident, now - start, shown, len(steps), footer))
             layout["trace"].update(trace_panel(steps, shown,
                                                 "…thinking" if state == "REVEAL" and shown < len(steps) else None))
-            layout["k8s"].update(k8s_panel(service, cache["pods"], cache["p95"],
-                                           recovering, recover_done))
+            layout["k8s"].update(k8s_panel(service, cache["pods"], list(p95_hist),
+                                           recovering, recover_done, pod_mode))
             layout["integrations"].update(integrations_panel(incident, flags_now()))
             layout["status"].update(status_panel(published, pending))
 
@@ -445,12 +503,17 @@ def main() -> None:
     ap.add_argument("--recover-timeout", type=float, default=90.0)
     ap.add_argument("--hold-seconds", type=float, default=20.0,
                     help="non-interactive only: seconds to hold the final frame before auto-exit")
+    ap.add_argument("--no-inject", dest="inject", action="store_false",
+                    help="don't inject the fault (assume it's already active in the cluster)")
+    ap.add_argument("--fault-value", type=float, default=3.0,
+                    help="intensity for the injected fault (e.g. cpu_throttle VALUE)")
+    ap.set_defaults(inject=True)
     a = ap.parse_args()
     # Non-TTY (piped / CI) can't read keypresses → force auto-approve so it still completes.
     auto = a.auto_approve or not sys.stdin.isatty()
     run(a.service, a.failure_mode, a.severity, a.delay_min, a.delay_max,
         auto, a.gate_pause, a.recover_threshold, a.recover_stable,
-        a.recover_timeout, a.hold_seconds)
+        a.recover_timeout, a.hold_seconds, a.inject, a.fault_value)
 
 
 if __name__ == "__main__":

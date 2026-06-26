@@ -56,20 +56,31 @@ curl -s localhost:18102/oncall/billing-service        # on-call: team+schedule (
 ```
 
 ### ⭐ One-command LIVE DASHBOARD (recommended for the recording)
-Splits ONE terminal into 4 live panes — agent reasoning streaming in, live Kubernetes pod
-status + Prometheus metrics, and the Slack/Jira/on-call integrations as they populate. No
-tmux, no second terminal. Best single shot for the video:
+Splits ONE terminal into a header + 4 live panes — agent reasoning streaming in, live
+Kubernetes pod status + a **p95 sparkline (peak→now)**, the Slack/Jira/on-call integrations,
+and a **Status Page** with a HITL approval at every stage. It **self-injects** the fault
+(symptom goes live), **clears it at the mitigate step**, and **waits for real recovery**
+before "Resolved". It does NOT auto-exit — the final frame stays until you press **[q]**, so
+you can screen-capture the complete end state. No tmux, no second terminal.
+
+**To SEE a p95 recovery curve, use a LEAF service** (low ~24ms baseline) with `cpu_throttle` —
+deep-fan-out services (billing/playback) have a huge flat baseline p95 that swamps the fault:
 ```bash
 cd ~/Documents/maven/projects/nexusgraph-ai
 INCIDENT_LIVE=true SLACK_MOCK_URL=http://localhost:18100 JIRA_MOCK_URL=http://localhost:18101 \
 ONCALL_REGISTRY_URL=http://localhost:18102 PROMETHEUS_URL=http://localhost:9090 \
 ALERTMANAGER_URL=http://localhost:9093 KUBE_CONTEXT=kind-streamflix \
-.venv/bin/python -m src.incident.demo_dashboard --service billing-service --failure-mode oom_kill
-#   tighten pacing for a shorter take: add  --delay-max 2
+.venv/bin/python -m src.incident.demo_dashboard --service identity-service --failure-mode cpu_throttle
+#   p95 climbs 0.02s → ~0.8s during the incident, then drops back to 0.02s after mitigation.
+#   good leaf services: identity-service, config-service, metadata-service, account-service.
 ```
-Tip: inject the fault first (`cd platform && make fault SVC=billing MODE=oom_kill TTL=300`) so
-the Kubernetes pane shows real OOMKilled/restarts climbing while the agent works. It uses the
-terminal's alternate screen (clean full-screen view) and restores on exit.
+HITL: on a TTY you press **[a]** to approve each status update. Add `--auto-approve` for a
+hands-free take. Tighten pacing with `--delay-max 2`.
+
+**For the OOM / billing story**, recovery is pod-based (OOMKilled → Running), not p95:
+```bash
+… .venv/bin/python -m src.incident.demo_dashboard --service billing-service --failure-mode oom_kill
+```
 
 ### Show the AGENT's work (plain, non-dashboard alternative)
 A pod restart is just Kubernetes self-healing. The AI agent's value is the incident
