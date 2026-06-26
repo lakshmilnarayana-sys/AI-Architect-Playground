@@ -464,7 +464,8 @@ ERR_MODES = {"error_rate", "high_error_rate", "dependency_timeout"}
 
 def run(service, failure_mode, severity, delay_min, delay_max,
         auto_approve, gate_pause, recover_threshold, recover_stable,
-        recover_timeout, hold_seconds, inject, fault_value, error_threshold) -> None:
+        recover_timeout, hold_seconds, inject, fault_value, error_threshold,
+        detect_timeout) -> None:
     console = Console()
     fm = failure_mode or "issue"
     pod_mode = fm in POD_MODES
@@ -488,7 +489,6 @@ def run(service, failure_mode, severity, delay_min, delay_max,
         # GUARANTEE the fault is reverted on ANY exit (normal quit, Ctrl-C, error) so a
         # throttle never leaks into the next run; idempotent, so the mitigate-step clear is fine too.
         atexit.register(clear_fault_sync, service)
-        time.sleep(6)  # let the symptom register before we start
 
     console.print(f"[dim]Running incident for {service} ({failure_mode})…[/dim]")
     ls_start = time.time()  # mark when this run's LangSmith trace begins
@@ -528,7 +528,10 @@ def run(service, failure_mode, severity, delay_min, delay_max,
     shown = 0                  # flat count of revealed steps (for trace + counter)
     pi = 0                     # current phase index
     in_phase = 0               # steps revealed within current phase
-    state = "REVEAL"           # REVEAL | RECOVER | GATE | HOLD
+    # Start by DETECTING: don't narrate the incident until the SLI has actually degraded —
+    # degradation must precede the alert/declaration, like a real incident.
+    state = "DEGRADING"        # DEGRADING | REVEAL | RECOVER | GATE | HOLD
+    detect_started = start
     next_reveal = start
     published, pending = [], None
     recover_done = False
@@ -570,7 +573,14 @@ def run(service, failure_mode, severity, delay_min, delay_max,
             recovering = (state == "RECOVER")
             footer = "press [a] approve · [q] quit"
 
-            if state == "REVEAL":
+            if state == "DEGRADING":
+                footer = "🔎 monitoring — waiting for the SLO to breach before declaring…"
+                # Begin the incident only once degradation is real (or after a detect timeout,
+                # in case the metric signal is unavailable).
+                if breached or (now - detect_started) > detect_timeout:
+                    state = "REVEAL"; next_reveal = now
+
+            elif state == "REVEAL":
                 cur = steps_by_phase[phases[pi]]
                 if in_phase < len(cur) and now >= next_reveal:
                     in_phase += 1; shown += 1
@@ -642,19 +652,31 @@ def run(service, failure_mode, severity, delay_min, delay_max,
                 footer = (f"✅ incident resolved — press [q] or Ctrl-C to exit "
                           f"(frame held for capture{_ls})")
 
-            if state == "HOLD":
-                next_action = (f"postmortem filed · {len(action_items)} follow-up action item(s) · "
-                               f"monitoring {service} for recurrence")
-            elif state == "RECOVER":
-                next_action = "apply remediation, then verify the SLO returns to baseline"
-            elif state == "GATE" and pending is not None:
-                next_action = f"awaiting human approval to publish: {pending[0]}"
+            if state == "DEGRADING":
+                # incident not declared yet — don't show the alert/notified as if it fired
+                hdr_alert = f"(monitoring {service} — no SLO breach detected yet)"
+                hdr_notified = ""
+                next_action = "detect the SLO breach, then declare the incident"
             else:
-                next_action = f"work the {phases[pi]} phase"
+                hdr_alert, hdr_notified = alert_summary, notified
+                if state == "HOLD":
+                    next_action = (f"postmortem filed · {len(action_items)} follow-up action item(s) · "
+                                   f"monitoring {service} for recurrence")
+                elif state == "RECOVER":
+                    next_action = "apply remediation, then verify the SLO returns to baseline"
+                elif state == "GATE" and pending is not None:
+                    next_action = f"awaiting human approval to publish: {pending[0]}"
+                else:
+                    next_action = f"work the {phases[pi]} phase"
             layout["header"].update(header_panel(incident, now - start, shown, len(steps), footer,
-                                                 alert_summary, notified, next_action))
-            layout["trace"].update(trace_panel(steps, shown,
-                                                "…thinking" if state == "REVEAL" and shown < len(steps) else None))
+                                                 hdr_alert, hdr_notified, next_action))
+            if state == "DEGRADING":
+                thinking = "⏳ monitoring telemetry — incident not yet declared"
+            elif state == "REVEAL" and shown < len(steps):
+                thinking = "…thinking"
+            else:
+                thinking = None
+            layout["trace"].update(trace_panel(steps, shown, thinking))
             layout["k8s"].update(k8s_panel(service, cache["pods"], list(p95_hist),
                                            recovering, recover_done, pod_mode, breached,
                                            baseline_p95, list(err_hist), sli_kind))
@@ -698,13 +720,16 @@ def main() -> None:
                     help="intensity for the injected fault (e.g. cpu_throttle VALUE)")
     ap.add_argument("--error-threshold", type=float, default=0.05,
                     help="5xx ratio = breached/recovered for error-rate incidents")
+    ap.add_argument("--detect-timeout", type=float, default=45.0,
+                    help="max seconds to wait for the SLO to breach before declaring anyway")
     ap.set_defaults(inject=True)
     a = ap.parse_args()
     # Non-TTY (piped / CI) can't read keypresses → force auto-approve so it still completes.
     auto = a.auto_approve or not sys.stdin.isatty()
     run(a.service, a.failure_mode, a.severity, a.delay_min, a.delay_max,
         auto, a.gate_pause, a.recover_threshold, a.recover_stable,
-        a.recover_timeout, a.hold_seconds, a.inject, a.fault_value, a.error_threshold)
+        a.recover_timeout, a.hold_seconds, a.inject, a.fault_value, a.error_threshold,
+        a.detect_timeout)
 
 
 if __name__ == "__main__":
