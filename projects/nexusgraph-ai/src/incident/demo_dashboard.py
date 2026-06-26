@@ -285,7 +285,7 @@ def k8s_panel(service, pods, p95_hist, recovering, recovered, pod_mode, breached
                  title_align="left", border_style="magenta")
 
 
-def integrations_panel(incident, flags) -> Panel:
+def integrations_panel(incident, flags, jira_key=None) -> Panel:
     """Always shows all three integrations (On-call · Slack · Jira), polled live, with a
     placeholder until each is active — so the full picture is visible in the terminal."""
     svc = (incident.get("affected_services") or ["?"])[0]
@@ -294,7 +294,7 @@ def integrations_panel(incident, flags) -> Panel:
     # On-call
     if flags.get("oncall"):
         oc = _get_json(f"{_env('ONCALL_REGISTRY_URL','http://localhost:18102')}/oncall/{svc}") or {}
-        g.add_row(Text("📟 On-call paged", style="bold green"))
+        g.add_row(Text("📟 On-call engaged", style="bold green"))
         g.add_row(Text(f"   {oc.get('schedule','?')} · {oc.get('team','?')}", style="white"))
     else:
         g.add_row(Text("📟 On-call: pending…", style="dim"))
@@ -314,14 +314,16 @@ def integrations_panel(incident, flags) -> Panel:
     else:
         g.add_row(Text("💬 Slack: pending…", style="dim"))
 
-    # Jira — always polled; shows the ticket as soon as one exists
+    # Jira — show THIS incident's ticket (stable). The mock returns tickets in random map
+    # order, so never slice the list positionally (that flaps); match by this run's key.
     issues = _get_json(f"{_env('JIRA_MOCK_URL','http://localhost:18101')}/issues") or []
-    if issues:
-        g.add_row(Text(f"🎫 Jira ({len(issues)} ticket{'s' if len(issues) != 1 else ''})",
-                       style="bold green"))
-        for it in issues[-2:]:
-            g.add_row(Text(f"   {it.get('key','?')}: "
-                           f"{(it.get('fields') or {}).get('summary','')[:38]}", style="white"))
+    mine = next((it for it in issues if it.get("key") == jira_key), None) if jira_key else None
+    if mine:
+        g.add_row(Text(f"🎫 Jira ({len(issues)} open)", style="bold green"))
+        g.add_row(Text(f"   {mine.get('key')}: "
+                       f"{(mine.get('fields') or {}).get('summary','')[:40]}", style="white"))
+    elif jira_key:
+        g.add_row(Text("🎫 Jira: creating ticket…", style="dim"))
     else:
         g.add_row(Text("🎫 Jira: pending…", style="dim"))
 
@@ -370,6 +372,7 @@ def run(service, failure_mode, severity, delay_min, delay_max,
     incident = final.get("incident", {})
     steps = _dedupe_events(final.get("timeline", []))
     fm = incident.get("failure_mode", failure_mode or "issue")
+    cur_jira_key = ((final.get("findings") or {}).get("jira_issue") or {}).get("key")
 
     # ordered unique phases present in the trace
     phases = []
@@ -402,7 +405,7 @@ def run(service, failure_mode, severity, delay_min, delay_max,
         f = {"oncall": False, "slack": False, "jira": False}
         for e in steps[:shown]:
             tx = e.get("text", "").lower()
-            if "paging on-call" in tx: f["oncall"] = True
+            if "on-call" in tx and ("paging" in tx or "adding on-call" in tx): f["oncall"] = True
             if "firehydrant" in tx or "slack channel" in tx or "declares" in tx: f["slack"] = True
             if "jira" in tx: f["jira"] = True
         return f
@@ -491,7 +494,7 @@ def run(service, failure_mode, severity, delay_min, delay_max,
                                                 "…thinking" if state == "REVEAL" and shown < len(steps) else None))
             layout["k8s"].update(k8s_panel(service, cache["pods"], list(p95_hist),
                                            recovering, recover_done, pod_mode, breached))
-            layout["integrations"].update(integrations_panel(incident, flags_now()))
+            layout["integrations"].update(integrations_panel(incident, flags_now(), cur_jira_key))
             layout["status"].update(status_panel(published, pending))
 
             if state == "HOLD" and hold_seconds and (now - start) > hold_seconds and not keys.enabled:

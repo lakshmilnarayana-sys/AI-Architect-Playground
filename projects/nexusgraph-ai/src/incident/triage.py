@@ -25,8 +25,19 @@ def _oncall(state: IncidentState, ctx: GraphContext) -> dict:
     svc = _primary_service(state)
     oncall = ctx.oncall_for(svc)
     name = oncall["name"] if oncall else "no on-call mapped"
-    update = emit("triage", "TriageAgent", "oncall", "action", f"Paging on-call for {svc}: {name}")
-    update["findings"] = {"oncall": oncall}
+    # Paging policy: if a runbook exists, the responder can self-serve — just add the on-call
+    # to the incident channel (no page). If the runbook/data is missing, page the engineer.
+    runbooks = ctx.runbooks_for(svc)
+    if runbooks:
+        rb = runbooks[0].get("name") or runbooks[0].get("id") or "service runbook"
+        text = (f"Runbook available ({rb}); adding on-call to the incident channel "
+                f"(no page needed): {name}")
+        action = "add_to_channel"
+    else:
+        text = f"No runbook found for {svc} (missing data); paging on-call engineer: {name}"
+        action = "page"
+    update = emit("triage", "TriageAgent", "oncall", "action", text)
+    update["findings"] = {"oncall": oncall, "oncall_action": action}
     return update
 
 
