@@ -236,7 +236,7 @@ def trace_panel(steps, shown, thinking) -> Panel:
     return Panel(body, title="🤖 Agent Reasoning", title_align="left", border_style="cyan")
 
 
-def k8s_panel(service, pods, p95_hist, recovering, recovered, pod_mode) -> Panel:
+def k8s_panel(service, pods, p95_hist, recovering, recovered, pod_mode, breached) -> Panel:
     tbl = Table(expand=True, show_edge=False)
     tbl.add_column("pod", style="dim", overflow="fold")
     tbl.add_column("status"); tbl.add_column("restarts", justify="right")
@@ -260,13 +260,19 @@ def k8s_panel(service, pods, p95_hist, recovering, recovered, pod_mode) -> Panel
     else:
         p95_line.append(Text("(no traffic signal)", style="dim"))
 
-    if recovered:
-        sli = ("pods Running, restarts stable" if pod_mode else "p95 back within target")
+    sli = ("pods Running, restarts stable" if pod_mode else "p95 back within target")
+    if recovered and breached:
         slo = Text(f"\nSLO: ✅ recovered — {sli}", style="bold green")
+    elif recovered and not breached:
+        # We reached the resolve stage but never actually observed the SLI degrade — be honest.
+        slo = Text("\nSLO: ✓ no breach observed (fault did not degrade the live SLI this run)",
+                   style="bold yellow")
     elif recovering:
         slo = Text("\nSLO: ⏳ verifying recovery (mitigation applied)…", style="bold yellow")
-    else:
+    elif breached:
         slo = Text("\nSLO: 🔴 breached — incident active", style="bold red")
+    else:
+        slo = Text("\nSLO: monitoring — no breach yet", style="dim")
     return Panel(Group(tbl, p95_line, slo), title="☸  Kubernetes & Metrics (live)",
                  title_align="left", border_style="magenta")
 
@@ -381,6 +387,7 @@ def run(service, failure_mode, severity, delay_min, delay_max,
     clear_flag = {"cleared": False}
     last_poll, cache = 0.0, {"pods": [], "p95": None}
     p95_hist = deque(maxlen=48)
+    breached = False           # has the SLI actually degraded at any point? (honesty gate)
     gate_entered = None
 
     def flags_now():
@@ -460,6 +467,12 @@ def run(service, failure_mode, severity, delay_min, delay_max,
                 cache["pods"] = poll_pods(service)
                 cache["p95"] = prom_p95(service)
                 p95_hist.append(cache["p95"])
+                # record a real breach (so "recovered" is only ever claimed after one)
+                if pod_mode:
+                    if any(p["current"] in BAD_STATES for p in cache["pods"]):
+                        breached = True
+                elif cache["p95"] is not None and cache["p95"] > recover_threshold:
+                    breached = True
                 last_poll = now
 
             if state == "HOLD":
@@ -469,7 +482,7 @@ def run(service, failure_mode, severity, delay_min, delay_max,
             layout["trace"].update(trace_panel(steps, shown,
                                                 "…thinking" if state == "REVEAL" and shown < len(steps) else None))
             layout["k8s"].update(k8s_panel(service, cache["pods"], list(p95_hist),
-                                           recovering, recover_done, pod_mode))
+                                           recovering, recover_done, pod_mode, breached))
             layout["integrations"].update(integrations_panel(incident, flags_now()))
             layout["status"].update(status_panel(published, pending))
 
