@@ -24,6 +24,7 @@ Splits the terminal (via `rich`) into a header + four live panes:
 from __future__ import annotations
 
 import argparse
+import atexit
 import json
 import os
 import random
@@ -116,10 +117,13 @@ def show_langsmith_trace(console, started_after: float) -> bool:
         if not runs:
             console.print("[dim]LangSmith: no runs found for this execution yet.[/dim]")
             return True
-        roots = [r for r in runs if not getattr(r, "parent_run_id", None)]
+        # The agent runs as several LangGraph invokes (the HITL interrupt pattern), so the
+        # incident spans MULTIPLE trace roots — render them all as ordered segments, not just
+        # the last one.
+        roots = sorted((r for r in runs if not getattr(r, "parent_run_id", None)),
+                       key=lambda r: r.start_time)
         if not roots:
             return False
-        root = sorted(roots, key=lambda r: r.start_time)[-1]
 
         def lat(r):
             try:
@@ -130,19 +134,22 @@ def show_langsmith_trace(console, started_after: float) -> bool:
         by_parent = {}
         for r in runs:
             by_parent.setdefault(getattr(r, "parent_run_id", None), []).append(r)
-        tree = Tree(f"[bold cyan]🧠 LangSmith trace[/bold cyan]  {root.name}  [dim]({lat(root)})[/dim]")
+        tree = Tree(f"[bold cyan]🧠 LangSmith trace[/bold cyan]  "
+                    f"[dim]{len(roots)} segment(s), {len(runs)} spans[/dim]")
 
         def add(node, run, depth=0):
-            if depth > 6:
+            if depth > 7:
                 return
             for child in sorted(by_parent.get(run.id, []),
-                                key=lambda r: r.start_time or root.start_time):
+                                key=lambda r: r.start_time or run.start_time):
                 add(node.add(f"{child.name}  [dim]· {lat(child)}[/dim]"), child, depth + 1)
 
-        add(tree, root)
+        for i, root in enumerate(roots, 1):
+            seg = tree.add(f"[bold]segment {i}: {root.name}[/bold]  [dim]· {lat(root)}[/dim]")
+            add(seg, root)
         console.print(tree)
         try:
-            url = client.get_run_url(run=root)
+            url = client.get_run_url(run=roots[0])
             console.print(f"[cyan]Full visual trace:[/cyan] {url}")
         except Exception:
             console.print(f"[dim]Open project '{project}' in LangSmith for the full trace.[/dim]")
@@ -243,6 +250,16 @@ def prom_p95(service: str):
     return None
 
 
+def clear_fault_sync(service: str) -> None:
+    """Blocking clear — used in a finally block so the fault is ALWAYS reverted on exit
+    (normal quit, Ctrl-C, or error), never leaking an active throttle into the next run."""
+    try:
+        subprocess.run(["bash", str(FAULT_SCRIPT), _short(service), "clear"],
+                       capture_output=True, text=True, timeout=30)
+    except Exception:
+        pass
+
+
 def fault_async(service: str, mode: str, value: float, ttl: int, flag: dict, key: str) -> None:
     def _work():
         try:
@@ -277,14 +294,21 @@ def sparkline(values: list[float]) -> str:
 
 # ---- panels ----------------------------------------------------------------
 
-def header_panel(incident, elapsed, shown, total, footer) -> Panel:
+def header_panel(incident, elapsed, shown, total, footer,
+                 alert_summary="", notified="", next_action="") -> Panel:
     t = Table.grid(expand=True)
     t.add_column(justify="left"); t.add_column(justify="right")
     left = Text.assemble(("INCIDENT  ", "bold white"),
                          (f"{incident.get('severity','?')} ", "bold red"),
                          (f"{incident.get('title','')}", "white"))
     t.add_row(left, Text(f"elapsed {elapsed:4.0f}s   step {shown}/{total}", style="dim"))
-    t.add_row(Text(footer, style="bold cyan"), Text(""))
+    if alert_summary:
+        t.add_row(Text("🚨 Alert: ", style="bold red").append(Text(alert_summary, style="white")), Text(""))
+    if notified:
+        t.add_row(Text("📟 Notified: ", style="bold").append(Text(notified, style="white")), Text(""))
+    if next_action:
+        t.add_row(Text("⏭  Next: ", style="bold cyan").append(Text(next_action, style="white")), Text(""))
+    t.add_row(Text(footer, style="bold green"), Text(""))
     return Panel(t, style="white", title="🎬 StreamFlix Incident — live", title_align="left")
 
 
@@ -303,7 +327,7 @@ def trace_panel(steps, shown, thinking) -> Panel:
     return Panel(body, title="🤖 Agent Reasoning", title_align="left", border_style="cyan")
 
 
-def k8s_panel(service, pods, p95_hist, recovering, recovered, pod_mode, breached) -> Panel:
+def k8s_panel(service, pods, p95_hist, recovering, recovered, pod_mode, breached, baseline=None) -> Panel:
     tbl = Table(expand=True, show_edge=False)
     tbl.add_column("pod", style="dim", overflow="fold")
     tbl.add_column("status"); tbl.add_column("restarts", justify="right")
@@ -323,8 +347,10 @@ def k8s_panel(service, pods, p95_hist, recovering, recovered, pod_mode, breached
     p95_line = Text("\np95 ", style="bold")
     p95_line.append(Text(spark + "  ", style="cyan"))
     if cur_p95 is not None:
-        col = "green" if cur_p95 < 0.5 else "yellow"
-        p95_line.append(Text(f"peak {_fmt_latency(peak)} → now {_fmt_latency(cur_p95)}", style=col))
+        near_base = baseline is not None and cur_p95 <= baseline * 1.5
+        col = "green" if near_base or cur_p95 < 0.5 else "yellow"
+        base_s = f"  (baseline {_fmt_latency(baseline)})" if baseline is not None else ""
+        p95_line.append(Text(f"peak {_fmt_latency(peak)} → now {_fmt_latency(cur_p95)}{base_s}", style=col))
     else:
         p95_line.append(Text("(no traffic signal)", style="dim"))
 
@@ -418,13 +444,24 @@ def run(service, failure_mode, severity, delay_min, delay_max,
     fm = failure_mode or "issue"
     pod_mode = fm in POD_MODES
 
+    # Capture the pre-incident baseline p95 BEFORE injecting, so breach/recovery are judged
+    # relative to this service's normal latency (24ms for a leaf, ~2.4s for a deep-fanout svc)
+    # rather than a fixed absolute threshold that may sit above or below the spike.
+    baseline_p95 = None
+    if inject and failure_mode and not pod_mode:
+        baseline_p95 = prom_p95(service)
+
     # Make the symptom LIVE for the demo: inject the fault now so the cluster genuinely
     # degrades (p95 climbs for latency faults; pod OOMKills for pod faults) while the agent
     # works — the dashboard then clears it at the mitigate step so recovery is real, not staged.
     inject_flag = {"injected": False}
     if inject and failure_mode:
-        console.print(f"[dim]Injecting {failure_mode} on {service} to make the incident live…[/dim]")
+        console.print(f"[dim]Injecting {failure_mode} on {service} to make the incident live "
+                      f"(baseline p95={_fmt_latency(baseline_p95)})…[/dim]")
         fault_async(service, failure_mode, fault_value, 900, inject_flag, "injected")
+        # GUARANTEE the fault is reverted on ANY exit (normal quit, Ctrl-C, error) so a
+        # throttle never leaks into the next run; idempotent, so the mitigate-step clear is fine too.
+        atexit.register(clear_fault_sync, service)
         time.sleep(6)  # let the symptom register before we start
 
     console.print(f"[dim]Running incident for {service} ({failure_mode})…[/dim]")
@@ -433,7 +470,21 @@ def run(service, failure_mode, severity, delay_min, delay_max,
     incident = final.get("incident", {})
     steps = _dedupe_events(final.get("timeline", []))
     fm = incident.get("failure_mode", failure_mode or "issue")
-    cur_jira_key = ((final.get("findings") or {}).get("jira_issue") or {}).get("key")
+    f0 = final.get("findings") or {}
+    cur_jira_key = (f0.get("jira_issue") or {}).get("key")
+
+    # incident summary for the header: what fired, who got it, (what's next is dynamic below)
+    _al = f0.get("alert") or {}
+    alert_summary = (f"{_al.get('source','Alertmanager')}: {_al.get('metric','SLO')} "
+                     f"crossed {_al.get('threshold','threshold')}"
+                     if _al.get("metric") else (steps[0].get("text", "alert")[:80] if steps else "alert"))
+    _oc = f0.get("oncall") or {}
+    _act = f0.get("oncall_action")
+    _ch = (f0.get("slack_channel") or {}).get("channel") or channel_name(incident)
+    _who = _oc.get("name") or _oc.get("id") or "on-call"
+    notified = (f"{_who} — {'PAGED' if _act == 'page' else 'added to incident channel (runbook available)'}"
+                f"  ·  {_ch}")
+    action_items = f0.get("action_items") or []
 
     # ordered unique phases present in the trace
     phases = []
@@ -443,7 +494,7 @@ def run(service, failure_mode, severity, delay_min, delay_max,
     steps_by_phase = {p: [e for e in steps if e.get("phase") == p] for p in phases}
 
     layout = Layout()
-    layout.split_column(Layout(name="header", size=4), Layout(name="body"))
+    layout.split_column(Layout(name="header", size=8), Layout(name="body"))
     layout["body"].split_row(Layout(name="trace", ratio=3), Layout(name="right", ratio=2))
     layout["right"].split_column(Layout(name="k8s"), Layout(name="integrations"), Layout(name="status"))
 
@@ -461,6 +512,10 @@ def run(service, failure_mode, severity, delay_min, delay_max,
     p95_hist = deque(maxlen=48)
     breached = False           # has the SLI actually degraded at any point? (honesty gate)
     gate_entered = None
+    # breach/recovery judged relative to the captured baseline (falls back to the flat
+    # threshold when no baseline/traffic signal exists).
+    breach_at = (max(baseline_p95 * 2, baseline_p95 + 0.1) if baseline_p95 else recover_threshold)
+    recover_to = (baseline_p95 * 1.5 if baseline_p95 else recover_threshold)
 
     def flags_now():
         f = {"oncall": False, "slack": False, "jira": False}
@@ -513,10 +568,8 @@ def run(service, failure_mode, severity, delay_min, delay_max,
                     healthy = bool(pods) and all(p["current"] not in BAD_STATES for p in pods)
                     ok = clear_flag["cleared"] and healthy and elapsed_r > recover_stable
                 else:
-                    # SLI for a latency/throttle incident: p95 drops below target OR falls to
-                    # half its peak (handles services whose baseline is above the flat target).
-                    ok = (clear_flag["cleared"] and cur_p95 is not None and
-                          (cur_p95 < recover_threshold or (peak and cur_p95 <= peak * 0.5)))
+                    # SLI for a latency/throttle incident: p95 has returned to ~baseline.
+                    ok = (clear_flag["cleared"] and cur_p95 is not None and cur_p95 <= recover_to)
                 if ok or elapsed_r > recover_timeout:
                     recover_done = True
                     state = "GATE"; gate_entered = now
@@ -543,7 +596,7 @@ def run(service, failure_mode, severity, delay_min, delay_max,
                 if pod_mode:
                     if any(p["current"] in BAD_STATES for p in cache["pods"]):
                         breached = True
-                elif cache["p95"] is not None and cache["p95"] > recover_threshold:
+                elif cache["p95"] is not None and cache["p95"] > breach_at:
                     breached = True
                 last_poll = now
 
@@ -553,11 +606,21 @@ def run(service, failure_mode, severity, delay_min, delay_max,
                 footer = (f"✅ incident resolved — press [q] or Ctrl-C to exit "
                           f"(frame held for capture{_ls})")
 
-            layout["header"].update(header_panel(incident, now - start, shown, len(steps), footer))
+            if state == "HOLD":
+                next_action = (f"postmortem filed · {len(action_items)} follow-up action item(s) · "
+                               f"monitoring {service} for recurrence")
+            elif state == "RECOVER":
+                next_action = "apply remediation, then verify the SLO returns to baseline"
+            elif state == "GATE" and pending is not None:
+                next_action = f"awaiting human approval to publish: {pending[0]}"
+            else:
+                next_action = f"work the {phases[pi]} phase"
+            layout["header"].update(header_panel(incident, now - start, shown, len(steps), footer,
+                                                 alert_summary, notified, next_action))
             layout["trace"].update(trace_panel(steps, shown,
                                                 "…thinking" if state == "REVEAL" and shown < len(steps) else None))
             layout["k8s"].update(k8s_panel(service, cache["pods"], list(p95_hist),
-                                           recovering, recover_done, pod_mode, breached))
+                                           recovering, recover_done, pod_mode, breached, baseline_p95))
             layout["integrations"].update(integrations_panel(incident, flags_now(), cur_jira_key))
             layout["status"].update(status_panel(published, pending))
 
@@ -594,7 +657,7 @@ def main() -> None:
                     help="non-interactive only: seconds to hold the final frame before auto-exit")
     ap.add_argument("--no-inject", dest="inject", action="store_false",
                     help="don't inject the fault (assume it's already active in the cluster)")
-    ap.add_argument("--fault-value", type=float, default=3.0,
+    ap.add_argument("--fault-value", type=float, default=4.0,
                     help="intensity for the injected fault (e.g. cpu_throttle VALUE)")
     ap.set_defaults(inject=True)
     a = ap.parse_args()
