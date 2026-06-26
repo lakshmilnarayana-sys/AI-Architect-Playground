@@ -96,20 +96,6 @@ def _evidence(state: IncidentState, use_vector: bool) -> dict:
     return emit("diagnose", "EvidenceAgent", "diagnose", "action", snippet)
 
 
-def _zoom_bridge(state: IncidentState) -> dict:
-    from src.incident.bridge import collect_zoom_actions
-
-    bridge = collect_zoom_actions(state["incident"], state.get("findings") or {})
-    update = emit(
-        "diagnose",
-        "Zoom Agent",
-        "diagnose",
-        "action",
-        f"Collected {len(bridge['action_items'])} action item(s) from the incident bridge.",
-    )
-    update["findings"] = {"zoom_bridge": bridge}
-    return update
-
 
 def build_diagnose_subgraph(llm=None, ctx: GraphContext | None = None, use_vector: bool = True):
     ctx = ctx or GraphContext()
@@ -119,12 +105,12 @@ def build_diagnose_subgraph(llm=None, ctx: GraphContext | None = None, use_vecto
     g.add_node("logs", _logs)
     g.add_node("observability", _observability)
     g.add_node("evidence", partial(_evidence, use_vector=use_vector))
-    g.add_node("zoom_bridge", _zoom_bridge)
+    # Note: the Zoom incident bridge moved to the triage phase (it's part of the
+    # commander's plumbing setup, opened right after the FireHydrant Slack channel).
     g.add_edge(START, "runbook")
     g.add_edge("runbook", "rca")
     g.add_edge("rca", "logs")
     g.add_edge("logs", "observability")
     g.add_edge("observability", "evidence")
-    g.add_edge("evidence", "zoom_bridge")
-    g.add_edge("zoom_bridge", END)
+    g.add_edge("evidence", END)
     return g.compile()

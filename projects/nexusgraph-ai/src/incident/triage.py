@@ -129,18 +129,43 @@ def _automation_kickoff(state: IncidentState) -> dict:
     return update
 
 
+def _incident_bridge(state: IncidentState) -> dict:
+    """Open the Zoom incident bridge and pull responders in — part of the commander's
+    plumbing setup, immediately after FireHydrant creates the Slack channel."""
+    from src.incident.bridge import collect_zoom_actions
+
+    bridge = collect_zoom_actions(state["incident"], state.get("findings") or {})
+    update = emit(
+        "triage",
+        "Zoom Bridge Agent",
+        "commander",
+        "action",
+        (
+            f"Opened Zoom incident bridge and pulled {len(bridge['participants'])} responders in; "
+            f"{len(bridge['action_items'])} action item(s) captured."
+        ),
+    )
+    update["findings"] = {"zoom_bridge": bridge}
+    return update
+
+
 def build_triage_subgraph(llm=None, ctx: GraphContext | None = None):
     ctx = ctx or GraphContext()
     g = StateGraph(IncidentState)
     g.add_node("ownership", partial(_ownership, ctx=ctx))
     g.add_node("oncall", partial(_oncall, ctx=ctx))
+    g.add_node("automation_kickoff", _automation_kickoff)
+    g.add_node("incident_bridge", _incident_bridge)
     g.add_node("impact", partial(_impact, ctx=ctx))
     g.add_node("kubernetes_context", _kubernetes_context)
-    g.add_node("automation_kickoff", _automation_kickoff)
+    # Command sequence: identify owner + on-call → FireHydrant spins up the Slack channel
+    # and pages on-call → open the Zoom bridge and pull responders in → then the rest
+    # of triage (blast radius, live Kubernetes context).
     g.add_edge(START, "ownership")
     g.add_edge("ownership", "oncall")
-    g.add_edge("oncall", "impact")
+    g.add_edge("oncall", "automation_kickoff")
+    g.add_edge("automation_kickoff", "incident_bridge")
+    g.add_edge("incident_bridge", "impact")
     g.add_edge("impact", "kubernetes_context")
-    g.add_edge("kubernetes_context", "automation_kickoff")
-    g.add_edge("automation_kickoff", END)
+    g.add_edge("kubernetes_context", END)
     return g.compile()
