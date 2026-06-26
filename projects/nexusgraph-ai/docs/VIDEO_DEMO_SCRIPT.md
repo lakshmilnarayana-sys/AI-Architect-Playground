@@ -81,11 +81,32 @@ curl -s localhost:18102/oncall/billing-service
 ```
 
 **Say (over it):**
-> "The pod is OOMKilled — that's a real Kubernetes event. It fires a Prometheus alert,
-> Alertmanager routes it to our Slack mock, a watcher picks it up and runs the incident
-> agent — which reads the *live* cluster, opens a Jira ticket, and resolves on-call from the
-> registry. Same agent, real signals — and because live mode is env-gated, the evaluation
+> "The pod is OOMKilled — that's a real Kubernetes event, and Kubernetes restarts the pod on
+> its own. But restarting the symptom isn't incident response. Here's what the AI agent does
+> on top of that."
+
+**Do — print the agent's step-by-step trace (THE 'where's the AI' moment):**
+```bash
+INCIDENT_LIVE=true SLACK_MOCK_URL=http://localhost:18100 JIRA_MOCK_URL=http://localhost:18101 \
+ONCALL_REGISTRY_URL=http://localhost:18102 PROMETHEUS_URL=http://localhost:9090 \
+ALERTMANAGER_URL=http://localhost:9093 KUBE_CONTEXT=kind-streamflix \
+.venv/bin/python -m src.incident.print_trace --service billing-service --failure-mode oom_kill
+```
+
+**Say (scroll the trace):**
+> "Twenty-three steps across six phases. It confirms severity, finds the owning team and
+> pages on-call, reads the live Kubernetes context, pulls the Billing runbook, forms a
+> root-cause hypothesis — OOM kill — proposes a concrete mitigation: raise the memory limit,
+> roll a canary, drain the OOMKilled pods, verify restarts stabilize. Then it verifies the
+> SLO recovered, drafts the postmortem with a human-approval gate, and opens the Jira
+> ticket. Same agent, real signals — and because live mode is env-gated, the evaluation
 > stays fully deterministic."
+
+**Do — show the evidence it produced:**
+```bash
+curl -s localhost:18101/issues | python3 -m json.tool | head     # the Jira ticket it opened
+curl -s localhost:18102/oncall/billing-service                   # on-call it resolved
+```
 
 ---
 
