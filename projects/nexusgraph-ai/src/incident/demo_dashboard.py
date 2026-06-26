@@ -234,10 +234,8 @@ def poll_pods(service: str) -> list[dict]:
         return []
 
 
-def prom_p95(service: str):
+def _prom_scalar(q: str):
     base = _env("PROMETHEUS_URL", "http://localhost:9090")
-    q = (f'histogram_quantile(0.95,sum by (le)(rate('
-         f'http_request_duration_seconds_bucket{{service="{service}"}}[1m])))')
     d = _get_json(f"{base}/api/v1/query?query={urllib.parse.quote(q)}")
     try:
         res = (d or {}).get("data", {}).get("result", [])
@@ -248,6 +246,17 @@ def prom_p95(service: str):
     except Exception:
         pass
     return None
+
+
+def prom_p95(service: str):
+    return _prom_scalar(f'histogram_quantile(0.95,sum by (le)(rate('
+                        f'http_request_duration_seconds_bucket{{service="{service}"}}[1m])))')
+
+
+def prom_err_ratio(service: str):
+    return _prom_scalar(
+        f'sum(rate(http_requests_total{{service="{service}",code=~"5.."}}[1m]))'
+        f'/sum(rate(http_requests_total{{service="{service}"}}[1m]))')
 
 
 def clear_fault_sync(service: str) -> None:
@@ -327,7 +336,8 @@ def trace_panel(steps, shown, thinking) -> Panel:
     return Panel(body, title="🤖 Agent Reasoning", title_align="left", border_style="cyan")
 
 
-def k8s_panel(service, pods, p95_hist, recovering, recovered, pod_mode, breached, baseline=None) -> Panel:
+def k8s_panel(service, pods, p95_hist, recovering, recovered, pod_mode, breached,
+              baseline=None, err_hist=None, sli_kind="latency") -> Panel:
     tbl = Table(expand=True, show_edge=False)
     tbl.add_column("pod", style="dim", overflow="fold")
     tbl.add_column("status"); tbl.add_column("restarts", justify="right")
@@ -354,7 +364,20 @@ def k8s_panel(service, pods, p95_hist, recovering, recovered, pod_mode, breached
     else:
         p95_line.append(Text("(no traffic signal)", style="dim"))
 
-    sli = ("pods Running, restarts stable" if pod_mode else "p95 back within target")
+    # errors line (shown for error-rate incidents or whenever 5xx are present)
+    err_line = None
+    if err_hist:
+        cur_err = next((v for v in reversed(err_hist) if v is not None), None)
+        peak_err = max([v for v in err_hist if v is not None], default=None)
+        if cur_err is not None and (sli_kind == "error" or (peak_err or 0) > 0.001):
+            ecol = "green" if cur_err < 0.05 else "red"
+            err_line = Text("\n5xx ", style="bold")
+            err_line.append(Text(sparkline(list(err_hist)) + "  ", style="red"))
+            err_line.append(Text(f"peak {(peak_err or 0)*100:.1f}% → now {cur_err*100:.1f}%", style=ecol))
+
+    sli = {"pod": "pods Running, restarts stable",
+           "error": "5xx error rate back within target",
+           "latency": "p95 back within target"}.get(sli_kind, "SLO back within target")
     if recovered and breached:
         slo = Text(f"\nSLO: ✅ recovered — {sli}", style="bold green")
     elif recovered and not breached:
@@ -367,7 +390,8 @@ def k8s_panel(service, pods, p95_hist, recovering, recovered, pod_mode, breached
         slo = Text("\nSLO: 🔴 breached — incident active", style="bold red")
     else:
         slo = Text("\nSLO: monitoring — no breach yet", style="dim")
-    return Panel(Group(tbl, p95_line, slo), title="☸  Kubernetes & Metrics (live)",
+    rows = [tbl, p95_line] + ([err_line] if err_line is not None else []) + [slo]
+    return Panel(Group(*rows), title="☸  Kubernetes & Metrics (live)",
                  title_align="left", border_style="magenta")
 
 
@@ -435,20 +459,22 @@ def status_panel(published, pending) -> Panel:
 # ---- driver ----------------------------------------------------------------
 
 POD_MODES = {"oom_kill", "pod_restart", "image_pull_backoff", "memory_leak", "node_pressure"}
+ERR_MODES = {"error_rate", "high_error_rate", "dependency_timeout"}
 
 
 def run(service, failure_mode, severity, delay_min, delay_max,
         auto_approve, gate_pause, recover_threshold, recover_stable,
-        recover_timeout, hold_seconds, inject, fault_value) -> None:
+        recover_timeout, hold_seconds, inject, fault_value, error_threshold) -> None:
     console = Console()
     fm = failure_mode or "issue"
     pod_mode = fm in POD_MODES
+    sli_kind = "pod" if pod_mode else ("error" if fm in ERR_MODES else "latency")
 
     # Capture the pre-incident baseline p95 BEFORE injecting, so breach/recovery are judged
     # relative to this service's normal latency (24ms for a leaf, ~2.4s for a deep-fanout svc)
     # rather than a fixed absolute threshold that may sit above or below the spike.
     baseline_p95 = None
-    if inject and failure_mode and not pod_mode:
+    if inject and failure_mode and sli_kind == "latency":
         baseline_p95 = prom_p95(service)
 
     # Make the symptom LIVE for the demo: inject the fault now so the cluster genuinely
@@ -508,8 +534,9 @@ def run(service, failure_mode, severity, delay_min, delay_max,
     recover_done = False
     recover_started = None
     clear_flag = {"cleared": False}
-    last_poll, cache = 0.0, {"pods": [], "p95": None}
+    last_poll, cache = 0.0, {"pods": [], "p95": None, "err": None}
     p95_hist = deque(maxlen=48)
+    err_hist = deque(maxlen=48)
     breached = False           # has the SLI actually degraded at any point? (honesty gate)
     gate_entered = None
     # breach/recovery judged relative to the captured baseline (falls back to the flat
@@ -563,10 +590,14 @@ def run(service, failure_mode, severity, delay_min, delay_max,
                 pods = cache.get("pods") or []
                 cur_p95 = next((v for v in reversed(p95_hist) if v is not None), None)
                 peak = max([v for v in p95_hist if v is not None], default=None)
-                if pod_mode:
+                cur_err = next((v for v in reversed(err_hist) if v is not None), None)
+                if sli_kind == "pod":
                     # SLI for a pod-failure incident: pods back to Running and stable.
                     healthy = bool(pods) and all(p["current"] not in BAD_STATES for p in pods)
                     ok = clear_flag["cleared"] and healthy and elapsed_r > recover_stable
+                elif sli_kind == "error":
+                    # SLI for an error-rate incident: 5xx ratio back below target.
+                    ok = clear_flag["cleared"] and cur_err is not None and cur_err < error_threshold
                 else:
                     # SLI for a latency/throttle incident: p95 has returned to ~baseline.
                     ok = (clear_flag["cleared"] and cur_p95 is not None and cur_p95 <= recover_to)
@@ -591,10 +622,15 @@ def run(service, failure_mode, severity, delay_min, delay_max,
             if now - last_poll > 1.2:
                 cache["pods"] = poll_pods(service)
                 cache["p95"] = prom_p95(service)
+                cache["err"] = prom_err_ratio(service)
                 p95_hist.append(cache["p95"])
+                err_hist.append(cache["err"])
                 # record a real breach (so "recovered" is only ever claimed after one)
-                if pod_mode:
+                if sli_kind == "pod":
                     if any(p["current"] in BAD_STATES for p in cache["pods"]):
+                        breached = True
+                elif sli_kind == "error":
+                    if cache["err"] is not None and cache["err"] > error_threshold:
                         breached = True
                 elif cache["p95"] is not None and cache["p95"] > breach_at:
                     breached = True
@@ -620,7 +656,8 @@ def run(service, failure_mode, severity, delay_min, delay_max,
             layout["trace"].update(trace_panel(steps, shown,
                                                 "…thinking" if state == "REVEAL" and shown < len(steps) else None))
             layout["k8s"].update(k8s_panel(service, cache["pods"], list(p95_hist),
-                                           recovering, recover_done, pod_mode, breached, baseline_p95))
+                                           recovering, recover_done, pod_mode, breached,
+                                           baseline_p95, list(err_hist), sli_kind))
             layout["integrations"].update(integrations_panel(incident, flags_now(), cur_jira_key))
             layout["status"].update(status_panel(published, pending))
 
@@ -659,13 +696,15 @@ def main() -> None:
                     help="don't inject the fault (assume it's already active in the cluster)")
     ap.add_argument("--fault-value", type=float, default=4.0,
                     help="intensity for the injected fault (e.g. cpu_throttle VALUE)")
+    ap.add_argument("--error-threshold", type=float, default=0.05,
+                    help="5xx ratio = breached/recovered for error-rate incidents")
     ap.set_defaults(inject=True)
     a = ap.parse_args()
     # Non-TTY (piped / CI) can't read keypresses → force auto-approve so it still completes.
     auto = a.auto_approve or not sys.stdin.isatty()
     run(a.service, a.failure_mode, a.severity, a.delay_min, a.delay_max,
         auto, a.gate_pause, a.recover_threshold, a.recover_stable,
-        a.recover_timeout, a.hold_seconds, a.inject, a.fault_value)
+        a.recover_timeout, a.hold_seconds, a.inject, a.fault_value, a.error_threshold)
 
 
 if __name__ == "__main__":

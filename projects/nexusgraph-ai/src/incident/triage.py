@@ -50,7 +50,8 @@ def _impact(state: IncidentState, ctx: GraphContext) -> dict:
 
 
 def _kubernetes_context(state: IncidentState) -> dict:
-    from src.incident.kubernetes import clear_failure, get_service_resource, inject_failure
+    from src.incident.kubernetes import (clear_failure, get_service_resource,
+                                         healthy_runtime, inject_failure, live_runtime)
 
     svc = _primary_service(state)
     try:
@@ -60,14 +61,21 @@ def _kubernetes_context(state: IncidentState) -> dict:
         fallback_service = "billing-service" if "billing" in signal else "playback-service"
         resource = get_service_resource(fallback_service)
         svc = fallback_service
-    from src.incident.kubernetes import live_runtime
     failure_mode = state["incident"].get("failure_mode")
     simulate = bool(state["incident"].get("simulate_failure"))
-    runtime = live_runtime(svc) or (
-        inject_failure(resource, failure_mode)
-        if simulate and failure_mode
-        else clear_failure(resource)
-    )
+
+    def _deterministic():
+        if not (simulate and failure_mode):
+            return clear_failure(resource)
+        try:
+            return inject_failure(resource, failure_mode)
+        except KeyError:
+            # app-level faults (latency, error_rate, …) aren't modeled as K8s pod faults —
+            # the pod is healthy; represent a generic degraded runtime instead of crashing.
+            return {**healthy_runtime(resource), "active_failure": failure_mode,
+                    "pod_status": "Degraded", "health": "degraded"}
+
+    runtime = live_runtime(svc) or _deterministic()
     update = emit(
         "triage",
         "KubernetesAgent",
