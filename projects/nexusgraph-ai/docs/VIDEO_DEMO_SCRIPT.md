@@ -85,13 +85,16 @@ curl -s localhost:18102/oncall/billing-service
 > its own. But restarting the symptom isn't incident response. Here's what the AI agent does
 > on top of that."
 
-**Do — print the agent's step-by-step trace (THE 'where's the AI' moment):**
+**Do — launch the LIVE DASHBOARD (THE 'where's the AI' moment — one terminal, 4 panes):**
 ```bash
 INCIDENT_LIVE=true SLACK_MOCK_URL=http://localhost:18100 JIRA_MOCK_URL=http://localhost:18101 \
 ONCALL_REGISTRY_URL=http://localhost:18102 PROMETHEUS_URL=http://localhost:9090 \
 ALERTMANAGER_URL=http://localhost:9093 KUBE_CONTEXT=kind-streamflix \
-.venv/bin/python -m src.incident.print_trace --service billing-service --failure-mode oom_kill --demo
+.venv/bin/python -m src.incident.demo_dashboard --service billing-service --failure-mode oom_kill
 ```
+Panes: 🤖 Agent Reasoning (streams in) · ☸ Kubernetes & Metrics (live pod status + p95) ·
+🔌 Integrations (Slack channel, Jira ticket, on-call appear as the agent creates them).
+Plain non-dashboard alternative: `.venv/bin/python -m src.incident.print_trace --service billing-service --failure-mode oom_kill --demo`
 
 **Say (scroll the trace):**
 > "Twenty-three steps across six phases. It confirms severity, finds the owning team and

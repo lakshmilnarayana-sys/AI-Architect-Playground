@@ -55,7 +55,23 @@ curl -s "localhost:18100/channels/inc-manual-incident-on-billing-service" | pyth
 curl -s localhost:18102/oncall/billing-service        # on-call: team+schedule (person:"" = KNOWN eval gap, mention it!)
 ```
 
-### Show the AGENT's work (the "where's the AI?" answer)
+### ⭐ One-command LIVE DASHBOARD (recommended for the recording)
+Splits ONE terminal into 4 live panes — agent reasoning streaming in, live Kubernetes pod
+status + Prometheus metrics, and the Slack/Jira/on-call integrations as they populate. No
+tmux, no second terminal. Best single shot for the video:
+```bash
+cd ~/Documents/maven/projects/nexusgraph-ai
+INCIDENT_LIVE=true SLACK_MOCK_URL=http://localhost:18100 JIRA_MOCK_URL=http://localhost:18101 \
+ONCALL_REGISTRY_URL=http://localhost:18102 PROMETHEUS_URL=http://localhost:9090 \
+ALERTMANAGER_URL=http://localhost:9093 KUBE_CONTEXT=kind-streamflix \
+.venv/bin/python -m src.incident.demo_dashboard --service billing-service --failure-mode oom_kill
+#   tighten pacing for a shorter take: add  --delay-max 2
+```
+Tip: inject the fault first (`cd platform && make fault SVC=billing MODE=oom_kill TTL=300`) so
+the Kubernetes pane shows real OOMKilled/restarts climbing while the agent works. It uses the
+terminal's alternate screen (clean full-screen view) and restores on exit.
+
+### Show the AGENT's work (plain, non-dashboard alternative)
 A pod restart is just Kubernetes self-healing. The AI agent's value is the incident
 *response* — print its full step-by-step trace (declare→triage→diagnose→mitigate→resolve→
 postmortem, ~23 steps incl. root-cause hypothesis, runbook, mitigation plan, Jira):
