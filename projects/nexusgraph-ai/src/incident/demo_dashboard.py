@@ -245,8 +245,10 @@ def k8s_panel(service, pods, p95_hist, recovering, recovered, pod_mode, breached
     for p in pods:
         cur = p["current"]
         st = "red" if cur in BAD_STATES else "green"
-        label = cur + (f"  (last: {p['last_term']})" if cur == "Running" and p["last_term"] else "")
-        tbl.add_row(p["name"][-30:], Text(label, style=st), p["restarts"])
+        last = p["last_term"]
+        # don't surface a meaningless "(last: Unknown)" — only show a real prior termination
+        suffix = f"  (last: {last})" if cur == "Running" and last and last != "Unknown" else ""
+        tbl.add_row(p["name"], Text(cur + suffix, style=st), p["restarts"])
 
     cur_p95 = next((v for v in reversed(p95_hist) if v is not None), None)
     peak = max([v for v in p95_hist if v is not None], default=None)
