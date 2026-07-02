@@ -23,7 +23,7 @@ make fault SVC=playback MODE=cpu_throttle VALUE=2 TTL=120
 make fault SVC=playback MODE=clear
 ```
 
-Modes reproducible at runtime: `cpu_throttle`, `memory_leak`, `oom_kill`, `pod_restart`, `disk_iops`.
+Modes reproducible at runtime: `cpu_throttle`, `memory_leak`, `oom_kill`, `pod_restart`, `disk_iops`, `latency`, `error_rate`.
 Manifest-layer modes: `image_pull_backoff` (apply `cluster/variants/playback-imagepull.yaml`), `hpa_maxed`/`node_pressure` (Phase 2, best-effort on a laptop).
 
 ### Fault catalog
@@ -35,6 +35,8 @@ Manifest-layer modes: `image_pull_backoff` (apply `cluster/variants/playback-ima
 | `oom_kill` | Allocate 16 MiB per call, touch every 4 KiB page so allocations are fully committed to resident memory (defeats zero-page dedup in macOS Docker Desktop's VM); cgroup v2 OOM-kills the pod when RSS exceeds the 128 Mi limit → real `OOMKilled` (exit 137) on both Linux and macOS Docker Desktop | Pod `Last State: Terminated / Reason: OOMKilled / Exit Code: 137`; Restart Count increments |
 | `pod_restart` | `os.Exit(1)` after TTL seconds | Deployment restarts visible in `kubectl get pods` |
 | `disk_iops` | Adds VALUE×100 ms of synthetic request latency (no real disk I/O on a laptop kind cluster; true I/O saturation is a Phase 2 item) | p95 latency spike in Prometheus / Grafana |
+| `latency` | Adds 300ms + VALUE×300ms of request latency (VALUE≥1 crosses the 500ms p95 alert threshold) | p95 latency spike in Prometheus / Grafana |
+| `error_rate` | Forces HTTP 5xx responses while active | 5xx error-rate SLI rises in Prometheus / Grafana (StreamFlixHighErrorRate) |
 | `image_pull_backoff` | Patch deployment to a nonexistent image tag via `kubectl --context kind-streamflix -n streamflix-prod patch deploy/playback-service --patch-file cluster/variants/playback-imagepull.yaml`; revert with `make deploy` (use patch-file, not `apply -f`, as the variant is a partial spec) | Pod enters `ImagePullBackOff` / `ErrImagePull` |
 | `clear` | Clear all active faults | Service returns to baseline behaviour |
 

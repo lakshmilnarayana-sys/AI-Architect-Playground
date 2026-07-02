@@ -150,7 +150,7 @@ The current seed graph contains people, teams, projects, services, skills, tools
 
 This repo now implements two Week 3 project tracks on top of the StreamFlix operations graph:
 
-1. **Multi-Agent IT Support / Incident Response Agent**: a Freshworks-style incident lifecycle simulation covering identification, logging, categorization, prioritization, response, escalation, diagnosis, recovery, closure, and post-incident review. The demo can inject Kubernetes failure modes for `oom_kill`, `pod_restart`, `disk_iops`, and `cpu_throttle`; the agents attach Kubernetes KV context, static production logs, observability evidence, mitigation plans, recovery checks, and postmortem actions.
+1. **Multi-Agent IT Support / Incident Response Agent**: a Freshworks-style incident lifecycle simulation covering identification, logging, categorization, prioritization, response, escalation, diagnosis, recovery, closure, and post-incident review. The demo can inject Kubernetes failure modes for `oom_kill`, `pod_restart`, `disk_iops`, `cpu_throttle`, `latency`, and `error_rate`; the agents attach Kubernetes KV context, static production logs, observability evidence, mitigation plans, recovery checks, and postmortem actions.
 2. **Intelligent Project Status Agent**: a weekly status synthesis agent over synthetic Jira, GitHub, dependency, risk, blocker, and decision snapshots. It produces a status color, executive summary, risks, blockers, dependencies, week-over-week insights, and next actions.
 
 By default the incident simulation uses local deterministic data rather than touching a live cluster. Kubernetes resources live in `data/kubernetes_resources.yaml`; static logs live in `data/service_logs.yaml`; outage scenarios live in `data/incident_scenarios.yaml`; FireHydrant-style runbook automation lives in `data/firehydrant_runbook_automations.yaml`. An **optional live mode** (`INCIDENT_LIVE=true`) wires the same agent to a real Kubernetes cluster, Prometheus, and local Slack/Jira/on-call services — see the StreamFlix Platform section below. With the flag unset, behavior and the evaluation suite are byte-identical to the deterministic path.
@@ -219,6 +219,35 @@ make fault SVC=playback MODE=cpu_throttle   # inject a fault and watch it flow t
 All platform code is local-only (binds to the kind cluster; never the production EKS
 contexts) and is intended for a disposable local demo (SQLite/guest auth/mocks, no SSO or
 managed databases).
+
+### Live Incident Demo Dashboard
+
+`src/incident/demo_dashboard.py` runs one full incident against the live cluster as a
+terminal dashboard: it injects a real fault, waits for the SLO to actually breach
+(degradation precedes declaration), streams the agent's phases with HITL approval gates,
+shows live p95/error-rate from Prometheus plus the Slack/Jira/on-call integrations, and
+verifies real recovery before resolving. The injected fault is always reverted on exit
+(including Ctrl-C).
+
+```bash
+cd platform && make incident-up && cd ..   # port-forwards: Prometheus, Alertmanager, mocks
+export INCIDENT_LIVE=true SLACK_MOCK_URL=http://localhost:18100 \
+  JIRA_MOCK_URL=http://localhost:18101 ONCALL_REGISTRY_URL=http://localhost:18102 \
+  PROMETHEUS_URL=http://localhost:9090 ALERTMANAGER_URL=http://localhost:9093
+.venv/bin/python -m src.incident.demo_dashboard --service identity-service \
+  --failure-mode latency --auto-approve
+```
+
+A run takes a few minutes end to end. At the end of execution the dashboard reports the
+incident's timing, measured against the live SLI from the moment the fault went in:
+
+```text
+⏱ MTTD 26s (fault → SLO breach detected)  ·  declared +26s  ·  MTTR 1m 26s (fault → SLO recovered)
+```
+
+With `LANGSMITH_TRACING=true` and `LANGSMITH_API_KEY` set (optional `LANGSMITH_PROJECT`),
+the run also renders this incident's LangSmith trace on exit — the run tree with per-node
+latency plus the clickable visual-trace URL. Without a key it silently skips the trace.
 
 ## Deliverables
 

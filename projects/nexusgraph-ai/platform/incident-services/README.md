@@ -19,6 +19,8 @@ export INCIDENT_LIVE=true SLACK_MOCK_URL=http://localhost:18100 JIRA_MOCK_URL=ht
 python -m src.incident.run --service billing-service --failure-mode oom_kill
 # automatic (polls Alertmanager):
 python -m src.incident.watcher
+# visual demo (terminal dashboard: live SLI, HITL gates, MTTD/MTTR + optional LangSmith trace on exit):
+python -m src.incident.demo_dashboard --service identity-service --failure-mode latency --auto-approve
 ```
 
 ## Verify
