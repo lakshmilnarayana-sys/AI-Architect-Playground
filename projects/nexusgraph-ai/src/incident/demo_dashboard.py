@@ -94,6 +94,13 @@ def _short(service: str) -> str:
     return service[:-len("-service")] if service.endswith("-service") else service
 
 
+def _fmt_dur(seconds) -> str:
+    if seconds is None:
+        return "n/a"
+    s = int(round(seconds))
+    return f"{s}s" if s < 60 else f"{s // 60}m {s % 60:02d}s"
+
+
 def show_langsmith_trace(console, started_after: float) -> bool:
     """On exit, fetch THIS run's LangSmith trace and render it locally as a tree
     (node · latency), plus the clickable URL. Returns False (no-op) if LangSmith isn't
@@ -482,9 +489,11 @@ def run(service, failure_mode, severity, delay_min, delay_max,
     # degrades (p95 climbs for latency faults; pod OOMKills for pod faults) while the agent
     # works — the dashboard then clears it at the mitigate step so recovery is real, not staged.
     inject_flag = {"injected": False}
+    fault_at = None            # when the fault went live — the incident's t0 for MTTD/MTTR
     if inject and failure_mode:
         console.print(f"[dim]Injecting {failure_mode} on {service} to make the incident live "
                       f"(baseline p95={_fmt_latency(baseline_p95)})…[/dim]")
+        fault_at = time.time()
         fault_async(service, failure_mode, fault_value, 900, inject_flag, "injected")
         # GUARANTEE the fault is reverted on ANY exit (normal quit, Ctrl-C, error) so a
         # throttle never leaks into the next run; idempotent, so the mitigate-step clear is fine too.
@@ -546,6 +555,12 @@ def run(service, failure_mode, severity, delay_min, delay_max,
     # threshold when no baseline/traffic signal exists).
     breach_at = (max(baseline_p95 * 2, baseline_p95 + 0.1) if baseline_p95 else recover_threshold)
     recover_to = (baseline_p95 * 1.5 if baseline_p95 else recover_threshold)
+    # incident timing (t0 = fault injection, falling back to loop start for --no-inject)
+    t0 = fault_at or start
+    first_breach_at = None     # first live SLI breach observed → MTTD
+    declared_at = None         # DEGRADING → REVEAL transition (incident declared)
+    recovered_at = None        # SLO confirmed back within target → MTTR
+    recovered_ok = False       # True only for real recovery, not the recover-timeout escape
 
     def flags_now():
         f = {"oncall": False, "slack": False, "jira": False}
@@ -579,6 +594,7 @@ def run(service, failure_mode, severity, delay_min, delay_max,
                 # in case the metric signal is unavailable).
                 if breached or (now - detect_started) > detect_timeout:
                     state = "REVEAL"; next_reveal = now
+                    declared_at = now
 
             elif state == "REVEAL":
                 cur = steps_by_phase[phases[pi]]
@@ -613,6 +629,8 @@ def run(service, failure_mode, severity, delay_min, delay_max,
                     ok = (clear_flag["cleared"] and cur_p95 is not None and cur_p95 <= recover_to)
                 if ok or elapsed_r > recover_timeout:
                     recover_done = True
+                    if recovered_at is None:
+                        recovered_at = now; recovered_ok = ok
                     state = "GATE"; gate_entered = now
                     pending = (PHASE_STATUS["resolve"][0],
                                PHASE_STATUS["resolve"][1].format(svc=service, fm=fm))
@@ -644,6 +662,8 @@ def run(service, failure_mode, severity, delay_min, delay_max,
                         breached = True
                 elif cache["p95"] is not None and cache["p95"] > breach_at:
                     breached = True
+                if breached and first_breach_at is None:
+                    first_breach_at = now
                 last_poll = now
 
             if state == "HOLD":
@@ -660,7 +680,10 @@ def run(service, failure_mode, severity, delay_min, delay_max,
             else:
                 hdr_alert, hdr_notified = alert_summary, notified
                 if state == "HOLD":
+                    _mttd = (first_breach_at - t0) if first_breach_at else None
+                    _mttr = (recovered_at - t0) if (recovered_at and recovered_ok) else None
                     next_action = (f"postmortem filed · {len(action_items)} follow-up action item(s) · "
+                                   f"MTTD {_fmt_dur(_mttd)} · MTTR {_fmt_dur(_mttr)} · "
                                    f"monitoring {service} for recurrence")
                 elif state == "RECOVER":
                     next_action = "apply remediation, then verify the SLO returns to baseline"
@@ -694,6 +717,14 @@ def run(service, failure_mode, severity, delay_min, delay_max,
     console.print(f"[bold green]Incident complete[/bold green] — phase={final.get('phase')} "
                   f"· jira={jira.get('key','(n/a)')} · {len(steps)} agent steps · "
                   f"{len(published)} status updates published")
+    # MTTD/MTTR judged against the LIVE SLI, from fault injection (t0): detection is the
+    # first observed breach, recovery only counts when the SLO was confirmed back in target.
+    mttd = (first_breach_at - t0) if first_breach_at else None
+    mttr = (recovered_at - t0) if (recovered_at and recovered_ok) else None
+    console.print(f"[bold cyan]⏱ MTTD {_fmt_dur(mttd)}[/bold cyan] (fault → SLO breach detected)"
+                  + (f"  ·  declared +{_fmt_dur(declared_at - t0)}" if declared_at else "")
+                  + f"  ·  [bold cyan]MTTR {_fmt_dur(mttr)}[/bold cyan] (fault → SLO recovered)"
+                  + ("" if mttr or not recovered_at else "  [dim](recovery not confirmed within timeout)[/dim]"))
     show_langsmith_trace(console, ls_start)
 
 
