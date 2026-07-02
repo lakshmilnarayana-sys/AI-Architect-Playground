@@ -1,5 +1,6 @@
 from pathlib import Path
 import csv
+import re
 
 import yaml
 
@@ -19,6 +20,13 @@ def _load_yaml(name: str) -> list[dict]:
 def _keyword_match(haystack: str, needle: str) -> bool:
     h = (haystack or "").lower()
     return any(tok in h for tok in needle.lower().replace("-", " ").split())
+
+
+def _service_base(service: str) -> str:
+    """"playback-service" / "Playback Service" -> "playback"; keeps hyphenated
+    bases like "cdn-routing" intact so they only match their own policies."""
+    s = re.sub(r"\s+", "-", str(service or "").strip().lower())
+    return re.sub(r"-service$", "", s)
 
 
 class GraphContext:
@@ -64,13 +72,13 @@ class GraphContext:
             return live
         policies = _load_yaml("escalation_policies.yaml")
         sev = severity.lower()
-        token = service.split()[0].lower()
+        # Match on the normalized base name ("playback-service" -> "playback") and
+        # require the severity too: a Billing SEV2 policy must not be returned for a
+        # billing SEV1 incident — no-policy-for-this-pairing is a real coverage gap.
+        token = _service_base(service)
         for p in policies:
             blob = (p.get("name", "") + " " + p.get("description", "")).lower()
             if token in blob and sev in blob:
-                return {"id": p["id"], "name": p.get("name")}
-        for p in policies:
-            if token in (p.get("name", "") + p.get("description", "")).lower():
                 return {"id": p["id"], "name": p.get("name")}
         return None
 
@@ -84,7 +92,16 @@ class GraphContext:
         live = self._registry_oncall(service)
         if live is not None:
             return live
-        return self._edge_target(service, ("HAS_ONCALL_SCHEDULE", "ON_CALL"))
+        schedule = self._edge_target(service, ("HAS_ONCALL_SCHEDULE", "ON_CALL"))
+        if not schedule:
+            return None
+        # Paging needs a person, not a rota: traverse schedule -> CURRENT_PRIMARY_ONCALL
+        # -> person. Fall back to the schedule node if no person is assigned.
+        person = self._edge_target_from(schedule["id"], ("CURRENT_PRIMARY_ONCALL",))
+        if person:
+            return {"id": person["id"], "name": person["name"],
+                    "schedule": schedule.get("name")}
+        return schedule
 
     # --- Live on-call registry (env-gated, registry-first) -------------------
     def _registry_oncall(self, service: str) -> dict | None:
@@ -106,6 +123,22 @@ class GraphContext:
         return {"id": data.get("policy"), "name": data.get("policy")}
 
     # --- CSV edge traversal fallback -----------------------------------------
+    def _edge_target_from(self, source_id: str, rel_types: tuple[str, ...]) -> dict | None:
+        """Follow an edge from an exact node id (second hop of a traversal)."""
+        edges_path = GRAPH / "edges.csv"
+        nodes_path = GRAPH / "nodes.csv"
+        if not edges_path.exists() or not nodes_path.exists():
+            return None
+        with open(nodes_path, newline="", encoding="utf-8") as fh:
+            nodes = {row["id"]: row for row in csv.DictReader(fh)}
+        with open(edges_path, newline="", encoding="utf-8") as fh:
+            for e in csv.DictReader(fh):
+                rel = (e.get("relationship", "") or "").upper()
+                if (e.get("source") == source_id and e.get("target") in nodes
+                        and any(rt == rel for rt in rel_types)):
+                    return {"id": e["target"], "name": nodes[e["target"]].get("name")}
+        return None
+
     def _edge_target(self, service: str, rel_types: tuple[str, ...]) -> dict | None:
         edges_path = GRAPH / "edges.csv"
         nodes_path = GRAPH / "nodes.csv"

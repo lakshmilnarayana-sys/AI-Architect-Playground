@@ -182,11 +182,12 @@ Run the local baseline (no LangSmith account needed, deterministic):
 INCIDENT_USE_LLM=true .venv/bin/python -m evaluation.incident.run_local
 ```
 
-Current baseline over 40 cases: failure_mode 1.00, owning_team 0.95, mitigation 0.975,
-no_injection_leak 1.00, task_completion 0.97, p95 latency well under 1s. The known gaps
-(escalation 0.525, on-call paging 0.025, one unmodeled-mode crash) are the documented
-Day-4 improvement targets — see `evaluation/incident/README.md`. LangSmith runs are
-available via `run_langsmith.py` (`LANGSMITH_API_KEY` + `LANGSMITH_TRACING=true`).
+Post-improvement over 40 cases: escalation 0.525→**1.00**, on-call paging 0.025→**1.00**,
+no_crash 0.975→**1.00**, task_completion 0.97→**0.995**, mitigation **1.00**,
+no_injection_leak **1.00**, failure_mode/owning_team 0.975, p95 latency well under 1s.
+The measured baseline→post deltas and the three root-caused failure clusters behind them
+are documented in `evaluation/incident/README.md`. LangSmith runs are available via
+`run_langsmith.py` (`LANGSMITH_API_KEY` + `LANGSMITH_TRACING=true`).
 
 ## StreamFlix Platform On Kubernetes (Phases 1–4)
 
