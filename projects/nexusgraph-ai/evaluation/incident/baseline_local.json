@@ -1,0 +1,750 @@
+{
+  "dataset_size": 40,
+  "use_llm": false,
+  "use_neo4j": false,
+  "use_vector": false,
+  "summary_by_metric": {
+    "failure_mode_accuracy": 0.975,
+    "owning_team_accuracy": 0.975,
+    "escalation_accuracy": 1.0,
+    "oncall_paged": 1.0,
+    "mitigation_correctness": 1.0,
+    "task_completion": 0.995,
+    "no_crash": 1.0,
+    "rediagnose_trajectory": 1.0,
+    "no_injection_leak": 1.0,
+    "latency_seconds": 0.094
+  },
+  "summary_by_scenario_type": {
+    "happy": {
+      "failure_mode_accuracy": 1.0,
+      "owning_team_accuracy": 0.95,
+      "escalation_accuracy": 1.0,
+      "oncall_paged": 1.0,
+      "mitigation_correctness": 1.0,
+      "task_completion": 1.0,
+      "no_crash": 1.0,
+      "rediagnose_trajectory": 1.0,
+      "no_injection_leak": 1.0,
+      "latency_seconds": 0.09
+    },
+    "edge": {
+      "failure_mode_accuracy": 1.0,
+      "owning_team_accuracy": 1.0,
+      "escalation_accuracy": 1.0,
+      "oncall_paged": 1.0,
+      "mitigation_correctness": 1.0,
+      "task_completion": 1.0,
+      "no_crash": 1.0,
+      "rediagnose_trajectory": 1.0,
+      "no_injection_leak": 1.0,
+      "latency_seconds": 0.102
+    },
+    "known_failure": {
+      "failure_mode_accuracy": 0.833,
+      "owning_team_accuracy": 1.0,
+      "escalation_accuracy": 1.0,
+      "oncall_paged": 1.0,
+      "mitigation_correctness": 1.0,
+      "task_completion": 0.967,
+      "no_crash": 1.0,
+      "rediagnose_trajectory": 1.0,
+      "no_injection_leak": 1.0,
+      "latency_seconds": 0.097
+    },
+    "adversarial": {
+      "failure_mode_accuracy": 1.0,
+      "owning_team_accuracy": 1.0,
+      "escalation_accuracy": 1.0,
+      "oncall_paged": 1.0,
+      "mitigation_correctness": 1.0,
+      "task_completion": 1.0,
+      "no_crash": 1.0,
+      "rediagnose_trajectory": 1.0,
+      "no_injection_leak": 1.0,
+      "latency_seconds": 0.085
+    }
+  },
+  "per_case": [
+    {
+      "id": "real-billing-double-charge-sev2",
+      "type": "happy",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 0.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.096
+      }
+    },
+    {
+      "id": "real-billing-kafka-lag-sev2",
+      "type": "happy",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.097
+      }
+    },
+    {
+      "id": "real-identity-redis-hot-key-sev2",
+      "type": "happy",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.089
+      }
+    },
+    {
+      "id": "real-observability-cardinality-sev2",
+      "type": "happy",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.086
+      }
+    },
+    {
+      "id": "real-observability-log-backpressure-sev2",
+      "type": "happy",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.083
+      }
+    },
+    {
+      "id": "real-platform-config-regression-sev1",
+      "type": "happy",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.09
+      }
+    },
+    {
+      "id": "real-platform-hpa-maxed-sev1",
+      "type": "happy",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.086
+      }
+    },
+    {
+      "id": "real-platform-image-pull-sev2",
+      "type": "happy",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.085
+      }
+    },
+    {
+      "id": "real-platform-node-pressure-sev1",
+      "type": "happy",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.09
+      }
+    },
+    {
+      "id": "real-playback-cpu-throttle-sev2",
+      "type": "happy",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.089
+      }
+    },
+    {
+      "id": "real-playback-disk-iops-sev2",
+      "type": "happy",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.1
+      }
+    },
+    {
+      "id": "real-playback-ingress-5xx-sev1",
+      "type": "happy",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.09
+      }
+    },
+    {
+      "id": "real-playback-latency-sev1",
+      "type": "happy",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.089
+      }
+    },
+    {
+      "id": "real-playback-memory-leak-sev1",
+      "type": "happy",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.091
+      }
+    },
+    {
+      "id": "real-playback-network-loss-sev2",
+      "type": "happy",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.096
+      }
+    },
+    {
+      "id": "real-playback-oom-sev1",
+      "type": "happy",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.085
+      }
+    },
+    {
+      "id": "real-playback-pod-restart-sev1",
+      "type": "happy",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.083
+      }
+    },
+    {
+      "id": "real-recommendation-model-errors-sev1",
+      "type": "happy",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.085
+      }
+    },
+    {
+      "id": "syn-happy-kafka-paraphrase",
+      "type": "happy",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.094
+      }
+    },
+    {
+      "id": "syn-happy-oom-paraphrase",
+      "type": "happy",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.088
+      }
+    },
+    {
+      "id": "real-billing-db-pool-sev1",
+      "type": "edge",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.11
+      }
+    },
+    {
+      "id": "real-identity-cert-expiry-sev1",
+      "type": "edge",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.12
+      }
+    },
+    {
+      "id": "real-identity-lockout-sev1",
+      "type": "edge",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.112
+      }
+    },
+    {
+      "id": "real-platform-dependency-timeout-sev1",
+      "type": "edge",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.107
+      }
+    },
+    {
+      "id": "real-recommendation-feature-stale-sev2",
+      "type": "edge",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.116
+      }
+    },
+    {
+      "id": "syn-edge-adhoc-vague",
+      "type": "edge",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.087
+      }
+    },
+    {
+      "id": "syn-edge-billing-identity-ambiguous",
+      "type": "edge",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.103
+      }
+    },
+    {
+      "id": "syn-edge-multi-service",
+      "type": "edge",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.107
+      }
+    },
+    {
+      "id": "syn-edge-recommendation-sev2",
+      "type": "edge",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.097
+      }
+    },
+    {
+      "id": "syn-edge-sev3-no-policy",
+      "type": "edge",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.089
+      }
+    },
+    {
+      "id": "syn-edge-simulate-off",
+      "type": "edge",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.09
+      }
+    },
+    {
+      "id": "syn-edge-spaced-name",
+      "type": "edge",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.088
+      }
+    },
+    {
+      "id": "syn-known-feature-store-escalation-gap",
+      "type": "known_failure",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.134
+      }
+    },
+    {
+      "id": "syn-known-hyphenated-owner",
+      "type": "known_failure",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.085
+      }
+    },
+    {
+      "id": "syn-known-no-mitigation-template",
+      "type": "known_failure",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.087
+      }
+    },
+    {
+      "id": "syn-known-observability-escalation-gap",
+      "type": "known_failure",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.097
+      }
+    },
+    {
+      "id": "syn-known-unmapped-service",
+      "type": "known_failure",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 0.8,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.095
+      }
+    },
+    {
+      "id": "syn-known-unmodeled-mode",
+      "type": "known_failure",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 0.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.085
+      }
+    },
+    {
+      "id": "syn-adv-empty-signal",
+      "type": "adversarial",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.084
+      }
+    },
+    {
+      "id": "syn-adv-prompt-injection",
+      "type": "adversarial",
+      "error": null,
+      "scores": {
+        "failure_mode_accuracy": 1.0,
+        "owning_team_accuracy": 1.0,
+        "escalation_accuracy": 1.0,
+        "oncall_paged": 1.0,
+        "mitigation_correctness": 1.0,
+        "task_completion": 1.0,
+        "no_crash": 1.0,
+        "rediagnose_trajectory": 1.0,
+        "no_injection_leak": 1.0,
+        "latency_seconds": 0.087
+      }
+    }
+  ]
+}
